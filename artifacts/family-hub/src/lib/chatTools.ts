@@ -33,6 +33,25 @@ export function pointsProfileId(profileIds: string[], profileKey: string): strin
   return profileIds[0] ?? null;
 }
 
+export function assignChange(
+  text: string,
+  chores: { id: string; title: string }[],
+  profiles: { id: string; name: string }[],
+): { choreId: string; profileIds: string[]; reply: string } | { reply: string } | null {
+  const match = text.trim().match(/^assign\s+(.+?)\s+to\s+(.+?)\.?$/i);
+  if (!match) return null;
+  const title = match[1].trim();
+  const who = match[2].trim();
+  const chore = chores.find((item) => item.title.toLowerCase() === title.toLowerCase());
+  if (!chore) return { reply: `I don't see ${title}.` };
+  if (/^(nobody|no one|everyone)$/i.test(who)) {
+    return { choreId: chore.id, profileIds: [], reply: `${chore.title} is for everyone.` };
+  }
+  const profile = profiles.find((person) => person.name.toLowerCase() === who.toLowerCase());
+  if (!profile) return { reply: `I don't see ${who}.` };
+  return { choreId: chore.id, profileIds: [profile.id], reply: `${chore.title} is assigned to ${profile.name}.` };
+}
+
 export function createTodoTitle(text: string): string | null {
   const match = text.trim().match(/^(?:add|create)\s+(?:a\s+)?to-?do\s+(?:called\s+)?(.+?)\.?$/i);
   const title = match?.[1]?.trim();
