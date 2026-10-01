@@ -99,7 +99,7 @@ function wallNow(now: Date, timeZone: string): Date {
 function dayShift(note: string, from: Date): number {
   const weekday = slipDayOffset(note, from);
   if (weekday != null) return weekday;
-  if (/\b(?:today|tonight)\b/i.test(note)) return 0;
+  if (/\b(?:today|tonight|this (?:morning|afternoon|evening))\b/i.test(note)) return 0;
   return 1;
 }
 

@@ -41,4 +41,8 @@ test("chat names tonight's dinner and does not mention the inbox", () => {
     { date: "2026-10-01", slot: "dinner", name: "Tacos" },
     { date: "2026-10-02", slot: "dinner", name: "Pasta" },
   ], new Date(2026, 9, 1)), "Dinner. Tacos");
+  assert.equal(dinnerReply("what's for dinner this evening", [
+    { date: "2026-10-01", slot: "dinner", name: "Tacos" },
+    { date: "2026-10-02", slot: "dinner", name: "Pasta" },
+  ], new Date(2026, 9, 1)), "Dinner. Tacos");
 });
