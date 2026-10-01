@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, importedEventNeedsConfirm, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "../../src/lib/chatTools";
+import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, importedEventNeedsConfirm, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "../../src/lib/chatTools";
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
@@ -93,6 +93,11 @@ test("assign names the to-do and the person", () => {
 test("add a to-do names the task", () => {
   assert.equal(createTodoTitle("add a to-do Buy milk"), "Buy milk");
   assert.equal(createTodoTitle("add event Soccer"), null);
+});
+
+test("add event at 4:30 uses that clock", () => {
+  assert.deepEqual(createEventClock("Soccer at 4:30 pm"), { title: "Soccer", hours: 16, minutes: 30 });
+  assert.deepEqual(createEventClock("Soccer practice"), { title: "Soccer practice" });
 });
 
 test("a new event is offered to the family calendar", () => {

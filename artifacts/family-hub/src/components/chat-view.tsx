@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
+import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
 import { dinnerName, mailVisibleToKid, openTodos, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
@@ -226,25 +226,27 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const createdTitle = createEventTitle(text);
-    if (createdTitle && tools.includes("create_event")) {
+    const created = createdTitle ? createEventClock(createdTitle) : null;
+    if (created && tools.includes("create_event")) {
       const calendarId = familyCalendarOffer(calendarSettings?.familyCalendarId);
       const start = new Date();
       start.setDate(start.getDate() + 1);
-      start.setHours(9, 0, 0, 0);
+      start.setHours(created.hours ?? 9, created.minutes ?? 0, 0, 0);
       const end = new Date(start.getTime() + 60 * 60 * 1000);
       void apiRequest("POST", "/api/events", {
-        title: createdTitle,
+        title: created.title,
         startTime: start.toISOString(),
         endTime: end.toISOString(),
         profileIds: [],
         drivingProfileIds: [],
         calendarId,
+        source: "app",
       });
       void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       next.push({
         id: `${Date.now()}-e`,
         role: "assistant",
-        text: calendarId ? `Added ${createdTitle} on the family calendar.` : `Added ${createdTitle}.`,
+        text: calendarId ? `Added ${created.title} on the family calendar.` : `Added ${created.title}.`,
       });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }

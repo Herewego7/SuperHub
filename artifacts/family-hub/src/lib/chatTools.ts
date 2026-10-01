@@ -65,6 +65,19 @@ export function createEventTitle(text: string): string | null {
   return title ? title : null;
 }
 
+export function createEventClock(title: string): { title: string; hours?: number; minutes?: number } {
+  const match = title.match(/^(.*?)\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i);
+  if (!match) return { title };
+  let hours = Number(match[2]);
+  const minutes = match[3] ? Number(match[3]) : 0;
+  const suffix = match[4].toLowerCase();
+  const name = match[1].trim();
+  if (!name || hours < 1 || hours > 12 || minutes > 59) return { title };
+  if (suffix === "pm" && hours !== 12) hours += 12;
+  if (suffix === "am" && hours === 12) hours = 0;
+  return { title: name, hours, minutes };
+}
+
 export function familyCalendarOffer(familyCalendarId: string | null | undefined): string | null {
   const id = familyCalendarId?.trim();
   if (!id || id === "none") return null;
