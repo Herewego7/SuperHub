@@ -7,12 +7,13 @@ export type HomeTodo = {
   isActive?: boolean | null;
 };
 
-export function visibleForProfiles<T extends { profileIds?: string[] | null }>(rows: T[], selectedIds: string[]): T[] {
+export function visibleForProfiles<T extends { profileIds?: string[] | null; drivingProfileIds?: string[] | null }>(rows: T[], selectedIds: string[]): T[] {
   if (selectedIds.length === 0) return rows;
   return rows.filter((row) => {
     const ids = row.profileIds ?? [];
+    const drivers = row.drivingProfileIds ?? [];
     if (ids.length === 0) return true;
-    return ids.some((id) => selectedIds.includes(id));
+    return ids.some((id) => selectedIds.includes(id)) || drivers.some((id) => selectedIds.includes(id));
   });
 }
 

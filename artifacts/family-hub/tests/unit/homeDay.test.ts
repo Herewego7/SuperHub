@@ -87,6 +87,11 @@ test("Chad's filter hides an event that is only for Liam", () => {
     ["chad"],
   );
   assert.deepEqual(rows.map((row) => row.title), ["Dinner"]);
+  const driving = visibleForProfiles(
+    [{ title: "Carpool", profileIds: ["liam"], drivingProfileIds: ["chad"] }],
+    ["chad"],
+  );
+  assert.deepEqual(driving.map((row) => row.title), ["Carpool"]);
 });
 
 test("dinner is the meal in that slot on that date", () => {
