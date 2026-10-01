@@ -1,4 +1,5 @@
 import { outlookEventProfileIds } from "@/lib/outlookAttribution";
+import { UPCOMING_KIND_LABELS, UPCOMING_KINDS, upcomingRows, type UpcomingKind } from "@/lib/upcoming";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Profile, Event, InsertEvent, CalendarAssignment } from "@workspace/shared-types";
@@ -55,7 +56,7 @@ function normalizeGmail(email?: string | null): string | null {
   return `${cleanedLocal}@${domain}`;
 }
 
-type ViewMode = "day" | "workweek" | "week" | "month";
+type ViewMode = "upcoming" | "day" | "workweek" | "week" | "month";
 
 // ── Normalized event shape ────────────────────────────────────────────────────
 interface Cal3Event {
@@ -1254,9 +1255,16 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "week";
     const saved = localStorage.getItem("familyHub_calViewMode") as ViewMode | null;
-    if (saved && (["day", "workweek", "week", "month"] as ViewMode[]).includes(saved)) return saved;
-    return window.innerWidth < 768 ? "day" : "week";
+    const known = ["upcoming", "day", "workweek", "week", "month"] as ViewMode[];
+    const phone = window.innerWidth < 768;
+    if (phone) {
+      if (saved === "upcoming" || saved === "week" || saved === "month") return saved;
+      return "upcoming";
+    }
+    if (saved && known.includes(saved)) return saved;
+    return "week";
   });
+  const [upcomingKind, setUpcomingKind] = useState<UpcomingKind>("all");
   // `currentDate` is just a local alias for the controlled `selectedDate`
   // prop — kept so the many existing reads below didn't need renaming.
   const currentDate = selectedDate;
@@ -1932,12 +1940,12 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
 
   // ── Navigate ───────────────────────────────────────────────────────────────
   const goNext = () => {
-    if (viewMode === "day") setCurrentDate(addDays(currentDate, 1));
+    if (viewMode === "day" || viewMode === "upcoming") setCurrentDate(addDays(currentDate, viewMode === "upcoming" ? 30 : 1));
     else if (viewMode === "workweek" || viewMode === "week") setCurrentDate(addWeeks(currentDate, 1));
     else setCurrentDate(addMonths(currentDate, 1));
   };
   const goPrev = () => {
-    if (viewMode === "day") setCurrentDate(subDays(currentDate, 1));
+    if (viewMode === "day" || viewMode === "upcoming") setCurrentDate(subDays(currentDate, viewMode === "upcoming" ? 30 : 1));
     else if (viewMode === "workweek" || viewMode === "week") setCurrentDate(subWeeks(currentDate, 1));
     else setCurrentDate(subMonths(currentDate, 1));
   };
@@ -2232,6 +2240,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
 
   // ── Render title ────────────────────────────────────────────────────────────
   const headerTitle = useMemo(() => {
+    if (viewMode === "upcoming") return "Upcoming";
     if (viewMode === "day") return format(currentDate, "EEEE, MMMM d, yyyy");
     if (viewMode === "month") return format(currentDate, "MMMM yyyy");
     const start = viewMode === "workweek"
@@ -2301,7 +2310,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
   const hasAllDay = headerDays.some(d => allDayEventsForDay(d).length > 0);
 
   // ── Time grid view ──────────────────────────────────────────────────────────
-  const timeGridView = viewMode !== "month";
+  const timeGridView = viewMode !== "month" && viewMode !== "upcoming";
 
   return (
     <TooltipProvider>
@@ -2416,7 +2425,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
             </div>
             <div className="flex items-center gap-2 px-3 py-2">
               <div className="flex items-center rounded-lg border border-[#b0bec8] dark:border-border overflow-hidden bg-[#dce8f2] dark:bg-[#1e2633] shrink-0">
-                {(["day", "month"] as ViewMode[]).map(v => (
+                {(["upcoming", "week", "month"] as ViewMode[]).map(v => (
                   <button
                     key={v}
                     onClick={() => setViewModePersisted(v)}
@@ -2427,12 +2436,12 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
                         : "font-medium hover:bg-accent text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    {v.charAt(0).toUpperCase() + v.slice(1)}
+                    {v === "upcoming" ? "Upcoming" : v.charAt(0).toUpperCase() + v.slice(1)}
                   </button>
                 ))}
               </div>
 
-              {viewMode !== "month" && (
+              {timeGridView && (
                 <div className="flex items-center rounded-lg border border-[#b0bec8] dark:border-border overflow-hidden bg-[#dce8f2] dark:bg-[#1e2633] shrink-0">
                   <button
                     onClick={() => adjustZoom(-0.25)}
@@ -2555,7 +2564,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
 
           {/* View switcher — abbreviated on tablet, full on desktop */}
           <div className="flex items-center rounded-lg border border-[#b0bec8] dark:border-border overflow-hidden bg-[#dce8f2] dark:bg-[#1e2633]">
-            {(["day", "workweek", "week", "month"] as ViewMode[]).map(v => (
+            {(["upcoming", "day", "workweek", "week", "month"] as ViewMode[]).map(v => (
               <button
                 key={v}
                 onClick={() => setViewModePersisted(v)}
@@ -2567,8 +2576,8 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
                 }`}
               >
                 {isTablet
-                  ? ({ day: "Day", workweek: "W.Wk", week: "Week", month: "Mo" }[v])
-                  : (v === "workweek" ? "Work week" : v.charAt(0).toUpperCase() + v.slice(1))
+                  ? ({ upcoming: "Up", day: "Day", workweek: "W.Wk", week: "Week", month: "Mo" }[v])
+                  : (v === "workweek" ? "Work week" : v === "upcoming" ? "Upcoming" : v.charAt(0).toUpperCase() + v.slice(1))
                 }
               </button>
             ))}
@@ -2576,7 +2585,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
 
           {/* Zoom controls — hidden on Month view since there's no time grid
               there for zoom to affect. */}
-          {!isTablet && viewMode !== "month" && (
+          {!isTablet && timeGridView && (
             <div className="flex items-center rounded-lg border border-[#b0bec8] dark:border-border overflow-hidden bg-[#dce8f2] dark:bg-[#1e2633]">
               <button
                 onClick={() => adjustZoom(-0.25)}
@@ -2731,6 +2740,33 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
 
           {/* Main calendar area */}
           <div className="flex-1 flex flex-col min-w-0">
+            {viewMode === "upcoming" && (
+              <div data-testid="upcoming-agenda" className="flex-1 overflow-y-auto bg-white dark:bg-card">
+                <div className="flex gap-2 overflow-x-auto px-3 py-2 border-b border-border">
+                  {UPCOMING_KINDS.map((kind) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      data-testid={`upcoming-kind-${kind}`}
+                      aria-pressed={upcomingKind === kind}
+                      onClick={() => setUpcomingKind(kind)}
+                      className="shrink-0 rounded-full px-3 py-1 text-xs"
+                      style={upcomingKind === kind ? { background: "#5E8FAD", color: "white" } : undefined}
+                    >
+                      {UPCOMING_KIND_LABELS[kind]}
+                    </button>
+                  ))}
+                </div>
+                <ul className="flex flex-col">
+                  {upcomingRows(visibleEvents, upcomingKind, currentDate).map((event) => (
+                    <li key={event.id} className="border-b border-border px-3 py-2 text-sm">
+                      <div className="text-xs text-muted-foreground">{format(event.startTime, "EEE, MMM d")}</div>
+                      {event.title}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* ── Month view ── */}
             {/* Two month views coexist deliberately (2026-09-15): the classic
