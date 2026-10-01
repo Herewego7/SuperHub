@@ -1700,14 +1700,16 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
   // set via Settings' "Manage" picker) — there's no separate client-side
   // enable/disable filter to apply here anymore.
   const visibleEvents = useMemo(() => {
+    const pickedPeople = profiles.filter((profile) => !profile.isAllFamilyProfile && selectedProfiles.includes(profile.id));
+    const kidName = pickedPeople.length === 1 && (pickedPeople[0].role === "child" || pickedPeople[0].isChild) ? pickedPeople[0].name : null;
     const picked = allEventsWithCelebrations.filter(e => {
       if (selectedProfiles.length === 0) return true;
       return e.profileIds.length === 0 ||
         e.profileIds.some(id => selectedProfiles.includes(id)) ||
         e.drivingProfileIds.some(id => selectedProfiles.includes(id));
-    });
+    }).filter((event) => mailVisibleToKid(event, kidName));
     return withoutUnwatched(picked, calendarAssignments);
-  }, [allEventsWithCelebrations, selectedProfiles, calendarAssignments]);
+  }, [allEventsWithCelebrations, selectedProfiles, calendarAssignments, profiles]);
 
   const upcomingItems = useMemo(() => {
     const familyIds = profiles.filter((profile) => !profile.isAllFamilyProfile).map((profile) => profile.id);
