@@ -736,18 +736,18 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
               localStorage.setItem("superhub_meals_on_calendar", on ? "true" : "false");
               setMealsOnCalendar(on);
               if (!on) return;
-              for (const meal of mealEvents(meals, true)) {
+              void Promise.all(mealEvents(meals, true).map((meal) => {
                 const start = new Date(`${meal.date}T18:00:00`);
                 const end = new Date(start);
                 end.setHours(19, 0, 0, 0);
-                void apiRequest("POST", "/api/events", {
+                return apiRequest("POST", "/api/events", {
                   title: meal.name,
                   startTime: start.toISOString(),
                   endTime: end.toISOString(),
                   profileIds: [],
                   source: "meal",
                 });
-              }
+              })).then(() => queryClient.invalidateQueries({ queryKey: ["/api/events"] }));
             }}
           />
         </label>
