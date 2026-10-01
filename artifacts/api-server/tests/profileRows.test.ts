@@ -7,4 +7,7 @@ test("a missing facts column is the database error, not any other failure", () =
   error.cause = new Error('column "facts" does not exist');
   assert.equal(factsColumnMissing(error), true);
   assert.equal(factsColumnMissing(new Error("connection refused")), false);
+  const refused = new Error('Failed query: select "facts" from "profiles"');
+  refused.cause = new Error("connect ECONNREFUSED");
+  assert.equal(factsColumnMissing(refused), false);
 });

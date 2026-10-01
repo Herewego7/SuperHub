@@ -12,7 +12,7 @@ export function factsColumnMissing(error: unknown): boolean {
     else if (typeof current === "object" && "message" in current) texts.push(String((current as { message: unknown }).message));
     current = typeof current === "object" && current && "cause" in current ? (current as { cause?: unknown }).cause : undefined;
   }
-  return texts.join(" ").toLowerCase().includes("facts");
+  return /column ["']facts["'] does not exist/i.test(texts.join(" "));
 }
 
 function columnsWithoutFacts() {
