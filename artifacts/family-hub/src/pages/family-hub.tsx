@@ -8,8 +8,8 @@ import { ChoreManagementDrawer } from "@/components/chore-management-drawer";
 import { EventModal, type EventFormData } from "@/components/event-modal";
 import { TabType, ChoresSubTabType } from "@/lib/types";
 import { BOTTOM_NAV_IDS } from "@/lib/bottomNav";
-import { ChatView } from "@/components/chat-view";
-import { appendUserMessage, clearChatUnread, unreadFor } from "@/lib/chatThread";
+import { ChatView, stagePendingChat } from "@/components/chat-view";
+import { clearChatUnread, unreadFor } from "@/lib/chatThread";
 import { stageEveningPlan } from "@/components/chat-view";
 import { devicePersonIds, readDevicePerson, writeDevicePerson } from "@/lib/devicePerson";
 import { consumeTabDeepLinkFromUrl, onTabDeepLink, consumeCelebrationDeepLinkFromUrl, onCelebrationDeepLink } from "@/lib/pushDeepLink";
@@ -770,8 +770,8 @@ export default function FamilyHub() {
   const chatIsChild = profiles.filter((p) => selectedProfiles.includes(p.id) && !p.isAllFamilyProfile).every((p) => p.role === "child" || p.isChild) &&
     profiles.some((p) => selectedProfiles.includes(p.id) && !p.isAllFamilyProfile);
   const sendChatFromMenu = () => {
-    const next = appendUserMessage(chatProfileKey, chatDraft);
-    if (!next) return;
+    if (!chatDraft.trim()) return;
+    stagePendingChat(chatDraft);
     setChatDraft("");
     setPlusOpen(false);
     setChatRevision((n) => n + 1);

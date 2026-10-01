@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
@@ -9,7 +9,14 @@ import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, noteChatUnread, readThread, threadWithPlan, type ChatBubble } from "@/lib/chatThread";
 
 const PLAN_KEY = "superhub_evening_plan";
+const PENDING_KEY = "superhub_chat_pending";
 const PLAN_REPLY_KEY = "superhub_evening_plan_reply";
+
+export function stagePendingChat(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed || typeof sessionStorage === "undefined") return;
+  sessionStorage.setItem(PENDING_KEY, trimmed);
+}
 
 export function stageEveningPlan(text: string, reply?: string | null, profileKey?: string | null) {
   sessionStorage.setItem(PLAN_KEY, text);
@@ -32,6 +39,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [pendingMove, setPendingMove] = useState<{ id: string; start: string; end: string } | null>(null);
   const [bubbles, setBubbles] = useState<ChatBubble[]>(() => readThread(profileKey));
+  const sentPending = useRef(false);
   useEffect(() => {
     if (!profileReady || typeof sessionStorage === "undefined") return;
     const plan = sessionStorage.getItem(PLAN_KEY);
@@ -46,7 +54,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     });
   }, [profileReady, profileKey]);
   const tools = toolsForRole(isChild);
-  const { data: chores = [] } = useQuery<Chore[]>({ queryKey: ["/api/chores"] });
+  const { data: chores = [], isFetched: choresFetched } = useQuery<Chore[]>({ queryKey: ["/api/chores"] });
   const { data: completions = [] } = useQuery<{ choreId: string; completedAt?: string | null }[]>({ queryKey: ["/api/chore-completions"] });
   const { data: groceries = [] } = useQuery<{ id: string; name: string }[]>({ queryKey: ["/api/grocery-items"] });
   const { data: mealGroceries = [] } = useQuery<{ name: string }[]>({
@@ -61,11 +69,11 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       return res.json();
     },
   });
-  const { data: events = [] } = useQuery<{ id: string; title: string; description?: string | null; location?: string | null; source?: string | null; drivingProfileIds?: string[] | null; profileIds?: string[] | null; startTime?: string | null; endTime?: string | null }[]>({ queryKey: ["/api/events"] });
+  const { data: events = [], isFetched: eventsFetched } = useQuery<{ id: string; title: string; description?: string | null; location?: string | null; source?: string | null; drivingProfileIds?: string[] | null; profileIds?: string[] | null; startTime?: string | null; endTime?: string | null }[]>({ queryKey: ["/api/events"] });
   const { data: profiles = [] } = useQuery<{ id: string; name: string; school?: string | null; facts?: string[] | null; isAllFamilyProfile?: boolean | null }[]>({ queryKey: ["/api/profiles"] });
   const { data: weather } = useQuery<{ location?: string; temperature?: number; condition?: string }>({ queryKey: ["/api/weather"], retry: false });
   const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
-  const { data: meals = [] } = useQuery<Meal[]>({
+  const { data: meals = [], isFetched: mealsFetched } = useQuery<Meal[]>({
     queryKey: ["/api/meals", "chat-dinner"],
     queryFn: async () => {
       const start = new Date();
@@ -76,6 +84,16 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       return res.json();
     },
   });
+
+  useEffect(() => {
+    if (!profileReady || !choresFetched || !eventsFetched || !mealsFetched || sentPending.current) return;
+    if (typeof sessionStorage === "undefined") return;
+    const pending = sessionStorage.getItem(PENDING_KEY);
+    if (!pending) return;
+    sentPending.current = true;
+    sessionStorage.removeItem(PENDING_KEY);
+    send(pending);
+  }, [profileReady, choresFetched, eventsFetched, mealsFetched, profileKey]);
 
   const complete = useMutation({
     mutationFn: async (chore: Chore) => {
