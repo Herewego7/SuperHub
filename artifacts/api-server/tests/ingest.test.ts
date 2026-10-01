@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dismissSlip, ingestMessages, muteSender } from "../src/ingest/process.ts";
+import { choresDismissedBySlip, dismissSlip, ingestMessages, muteSender } from "../src/ingest/process.ts";
 
 test("two copies of the same slip from two adults become one to-do", () => {
   const planned = ingestMessages(
@@ -30,4 +30,15 @@ test("a muted sender and a dismissed slip stay off the household list", () => {
     ["liam"],
   );
   assert.equal(planned.todos.length, 0);
+});
+
+test("not relevant drops the slip already on Home", () => {
+  const ids = choresDismissedBySlip(
+    [
+      { id: "a", title: "Re: Permission slip for the field trip", category: "school_email" },
+      { id: "b", title: "Feed the dog", category: "chore" },
+    ],
+    "permission slip for the field trip",
+  );
+  assert.deepEqual(ids, ["a"]);
 });

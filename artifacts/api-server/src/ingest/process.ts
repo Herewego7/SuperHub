@@ -36,6 +36,10 @@ export function muteSender(state: HouseholdMail, address: string): HouseholdMail
   return { ...state, mutedSenders: [...state.mutedSenders, next] };
 }
 
+export function choresDismissedBySlip<T extends { id: string; title: string; category?: string | null }>(chores: T[], key: string): string[] {
+  return chores.filter((chore) => chore.category === "school_email" && slipKey(chore.title) === key).map((chore) => chore.id);
+}
+
 export function dismissSlip(state: HouseholdMail, key: string): HouseholdMail {
   if (!key || state.dismissedSlipKeys.includes(key)) return state;
   return { ...state, dismissedSlipKeys: [...state.dismissedSlipKeys, key] };

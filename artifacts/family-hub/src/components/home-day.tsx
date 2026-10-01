@@ -25,6 +25,15 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
     },
   });
 
+  const dismissSlip = useMutation({
+    mutationFn: async (title: string) => {
+      await apiRequest("POST", "/api/ingest/not-relevant", { title });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+    },
+  });
+
   const complete = useMutation({
     mutationFn: async (choreId: string) => {
       const profileId = chores.find((chore) => chore.id === choreId)?.profileIds[0];
@@ -81,10 +90,15 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
                 />
                 <div className="min-w-0">
                   <div className="text-[15px] font-medium">{todo.title}</div>
-                  {todo.description && <div className="text-sm text-muted-foreground">{todo.description}</div>}
-                  <div className="mt-1 text-xs text-muted-foreground">
+                  {todo.description && <div data-testid="home-todo-quote" className="text-sm text-muted-foreground">{todo.description}</div>}
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     {todo.category === "school_email" ? (
-                      <span data-testid="home-todo-source" className="inline-block rounded-full bg-muted px-2 py-0.5">School email</span>
+                      <>
+                        <span data-testid="home-todo-source" className="inline-block rounded-full bg-muted px-2 py-0.5">School email</span>
+                        <button type="button" data-testid="home-todo-not-relevant" className="underline" onClick={() => dismissSlip.mutate(todo.title)}>
+                          Not relevant
+                        </button>
+                      </>
                     ) : (
                       "To-do"
                     )}

@@ -25,7 +25,7 @@ import { geocodeCity } from "../lib/geocode";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
-import { dismissSlip, ingestMessages, muteSender } from "../ingest/process";
+import { choresDismissedBySlip, dismissSlip, ingestMessages, muteSender } from "../ingest/process";
 import { slipKey } from "../ingest/parse";
 import { expandRecurringEvents, resolveSeriesEventId } from "../lib/eventRecurrence";
 import { planRecurringEdit, planRecurringDelete, type EditScope } from "../lib/recurringEdit";
@@ -3277,13 +3277,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ingest/not-relevant", isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
-      const key = typeof req.body.slipKey === "string" ? req.body.slipKey : "";
+      const key = typeof req.body.slipKey === "string" && req.body.slipKey
+        ? req.body.slipKey
+        : typeof req.body.title === "string" ? slipKey(req.body.title) : "";
       if (!key) return res.status(400).json({ error: "slipKey is required" });
       const settings = await storage.getCalendarSettingsByUser(userId);
       const next = dismissSlip(
         { mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] },
         key,
       );
+      const chores = await storage.getChoresByUser(userId);
+      for (const id of choresDismissedBySlip(chores, key)) {
+        await storage.deleteChore(id, userId);
+      }
       const saved = await storage.updateCalendarSettings({ dismissedSlipKeys: next.dismissedSlipKeys, userId });
       res.json(saved);
     } catch (error) {
