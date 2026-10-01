@@ -65,19 +65,57 @@ export function createEventTitle(text: string): string | null {
   return title ? title : null;
 }
 
-export function createEventClock(title: string): { title: string; hours?: number; minutes?: number; day: "today" | "tomorrow" } {
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+function eventOn(name: string, from: Date): { title: string; on: Date } | null {
+  const weekday = name.match(/^(.*?)\s+(?:on\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/i);
+  if (weekday?.[1]?.trim()) {
+    const on = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    const target = WEEKDAYS.indexOf(weekday[2].toLowerCase());
+    on.setDate(on.getDate() + ((target - on.getDay() + 7) % 7));
+    return { title: weekday[1].trim(), on };
+  }
+  const written = name.match(/^(.*?)\s+(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?$/i);
+  if (written?.[1]?.trim()) {
+    const label = written[2].toLowerCase() === "sept" ? "sep" : written[2].toLowerCase();
+    const month = MONTHS.indexOf(label) >= 0 ? MONTHS.indexOf(label) : ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(label.slice(0, 3));
+    const day = Number(written[3]);
+    const on = new Date(from.getFullYear(), month, day);
+    if (month < 0 || on.getMonth() !== month) return null;
+    const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    if (on < today) on.setFullYear(from.getFullYear() + 1);
+    return { title: written[1].trim(), on };
+  }
+  const numeric = name.match(/^(.*?)\s+(?:on\s+)?(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  if (!numeric?.[1]?.trim()) return null;
+  const month = Number(numeric[2]) - 1;
+  const day = Number(numeric[3]);
+  const rawYear = numeric[4] ? Number(numeric[4]) : null;
+  const year = rawYear == null ? from.getFullYear() : rawYear < 100 ? 2000 + rawYear : rawYear;
+  const on = new Date(year, month, day);
+  if (month < 0 || month > 11 || on.getMonth() !== month) return null;
+  if (rawYear == null) {
+    const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    if (on < today) on.setFullYear(from.getFullYear() + 1);
+  }
+  return { title: numeric[1].trim(), on };
+}
+
+export function createEventClock(title: string, from = new Date()): { title: string; hours?: number; minutes?: number; day: "today" | "tomorrow"; on?: Date } {
   const match = title.match(/^(.*?)(?:\s+(today|tomorrow))?(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm))?$/i);
-  if (!match || (!match[2] && !match[3])) return { title, day: "tomorrow" };
-  const name = match[1].trim();
-  const day = match[2]?.toLowerCase() === "today" ? "today" : "tomorrow";
-  if (!match[3]) return name ? { title: name, day } : { title, day: "tomorrow" };
+  const placed = eventOn((match?.[1] ?? title).trim(), from);
+  if (!match || (!match[2] && !match[3] && !placed)) return { title, day: "tomorrow" };
+  const name = (placed?.title ?? match[1] ?? "").trim();
+  const day = match?.[2]?.toLowerCase() === "today" ? "today" : "tomorrow";
+  if (!match?.[3]) return name ? { title: name, day, ...(placed ? { on: placed.on } : {}) } : { title, day: "tomorrow" };
   let hours = Number(match[3]);
   const minutes = match[4] ? Number(match[4]) : 0;
   const suffix = match[5].toLowerCase();
   if (!name || hours < 1 || hours > 12 || minutes > 59) return { title, day: "tomorrow" };
   if (suffix === "pm" && hours !== 12) hours += 12;
   if (suffix === "am" && hours === 12) hours = 0;
-  return { title: name, hours, minutes, day };
+  return { title: name, hours, minutes, day, ...(placed ? { on: placed.on } : {}) };
 }
 
 export function familyCalendarOffer(familyCalendarId: string | null | undefined): string | null {
