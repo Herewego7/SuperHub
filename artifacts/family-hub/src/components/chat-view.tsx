@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { checkOffTitle, createEventTitle, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "@/lib/chatTools";
+import { checkOffTitle, createEventTitle, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, schoolFact, toolsForRole } from "@/lib/chatTools";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, noteChatUnread, readThread, threadWithPlan, type ChatBubble } from "@/lib/chatThread";
@@ -114,6 +114,13 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     if (chore && tools.includes("complete_task")) {
       complete.mutate(chore);
       next.push({ id: `${Date.now()}-a`, role: "assistant", text: `Checked off ${chore.title}.` });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    }
+    const fact = isChild ? null : schoolFact(text, profiles);
+    if (fact && tools.includes("remember_fact")) {
+      void apiRequest("PATCH", `/api/profiles/${fact.profileId}`, { school: fact.school });
+      void queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
+      next.push({ id: `${Date.now()}-s`, role: "assistant", text: `Saved ${fact.name}'s school as ${fact.school}.` });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const driving = drivingReply(text, events, profiles);

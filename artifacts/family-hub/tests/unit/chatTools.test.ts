@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkOffTitle, createEventTitle, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "../../src/lib/chatTools";
+import { checkOffTitle, createEventTitle, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, schoolFact, toolsForRole } from "../../src/lib/chatTools";
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
@@ -27,6 +27,12 @@ test("a check-off credits the person on screen", () => {
 test("check off names the chore", () => {
   assert.equal(checkOffTitle("check off dishes"), "dishes");
   assert.equal(checkOffTitle("Who is driving soccer?"), null);
+});
+
+test("an adult can name a person's school", () => {
+  const fact = schoolFact("Liam's school is Lincoln.", [{ id: "liam", name: "Liam" }]);
+  assert.deepEqual(fact, { profileId: "liam", name: "Liam", school: "Lincoln" });
+  assert.equal(schoolFact("school is Lincoln", [{ id: "liam", name: "Liam" }]), null);
 });
 
 test("who is driving names the person on that event", () => {

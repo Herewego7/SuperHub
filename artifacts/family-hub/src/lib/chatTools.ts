@@ -51,6 +51,19 @@ export function checkOffTitle(text: string): string | null {
   return title ? title : null;
 }
 
+export function schoolFact(
+  text: string,
+  profiles: { id: string; name: string }[],
+): { profileId: string; name: string; school: string } | null {
+  const match = text.trim().match(/^(.+?)['’]s school is\s+(.+?)\.?$/i);
+  const who = match?.[1]?.trim().toLowerCase();
+  const school = match?.[2]?.trim();
+  if (!who || !school) return null;
+  const profile = profiles.find((person) => person.name.trim().toLowerCase() === who);
+  if (!profile) return null;
+  return { profileId: profile.id, name: profile.name, school };
+}
+
 export function drivingReply(
   text: string,
   events: { title: string; drivingProfileIds?: string[] | null }[],
