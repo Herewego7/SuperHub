@@ -4,6 +4,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
 import { choreProgress, choresForCount, dinnerName, earlierForHome, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
+import { eventClockLine } from "@/lib/chatTools";
 import { openEmailHref, slipQuote, slipSender, suggestedSchool } from "@/lib/slipMail";
 
 type Props = {
@@ -169,7 +170,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           <ul className="flex flex-col gap-1">
             {todayEvents.slice(0, 6).map((event) => (
               <li key={event.id} className="text-sm">
-                {event.title}
+                {eventClockLine(event.title, event.startTime)}
                 {eventSourceChip(event.source) && (
                   <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(event.source)}</span>
                 )}
@@ -187,7 +188,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           <ul className="flex flex-col gap-1">
             {horizon.slice(0, 5).map((event) => (
               <li key={event.id} className="text-sm">
-                {event.title}
+                {eventClockLine(event.title, event.startTime, true)}
                 {eventSourceChip(event.source) && (
                   <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(event.source)}</span>
                 )}

@@ -153,12 +153,16 @@ export function checkOffTitle(text: string): string | null {
   return title ? title : null;
 }
 
-function eventWhen(title: string, at: Date): string {
-  if (Number.isNaN(at.getTime()) || (at.getHours() === 0 && at.getMinutes() === 0)) return title;
+export function eventClockLine(title: string, startTime: Date | string, withDay = false): string {
+  const at = new Date(startTime);
+  if (Number.isNaN(at.getTime())) return title;
+  const day = withDay ? at.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
+  if (at.getHours() === 0 && at.getMinutes() === 0) return day ? `${title}, ${day}` : title;
   let hours = at.getHours();
   const suffix = hours >= 12 ? "PM" : "AM";
   hours = hours % 12 || 12;
-  return `${title}, ${hours}:${String(at.getMinutes()).padStart(2, "0")} ${suffix}`;
+  const clock = `${hours}:${String(at.getMinutes()).padStart(2, "0")} ${suffix}`;
+  return [title, day, clock].filter(Boolean).join(", ");
 }
 
 function dueOnDay(
@@ -235,7 +239,7 @@ export function dayReply(
   }
   for (const event of input.events) {
     const at = new Date(event.startTime);
-    if (at >= start && at < end) lines.push(eventWhen(event.title, at));
+    if (at >= start && at < end) lines.push(eventClockLine(event.title, at));
   }
   const kept = lines.slice(0, 5);
   const askedToday = start.toDateString() === new Date(input.day).toDateString();

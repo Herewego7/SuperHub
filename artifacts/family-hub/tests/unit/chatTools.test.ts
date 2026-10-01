@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "../../src/lib/chatTools";
+import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "../../src/lib/chatTools";
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
@@ -214,6 +214,13 @@ test("who is driving names the person on that event", () => {
   );
   assert.equal(reply, "Chad is driving Soccer.");
   assert.equal(drivingReply("Who is driving piano?", [], []), "I don't see piano.");
+});
+
+test("a home event names its clock, and the horizon names the day", () => {
+  const at = new Date(2026, 9, 2, 16, 0);
+  assert.equal(eventClockLine("Soccer", at), "Soccer, 4:00 PM");
+  assert.equal(eventClockLine("Picture day", new Date(2026, 9, 2, 0, 0)), "Picture day");
+  assert.match(eventClockLine("Soccer", at, true), /^Soccer, .+, 4:00 PM$/);
 });
 
 test("deleting an imported event asks first", () => {
