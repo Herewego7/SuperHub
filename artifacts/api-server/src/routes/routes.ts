@@ -3303,6 +3303,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { slipKey: _slipKey, ...row } = todo;
         todos.push(await storage.createChore({ ...row, userId }));
       }
+      const familyCalendarId = settings?.familyCalendarId;
+      const calendarId = familyCalendarId && familyCalendarId !== "none" ? familyCalendarId : null;
       const events = [];
       for (const event of planned.events) {
         const start = new Date();
@@ -3312,16 +3314,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         else start.setDate(start.getDate() + (slipDayOffset(note, start) ?? 1));
         start.setHours(event.hours, event.minutes, 0, 0);
         const end = new Date(start.getTime() + 60 * 60 * 1000);
-        events.push(await storage.createEvent({
+        const saved = await storage.createEvent({
           userId,
           title: event.title,
           description: event.description,
           startTime: start,
           endTime: end,
           profileIds: event.profileIds,
+          calendarId,
           source: event.source,
           externalId: event.externalId,
-        }));
+        });
+        events.push(saved);
+        void syncEventCreate(saved).catch((err) =>
+          console.warn("syncEventCreate (school email) failed:", err instanceof Error ? err.message : err),
+        );
       }
       res.status(201).json({ todos, events });
     } catch (error) {
