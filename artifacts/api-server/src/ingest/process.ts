@@ -4,6 +4,7 @@
  * one chore row and, when the note names a clock time, one event row.
  * Not-relevant and mute-sender live on the household, not on a person.
  */
+import { zonedWallClock } from "../lib/timezone";
 import { slipKey, type InboundMessage } from "./parse";
 
 export type HouseholdMail = {
@@ -77,6 +78,30 @@ export function slipClock(text: string): { hours: number; minutes: number } | nu
   if (suffix === "pm" && hours !== 12) hours += 12;
   if (suffix === "am" && hours === 12) hours = 0;
   return { hours, minutes };
+}
+
+function wallNow(now: Date, timeZone: string): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? "0");
+  return new Date(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"));
+}
+
+/** The clock in the email is the family's wall time, not the server's. */
+export function schoolEventStart(note: string, hours: number, minutes: number, now: Date, timeZone: string): Date {
+  const start = wallNow(now, timeZone);
+  const named = slipDate(note, start);
+  if (named) start.setFullYear(named.getFullYear(), named.getMonth(), named.getDate());
+  else start.setDate(start.getDate() + (slipDayOffset(note, start) ?? 1));
+  const date = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+  return zonedWallClock(date, hours, minutes, timeZone);
 }
 
 export function muteSender(state: HouseholdMail, address: string): HouseholdMail {

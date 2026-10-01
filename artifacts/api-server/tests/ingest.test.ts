@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, ingestMessages, muteSender, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, ingestMessages, muteSender, schoolEventStart, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
 
 test("two copies of the same slip from two adults become one to-do", () => {
   const planned = ingestMessages(
@@ -72,6 +72,8 @@ test("a written month and day is that calendar date", () => {
   assert.equal(numeric?.getMonth(), 9);
   assert.equal(numeric?.getDate(), 8);
   assert.equal(slipDate("10/8/2025", thursday)?.getFullYear(), 2025);
+  const late = schoolEventStart("Thursday at 3:30 PM", 15, 30, new Date("2026-10-01T03:00:00.000Z"), "America/Chicago");
+  assert.equal(late.toISOString(), "2026-10-01T20:30:00.000Z");
 });
 
 test("not relevant drops the slip already on Home", () => {

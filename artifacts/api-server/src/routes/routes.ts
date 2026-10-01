@@ -25,7 +25,7 @@ import { geocodeCity } from "../lib/geocode";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, ingestMessages, muteSender, slipDate, slipDayOffset, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, ingestMessages, muteSender, schoolEventStart, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
 import { dinnerCalendarChange, dinnerEventInsert, dinnersToCopy } from "../meals/dinnerEvent";
 import { slipKey } from "../ingest/parse";
 import { moveClock } from "../scheduler/eveningPlan";
@@ -3306,14 +3306,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const familyCalendarId = settings?.familyCalendarId;
       const calendarId = familyCalendarId && familyCalendarId !== "none" ? familyCalendarId : null;
+      const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
       const events = [];
       for (const event of planned.events) {
-        const start = new Date();
         const note = `${event.title} ${event.description}`;
-        const named = slipDate(note, start);
-        if (named) start.setFullYear(named.getFullYear(), named.getMonth(), named.getDate());
-        else start.setDate(start.getDate() + (slipDayOffset(note, start) ?? 1));
-        start.setHours(event.hours, event.minutes, 0, 0);
+        const start = schoolEventStart(note, event.hours, event.minutes, new Date(), timeZone);
         const end = new Date(start.getTime() + 60 * 60 * 1000);
         const saved = await storage.createEvent({
           userId,
