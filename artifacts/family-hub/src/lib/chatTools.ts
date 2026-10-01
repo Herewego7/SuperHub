@@ -92,11 +92,13 @@ const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "frida
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 
 function eventOn(name: string, from: Date): { title: string; on: Date } | null {
-  const weekday = name.match(/^(.*?)\s+(?:on\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/i);
+  const weekday = name.match(/^(.*?)\s+(?:on\s+)?(?:(next)\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/i);
   if (weekday?.[1]?.trim()) {
     const on = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-    const target = WEEKDAYS.indexOf(weekday[2].toLowerCase());
-    on.setDate(on.getDate() + ((target - on.getDay() + 7) % 7));
+    const target = WEEKDAYS.indexOf(weekday[3].toLowerCase());
+    let delta = (target - on.getDay() + 7) % 7;
+    if (weekday[2] && delta === 0) delta = 7;
+    on.setDate(on.getDate() + delta);
     return { title: weekday[1].trim(), on };
   }
   const written = name.match(/^(.*?)\s+(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?$/i);

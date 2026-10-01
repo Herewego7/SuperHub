@@ -62,10 +62,12 @@ export function slipDate(text: string, from: Date): Date | null {
 }
 
 export function slipDayOffset(text: string, from: Date): number | null {
-  const match = text.toLowerCase().match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
+  const match = text.toLowerCase().match(/\b(?:(next)\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
   if (!match) return null;
-  const target = WEEKDAYS.indexOf(match[1]);
-  return (target - from.getDay() + 7) % 7;
+  const target = WEEKDAYS.indexOf(match[2]);
+  let offset = (target - from.getDay() + 7) % 7;
+  if (match[1] && offset === 0) offset = 7;
+  return offset;
 }
 
 export function slipClock(text: string): { hours: number; minutes: number } | null {

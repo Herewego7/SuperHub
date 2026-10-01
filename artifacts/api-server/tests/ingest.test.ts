@@ -56,6 +56,8 @@ test("a named weekday is the next time that day comes", () => {
   assert.equal(slipDayOffset("Friday at 3:30 PM", thursday), 1);
   assert.equal(slipDayOffset("Wednesday at 3:30 PM", thursday), 6);
   assert.equal(slipDayOffset("at 3:30 PM", thursday), null);
+  assert.equal(slipDayOffset("next Friday at 3:30 PM", new Date(2026, 9, 2)), 7);
+  assert.equal(slipDayOffset("next Friday at 3:30 PM", thursday), 1);
 });
 
 test("a written month and day is that calendar date", () => {
