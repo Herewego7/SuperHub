@@ -33,6 +33,21 @@ export type PlannedEvent = {
 };
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+export function slipDate(text: string, from: Date): Date | null {
+  const match = text.toLowerCase().match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
+  if (!match) return null;
+  const name = match[1] === "sept" ? "sep" : match[1];
+  const month = MONTHS.indexOf(name) >= 0 ? MONTHS.indexOf(name) : ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(name.slice(0, 3));
+  const day = Number(match[2]);
+  if (month < 0 || day < 1 || day > 31) return null;
+  const date = new Date(from.getFullYear(), month, day);
+  if (date.getMonth() !== month) return null;
+  const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  if (date < today) date.setFullYear(from.getFullYear() + 1);
+  return date;
+}
 
 export function slipDayOffset(text: string, from: Date): number | null {
   const match = text.toLowerCase().match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
