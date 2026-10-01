@@ -35,6 +35,15 @@ export function assignmentsVisibleToFamily<T extends ScopedAssignment>(
  * `profileId` is the first person, which is what the existing unique key uses.
  * `audienceProfileIds` is the full list.
  */
+export function calendarIsWritable(
+  assignments: { calendarId: string; watched?: boolean | null; isActive?: boolean | null }[],
+  calendarId: string,
+): boolean {
+  const row = assignments.find((assignment) => assignment.calendarId === calendarId && assignment.isActive !== false);
+  if (!row) return true;
+  return row.watched !== false;
+}
+
 export function assignPeopleToCalendar(calendarId: string, profileIds: string[]) {
   const audienceProfileIds = [...new Set(profileIds.filter((id) => id.length > 0))];
   return {

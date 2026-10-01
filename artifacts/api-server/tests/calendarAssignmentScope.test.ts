@@ -4,6 +4,7 @@ import {
   assignmentsVisibleToFamily,
   assignmentsToDeactivate,
   assignPeopleToCalendar,
+  calendarIsWritable,
 } from "../src/lib/calendarAssignmentScope.ts";
 
 // Two families, and a calendar both of them have connected — a school
@@ -98,6 +99,12 @@ test("an already-inactive row is not re-deactivated", () => {
     calendarType: "google",
   });
   assert.deepEqual(toDeactivate, []);
+});
+
+test("an unwatched calendar is not a write target", () => {
+  const assignments = [{ calendarId: "school", watched: false, isActive: true }];
+  assert.equal(calendarIsWritable(assignments, "school"), false);
+  assert.equal(calendarIsWritable(assignments, "family"), true);
 });
 
 test("assigning two people to one calendar stores one calendar id", () => {

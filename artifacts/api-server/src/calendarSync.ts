@@ -13,6 +13,7 @@
  */
 import { storage } from "./storage";
 import { twoWaySyncFromSettings } from "./lib/settingsOwnership";
+import { calendarIsWritable } from "./lib/calendarAssignmentScope";
 import { googleRecurrence, outlookRecurrence, excludedInstants } from "./lib/recurrenceRule";
 import { DEFAULT_TIMEZONE } from "./lib/timezone";
 import { GoogleCalendarService } from "./googleCalendar";
@@ -166,6 +167,8 @@ async function createGoogleCopy(event: Event, profileId: string): Promise<void> 
   // to the account's primary calendar — the only behavior before this was
   // configurable.
   const targetCalendarId = tokens.writeCalendarId || GOOGLE_PRIMARY_CALENDAR;
+  const assignments = await storage.getCalendarAssignments(profileId);
+  if (!calendarIsWritable(assignments, targetCalendarId)) return;
   try {
     const created = await googleCalendarService.createEvent(
       tokens.accessToken,
@@ -211,6 +214,10 @@ async function createOutlookCopy(event: Event, profileId: string): Promise<void>
   // calendar (undefined → outlookCalendarService.createEvent posts to
   // /me/events) — the only behavior before this was configurable.
   const targetCalendarId = tokens?.writeCalendarId || undefined;
+  if (targetCalendarId) {
+    const assignments = await storage.getCalendarAssignments(profileId);
+    if (!calendarIsWritable(assignments, targetCalendarId)) return;
+  }
   try {
     const created = await outlookCalendarService.createEvent(
       accessToken,
