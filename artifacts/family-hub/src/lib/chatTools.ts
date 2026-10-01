@@ -51,11 +51,41 @@ export function checkOffTitle(text: string): string | null {
   return title ? title : null;
 }
 
+function dueOnDay(
+  chore: {
+    taskType?: string | null;
+    isActive?: boolean | null;
+    daysOfWeek?: number[] | null;
+    recurrenceType?: string | null;
+    targetCount?: number | null;
+    endDate?: Date | string | null;
+  },
+  start: Date,
+): boolean {
+  if (chore.isActive === false) return false;
+  if (chore.taskType === "todo") return true;
+  if (chore.taskType && chore.taskType !== "chore") return false;
+  if (chore.endDate && new Date(chore.endDate) < start) return false;
+  if (chore.targetCount && chore.targetCount > 0) return true;
+  if (chore.recurrenceType === "daily") return true;
+  return (chore.daysOfWeek ?? []).includes(start.getDay());
+}
+
 export function dayReply(
   text: string,
   input: {
-    chores: { title: string; taskType?: string | null }[];
+    chores: {
+      id?: string;
+      title: string;
+      taskType?: string | null;
+      isActive?: boolean | null;
+      daysOfWeek?: number[] | null;
+      recurrenceType?: string | null;
+      targetCount?: number | null;
+      endDate?: Date | string | null;
+    }[];
     events: { title: string; startTime: Date | string }[];
+    completions?: { choreId: string; completedAt?: Date | string | null }[];
     dinner?: string | null;
     day: Date;
   },
@@ -65,9 +95,19 @@ export function dayReply(
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
+  const done = new Set(
+    (input.completions ?? [])
+      .filter((completion) => {
+        if (!completion.completedAt) return false;
+        const at = new Date(completion.completedAt);
+        return at >= start && at < end;
+      })
+      .map((completion) => completion.choreId),
+  );
   const lines: string[] = [];
   for (const chore of input.chores) {
-    if (chore.taskType && chore.taskType !== "todo" && chore.taskType !== "chore") continue;
+    if (chore.id && done.has(chore.id)) continue;
+    if (!dueOnDay(chore, start)) continue;
     lines.push(chore.title);
   }
   for (const event of input.events) {

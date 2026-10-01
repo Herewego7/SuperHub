@@ -46,6 +46,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   }, [profileReady, profileKey]);
   const tools = toolsForRole(isChild);
   const { data: chores = [] } = useQuery<Chore[]>({ queryKey: ["/api/chores"] });
+  const { data: completions = [] } = useQuery<{ choreId: string; completedAt?: string | null }[]>({ queryKey: ["/api/chore-completions"] });
   const { data: groceries = [] } = useQuery<{ id: string; name: string }[]>({ queryKey: ["/api/grocery-items"] });
   const { data: mealGroceries = [] } = useQuery<{ name: string }[]>({
     queryKey: ["/api/grocery-list/aggregate", "chat"],
@@ -138,7 +139,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     });
     const planEvents = visibleForProfiles(events, selectedIds);
     const plan = tools.includes("get_plan")
-      ? dayReply(text, { chores: planChores, events: planEvents, dinner: dinnerName(meals, new Date()), day: new Date() })
+      ? dayReply(text, { chores: planChores, events: planEvents, completions, dinner: dinnerName(meals, new Date()), day: new Date() })
       : null;
     if (plan) {
       next.push({ id: `${Date.now()}-p`, role: "assistant", text: plan });

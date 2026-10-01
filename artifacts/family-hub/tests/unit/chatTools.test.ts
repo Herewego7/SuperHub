@@ -32,12 +32,18 @@ test("check off names the chore", () => {
 test("what's the plan names the day and dinner", () => {
   const day = new Date(2026, 9, 1, 15, 0);
   const reply = dayReply("what's the plan?", {
-    chores: [{ title: "Feed the dog", taskType: "chore" }],
+    chores: [
+      { id: "dog", title: "Feed the dog", taskType: "chore", recurrenceType: "daily" },
+      { id: "mow", title: "Mow the lawn", taskType: "chore", daysOfWeek: [0] },
+      { id: "done", title: "Dishes", taskType: "chore", recurrenceType: "daily" },
+      { id: "milk", title: "Buy milk", taskType: "todo" },
+    ],
+    completions: [{ choreId: "done", completedAt: day }],
     events: [{ title: "Soccer", startTime: day }],
     dinner: "Tacos",
     day,
   });
-  assert.equal(reply, "Feed the dog\nSoccer\nDinner. Tacos");
+  assert.equal(reply, "Feed the dog\nBuy milk\nSoccer\nDinner. Tacos");
   assert.equal(dayReply("hello", { chores: [], events: [], dinner: null, day }), null);
 });
 
