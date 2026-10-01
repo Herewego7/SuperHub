@@ -154,6 +154,20 @@ test("what's the plan names the day and dinner", () => {
   });
   assert.equal(reply, "Feed the dog\nBuy milk\nSoccer\nDinner. Tacos");
   assert.equal(dayReply("hello", { chores: [], events: [], dinner: null, day }), null);
+  const friday = dayReply("what's the plan Friday", {
+    chores: [
+      { id: "dog", title: "Feed the dog", taskType: "chore", recurrenceType: "daily" },
+      { id: "mow", title: "Mow the lawn", taskType: "chore", daysOfWeek: [0] },
+      { id: "done", title: "Dishes", taskType: "chore", recurrenceType: "daily" },
+      { id: "milk", title: "Buy milk", taskType: "todo" },
+    ],
+    completions: [{ choreId: "done", completedAt: day }],
+    events: [{ title: "Soccer", startTime: day }, { title: "Piano", startTime: new Date(2026, 9, 2, 16, 0) }],
+    dinner: "Tacos",
+    day,
+  });
+  assert.equal(friday, "Feed the dog\nDishes\nBuy milk\nPiano");
+  assert.equal(dayReply("what's the plan for the weekend", { chores: [], events: [], dinner: null, day }), "I don't know that day.");
 });
 
 test("an adult can name a person's school", () => {

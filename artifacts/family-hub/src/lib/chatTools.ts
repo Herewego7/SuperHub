@@ -169,9 +169,16 @@ export function dayReply(
     day: Date;
   },
 ): string | null {
-  if (!/\bwhat(?:'s| is) (?:the plan|my day)\b/i.test(text.trim())) return null;
+  const asked = text.trim().match(/\bwhat(?:'s| is) (?:the plan|my day)(?:\s+(?:for|on))?\s*(.*?)\??$/i);
+  if (!asked) return null;
   const start = new Date(input.day);
   start.setHours(0, 0, 0, 0);
+  const when = asked[1].trim();
+  if (when && !/^today$/i.test(when)) {
+    const on = moveDay(when, start);
+    if (!on) return "I don't know that day.";
+    start.setFullYear(on.getFullYear(), on.getMonth(), on.getDate());
+  }
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
   const done = new Set(
@@ -194,7 +201,8 @@ export function dayReply(
     if (at >= start && at < end) lines.push(event.title);
   }
   const kept = lines.slice(0, 5);
-  if (input.dinner) kept.push(`Dinner. ${input.dinner}`);
+  const askedToday = start.toDateString() === new Date(input.day).toDateString();
+  if (input.dinner && askedToday) kept.push(`Dinner. ${input.dinner}`);
   return kept.join("\n") || "Nothing on the plan.";
 }
 
