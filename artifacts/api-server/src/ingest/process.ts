@@ -35,18 +35,29 @@ export type PlannedEvent = {
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 
-export function slipDate(text: string, from: Date): Date | null {
-  const match = text.toLowerCase().match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
-  if (!match) return null;
-  const name = match[1] === "sept" ? "sep" : match[1];
-  const month = MONTHS.indexOf(name) >= 0 ? MONTHS.indexOf(name) : ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(name.slice(0, 3));
-  const day = Number(match[2]);
-  if (month < 0 || day < 1 || day > 31) return null;
-  const date = new Date(from.getFullYear(), month, day);
+function calendarDate(year: number, month: number, day: number, from: Date, explicitYear: boolean): Date | null {
+  if (month < 0 || month > 11 || day < 1 || day > 31) return null;
+  const date = new Date(year, month, day);
   if (date.getMonth() !== month) return null;
-  const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  if (date < today) date.setFullYear(from.getFullYear() + 1);
+  if (!explicitYear) {
+    const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    if (date < today) date.setFullYear(from.getFullYear() + 1);
+  }
   return date;
+}
+
+export function slipDate(text: string, from: Date): Date | null {
+  const written = text.toLowerCase().match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
+  if (written) {
+    const name = written[1] === "sept" ? "sep" : written[1];
+    const month = MONTHS.indexOf(name) >= 0 ? MONTHS.indexOf(name) : ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(name.slice(0, 3));
+    return calendarDate(from.getFullYear(), month, Number(written[2]), from, false);
+  }
+  const numeric = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  if (!numeric) return null;
+  const rawYear = numeric[3] ? Number(numeric[3]) : null;
+  const year = rawYear == null ? from.getFullYear() : rawYear < 100 ? 2000 + rawYear : rawYear;
+  return calendarDate(year, Number(numeric[1]) - 1, Number(numeric[2]), from, rawYear != null);
 }
 
 export function slipDayOffset(text: string, from: Date): number | null {

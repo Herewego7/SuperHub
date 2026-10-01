@@ -67,6 +67,11 @@ test("a written month and day is that calendar date", () => {
   const past = slipDate("January 2", thursday);
   assert.equal(past?.getFullYear(), 2027);
   assert.equal(slipDate("Thursday at 3:30", thursday), null);
+  const numeric = slipDate("Picture day 10/8 at 3:30 PM", thursday);
+  assert.equal(numeric?.getFullYear(), 2026);
+  assert.equal(numeric?.getMonth(), 9);
+  assert.equal(numeric?.getDate(), 8);
+  assert.equal(slipDate("10/8/2025", thursday)?.getFullYear(), 2025);
 });
 
 test("not relevant drops the slip already on Home", () => {
