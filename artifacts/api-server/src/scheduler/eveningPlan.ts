@@ -7,6 +7,7 @@ import { eq, isNotNull } from "drizzle-orm";
 import { db, profiles, locationSettings } from "@workspace/db";
 import { sendPushToUser } from "../lib/push";
 import { localDate, localHHMM } from "../lib/choreToday";
+import { driverIdsOf } from "../lib/eventDrivers";
 import { logger } from "../lib/logger";
 import { createWorkGate } from "../lib/workGate";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
@@ -73,14 +74,13 @@ export function dueForPlan<T extends {
   });
 }
 
-export function eventsForPlan<T extends { profileIds?: string[] | null; drivingProfileIds?: string[] | null }>(
+export function eventsForPlan<T extends { profileIds?: string[] | null; drivingProfileId?: string | null; drivingProfileIds?: string[] | null }>(
   events: T[],
   profileId: string,
 ): T[] {
   return events.filter((event) => {
     const ids = event.profileIds ?? [];
-    const drivers = event.drivingProfileIds ?? [];
-    return ids.length === 0 || ids.includes(profileId) || drivers.includes(profileId);
+    return ids.length === 0 || ids.includes(profileId) || driverIdsOf(event).includes(profileId);
   });
 }
 

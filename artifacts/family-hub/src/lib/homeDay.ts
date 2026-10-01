@@ -1,5 +1,6 @@
 /** What Home shows for one day. A shared to-do is one chore row, however many people are on it. */
 import { withoutUnwatched, type AssignmentLike } from "./outlookAttribution";
+import { driverIdsOf } from "./eventDrivers";
 
 export type HomeTodo = {
   id: string;
@@ -8,13 +9,12 @@ export type HomeTodo = {
   isActive?: boolean | null;
 };
 
-export function visibleForProfiles<T extends { profileIds?: string[] | null; drivingProfileIds?: string[] | null }>(rows: T[], selectedIds: string[]): T[] {
+export function visibleForProfiles<T extends { profileIds?: string[] | null; drivingProfileId?: string | null; drivingProfileIds?: string[] | null }>(rows: T[], selectedIds: string[]): T[] {
   if (selectedIds.length === 0) return rows;
   return rows.filter((row) => {
     const ids = row.profileIds ?? [];
-    const drivers = row.drivingProfileIds ?? [];
     if (ids.length === 0) return true;
-    return ids.some((id) => selectedIds.includes(id)) || drivers.some((id) => selectedIds.includes(id));
+    return ids.some((id) => selectedIds.includes(id)) || driverIdsOf(row).some((id) => selectedIds.includes(id));
   });
 }
 

@@ -92,6 +92,11 @@ test("Chad's filter hides an event that is only for Liam", () => {
     ["chad"],
   );
   assert.deepEqual(driving.map((row) => row.title), ["Carpool"]);
+  const legacy = visibleForProfiles(
+    [{ title: "Pickup", profileIds: ["liam"], drivingProfileId: "chad", drivingProfileIds: [] }],
+    ["chad"],
+  );
+  assert.deepEqual(legacy.map((row) => row.title), ["Pickup"]);
 });
 
 test("chat leaves out an unwatched calendar", () => {

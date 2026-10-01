@@ -123,6 +123,11 @@ test("a plan keeps household events and the ones for that person", () => {
     "chad",
   );
   assert.deepEqual(rows.map((row) => row.title), ["Dinner out", "Carpool"]);
+  const legacy = eventsForPlan(
+    [{ title: "Pickup", profileIds: ["liam"], drivingProfileId: "chad", drivingProfileIds: [] }],
+    "chad",
+  );
+  assert.deepEqual(legacy.map((row) => row.title), ["Pickup"]);
 });
 
 test("a weekly event is on the plan the week after it starts", () => {
