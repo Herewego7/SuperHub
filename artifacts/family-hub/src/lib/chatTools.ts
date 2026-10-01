@@ -175,6 +175,18 @@ export function drivingReply(
   return `${names.slice(0, -1).join(", ")} and ${last} are driving ${event.title}.`;
 }
 
+export function muteAddress(text: string): string | null {
+  const match = text.trim().match(/^mute\s+(\S+@\S+)$/i);
+  const address = match?.[1]?.replace(/\.+$/, "");
+  return address || null;
+}
+
+export function notRelevantTitle(text: string): string | null {
+  const match = text.trim().match(/^(?:not relevant|ignore)\s+(.+?)\.?$/i);
+  const title = match?.[1]?.trim();
+  return title || null;
+}
+
 export function moveEventWhen(text: string): { title: string; hours: number; minutes: number } | null {
   const match = text.trim().match(/^move\s+(.+?)\s+to\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\.?$/i);
   if (!match) return null;

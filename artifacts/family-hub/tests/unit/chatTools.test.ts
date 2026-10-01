@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, moveEventWhen, pointsProfileId, schoolFact, toolsForRole } from "../../src/lib/chatTools";
+import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, moveEventWhen, muteAddress, notRelevantTitle, pointsProfileId, schoolFact, toolsForRole } from "../../src/lib/chatTools";
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
@@ -11,6 +11,12 @@ test("a kid tool list excludes inbox search", () => {
 
 test("a parent tool list includes inbox search", () => {
   assert.equal(toolsForRole(false).includes("search"), true);
+});
+
+test("mute and not-relevant name the sender and the slip", () => {
+  assert.equal(muteAddress("mute office@school.edu"), "office@school.edu");
+  assert.equal(notRelevantTitle("not relevant Permission slip"), "Permission slip");
+  assert.equal(toolsForRole(true).includes("mute_sender"), false);
 });
 
 test("move names the event and the clock", () => {
