@@ -1064,8 +1064,8 @@ function PersonCalendarTypeSection({
   calendars,
   profiles,
   calendarAssignments,
-  pendingAssignments,
-  setPendingAssignments,
+  pendingAudiences,
+  setPendingAudiences,
   saveCalendarAssignmentMutation,
   onReconnect,
   isExpanded,
@@ -1078,9 +1078,9 @@ function PersonCalendarTypeSection({
   calendars: CalendarAssignmentCalendar[];
   profiles: Profile[];
   calendarAssignments: any[];
-  pendingAssignments: Record<string, string>;
-  setPendingAssignments: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  saveCalendarAssignmentMutation: ReturnType<typeof useMutation<any, Error, { calendarId: string; profileId: string; calendarType: "google" | "outlook"; calendarName: string; calendarColor: string; emailAddress: string }>>;
+  pendingAudiences: Record<string, string[]>;
+  setPendingAudiences: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
+  saveCalendarAssignmentMutation: ReturnType<typeof useMutation<any, Error, { calendarId: string; profileId: string; profileIds: string[]; calendarType: "google" | "outlook"; calendarName: string; calendarColor: string; emailAddress: string }>>;
   onReconnect: (profileId: string) => void;
   /** Controlled by the single chevron on the unified per-person row above —
    * this component no longer owns its own expand/collapse state. */
@@ -1221,8 +1221,7 @@ function PersonCalendarTypeSection({
         // the connecting profile — the calendar view already implicitly treats an
         // unassigned calendar's events as belonging to whoever connected it, so
         // showing "unassigned" here was misleading, not neutral.
-        const assignedProfileId = pendingAssignments[calendar.id] || assignment?.profileId || ownerProfile?.id || "";
-        const assignedProfile = profiles.find((p) => p.id === assignedProfileId);
+        const assignedProfileId = assignment?.profileId || ownerProfile?.id || "";
         const isSelected = (pendingSelected ?? new Set(profileCalendars.filter((c) => c.selected).map((c) => c.id))).has(calendar.id);
 
         return (
@@ -1234,7 +1233,9 @@ function PersonCalendarTypeSection({
                 checked={isSelected}
                 onCheckedChange={() => toggleCalendarSelected(calendar.id)}
                 data-testid={`calendar-checkbox-${calendar.id}`}
+                aria-label="Watch"
               />
+              <span className="text-xs text-muted-foreground">Watch</span>
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <div
                   className="w-3 h-3 rounded-full flex-shrink-0"
@@ -1250,51 +1251,41 @@ function PersonCalendarTypeSection({
             </div>
 
             {/* Second row: Assignment dropdown */}
-            <div className="flex items-center gap-2 pl-8">
-              <span className="text-xs text-muted-foreground min-w-fit">Assign to:</span>
-              <Select
-                value={assignedProfileId || "none"}
-                onValueChange={(profileId) => {
-                  if (profileId && profileId !== "none") {
-                    setPendingAssignments((prev) => ({ ...prev, [calendar.id]: profileId }));
-                    saveCalendarAssignmentMutation.mutate({
-                      calendarId: calendar.id,
-                      profileId,
-                      calendarType,
-                      calendarName: calendar.name,
-                      calendarColor: calendar.color || FALLBACK_COLOR,
-                      emailAddress: ownerProfile?.email || "",
-                    });
-                  }
-                }}
-                data-testid={`select-${calendarType}-calendar-${calendar.id}`}
-              >
-                <SelectTrigger className="w-36 h-7 text-xs">
-                  <div className="flex items-center gap-1 w-full">
-                    {assignedProfile ? (
-                      <>
-                        <div
-                          className="w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: assignedProfile.color }}
-                        />
-                        <span className="truncate flex-1 text-left">{assignedProfile.name}</span>
-                      </>
-                    ) : (
-                      <span className="text-muted-foreground">Select...</span>
-                    )}
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  {profiles.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
-                        {p.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-2 pl-8 flex-wrap">
+              <span className="text-xs text-muted-foreground min-w-fit">Who it's for</span>
+              {profiles.filter((p) => !p.isAllFamilyProfile).map((p) => {
+                const savedAudience: string[] = Array.isArray(assignment?.audienceProfileIds) && assignment.audienceProfileIds.length > 0
+                  ? assignment.audienceProfileIds
+                  : assignedProfileId ? [assignedProfileId] : [];
+                const audience = pendingAudiences[calendar.id] ?? savedAudience;
+                const on = audience.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    aria-pressed={on}
+                    data-testid={`who-for-${calendar.id}-${p.id}`}
+                    className="rounded-full px-2 py-0.5 text-xs border border-border"
+                    style={on ? { background: "#5E8FAD", color: "white" } : undefined}
+                    onClick={() => {
+                      const next = on ? audience.filter((id) => id !== p.id) : [...audience, p.id];
+                      if (next.length === 0) return;
+                      setPendingAudiences((prev) => ({ ...prev, [calendar.id]: next }));
+                      saveCalendarAssignmentMutation.mutate({
+                        calendarId: calendar.id,
+                        profileId: next[0],
+                        profileIds: next,
+                        calendarType,
+                        calendarName: calendar.name,
+                        calendarColor: calendar.color || FALLBACK_COLOR,
+                        emailAddress: ownerProfile?.email || "",
+                      });
+                    }}
+                  >
+                    {p.name}
+                  </button>
+                );
+              })}
             </div>
           </div>
         );
@@ -1376,7 +1367,7 @@ export function CalendarConnectionsSection({
   const queryClient = useQueryClient();
   const { spotlight, spotlightOverlay } = useSpotlight();
 
-  const [pendingAssignments, setPendingAssignments] = useState<Record<string, string>>({});
+  const [pendingAudiences, setPendingAudiences] = useState<Record<string, string[]>>({});
 
   // Find ALL profiles with Google Calendar connections
   const googleConnectedProfiles = profiles.filter(p => p.googleCalendarConnected);
@@ -1434,13 +1425,20 @@ export function CalendarConnectionsSection({
   });
 
   // Two-way sync: read current setting + toggle mutation
-  const { data: calendarSettingsData } = useQuery<{ twoWaySyncEnabled?: boolean | null }>({
+  const { data: calendarSettingsData } = useQuery<{
+    twoWaySyncEnabled?: boolean | null;
+    familyCalendarId?: string | null;
+    scanInbox?: boolean | null;
+    shareOriginals?: boolean | null;
+  }>({
     queryKey: ["/api/calendar-settings"],
   });
   // `!== false`, not `=== true`: the DB column defaults to true, but a family
   // with no calendar_settings row yet returns undefined here — which read as
   // OFF, contradicting the documented default. An explicit false still wins.
   const twoWaySyncEnabled = calendarSettingsData?.twoWaySyncEnabled !== false;
+  const scanInbox = calendarSettingsData?.scanInbox !== false;
+  const shareOriginals = calendarSettingsData?.shareOriginals === true;
 
   // Recent two-way-sync failures — these were previously written to the
   // database (event_calendar_syncs.syncState/lastError) on every write-path
@@ -1488,6 +1486,24 @@ export function CalendarConnectionsSection({
           ? "New events will be added to each assignee's connected calendar."
           : "App events will no longer be added to connected calendars.",
       });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+    },
+  });
+
+  const inboxMutation = useMutation({
+    mutationFn: async (patch: { scanInbox?: boolean; shareOriginals?: boolean }) => {
+      await apiRequest("PATCH", "/api/calendar-settings/inbox", patch);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+    },
+  });
+
+  const familyCalendarMutation = useMutation({
+    mutationFn: async (calendarId: string | null) => {
+      await apiRequest("PATCH", "/api/calendar-settings/family-calendar", { calendarId });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
@@ -1835,16 +1851,14 @@ export function CalendarConnectionsSection({
                 renders one profile's calendar details at a time instead of a
                 whole list internally. */}
               <div>
-                {/* No "Calendar Connections" sub-header — this is the whole
-                    content of a section already titled "Calendar", so the
-                    header just repeated the label one level down. */}
+                <h3 className="text-sm font-semibold mb-1" data-testid="connected-accounts-heading">Connected accounts</h3>
                 <p className="text-[11px] text-muted-foreground mb-2">
-                  Connect each person's Google or Outlook calendar (two-way sync), or subscribe to a read-only iCal / URL feed.
+                  One adult connects Google or Outlook. That account brings mail and calendars. A kid is not an account owner.
                 </p>
                 {/* Two-way sync toggle — compact, sits right under the section's own sub-text */}
                 <div className="flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-md bg-muted/50 mb-3">
                   <p className="text-xs text-foreground">
-                    Add app events to connected calendars
+                    Add app events to watched calendars that can be written
                   </p>
                   <Switch
                     checked={twoWaySyncEnabled}
@@ -1852,6 +1866,39 @@ export function CalendarConnectionsSection({
                     disabled={twoWaySyncMutation.isPending}
                     data-testid="toggle-two-way-sync"
                   />
+                </div>
+                <div className="flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-md bg-muted/50 mb-2">
+                  <p className="text-xs text-foreground">Scan inbox</p>
+                  <Switch
+                    checked={scanInbox}
+                    onCheckedChange={(checked) => inboxMutation.mutate({ scanInbox: !!checked })}
+                    data-testid="toggle-scan-inbox"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-md bg-muted/50 mb-3">
+                  <p className="text-xs text-foreground">Share originals with other adults</p>
+                  <Switch
+                    checked={shareOriginals}
+                    onCheckedChange={(checked) => inboxMutation.mutate({ shareOriginals: !!checked })}
+                    data-testid="toggle-share-originals"
+                  />
+                </div>
+                <div className="mb-3">
+                  <p className="text-xs font-medium mb-1">Family calendar</p>
+                  <Select
+                    value={calendarSettingsData?.familyCalendarId || "none"}
+                    onValueChange={(value) => familyCalendarMutation.mutate(value === "none" ? null : value)}
+                  >
+                    <SelectTrigger className="h-8 text-xs" data-testid="select-family-calendar">
+                      <SelectValue placeholder="Where new events are written" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not chosen yet</SelectItem>
+                      {[...allGoogleCalendars, ...allOutlookCalendars].map((calendar: any) => (
+                        <SelectItem key={calendar.id} value={calendar.id}>{calendar.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 {syncErrors && syncErrors.length > 0 && (
                   <div className="mb-3 p-2.5 rounded-md bg-destructive/10 border border-destructive/20 space-y-1.5">
@@ -1936,6 +1983,7 @@ export function CalendarConnectionsSection({
                         <div key={profile.id} id={`calendar-profile-row-${profile.id}`} className="rounded-lg border border-border overflow-hidden">
                           <ProfileCalendarRow
                             profile={profile}
+                            allowConnect={!(profile.role === "child" || profile.isChild)}
                             onGoogleConnect={handleGoogleCalendarConnect}
                             onGoogleDisconnect={(id) => disconnectGoogleCalendarMutation.mutate(id)}
                             onOutlookConnect={handleOutlookConnect}
@@ -1971,8 +2019,8 @@ export function CalendarConnectionsSection({
                                   calendars={mappedGoogleCalendars}
                                   profiles={profiles}
                                   calendarAssignments={calendarAssignments}
-                                  pendingAssignments={pendingAssignments}
-                                  setPendingAssignments={setPendingAssignments}
+                                  pendingAudiences={pendingAudiences}
+                                  setPendingAudiences={setPendingAudiences}
                                   saveCalendarAssignmentMutation={saveCalendarAssignmentMutation}
                                   onReconnect={handleGoogleCalendarConnect}
                                   isExpanded={isExpanded}
@@ -1986,8 +2034,8 @@ export function CalendarConnectionsSection({
                                   calendars={mappedOutlookCalendars}
                                   profiles={profiles}
                                   calendarAssignments={calendarAssignments}
-                                  pendingAssignments={pendingAssignments}
-                                  setPendingAssignments={setPendingAssignments}
+                                  pendingAudiences={pendingAudiences}
+                                  setPendingAudiences={setPendingAudiences}
                                   saveCalendarAssignmentMutation={saveCalendarAssignmentMutation}
                                   onReconnect={handleOutlookConnect}
                                   isExpanded={isExpanded}

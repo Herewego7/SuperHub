@@ -31,6 +31,20 @@ export function assignmentsVisibleToFamily<T extends ScopedAssignment>(
 }
 
 /**
+ * One calendar, many people. The saved row keeps a single calendar id.
+ * `profileId` is the first person, which is what the existing unique key uses.
+ * `audienceProfileIds` is the full list.
+ */
+export function assignPeopleToCalendar(calendarId: string, profileIds: string[]) {
+  const audienceProfileIds = [...new Set(profileIds.filter((id) => id.length > 0))];
+  return {
+    calendarId,
+    profileId: audienceProfileIds[0] ?? "",
+    audienceProfileIds,
+  };
+}
+
+/**
  * Which rows a reassignment should deactivate.
  *
  * A calendar belongs to one profile at a time, so the previous owner's row has

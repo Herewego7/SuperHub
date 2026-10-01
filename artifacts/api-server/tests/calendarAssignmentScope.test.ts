@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   assignmentsVisibleToFamily,
   assignmentsToDeactivate,
+  assignPeopleToCalendar,
 } from "../src/lib/calendarAssignmentScope.ts";
 
 // Two families, and a calendar both of them have connected — a school
@@ -97,4 +98,11 @@ test("an already-inactive row is not re-deactivated", () => {
     calendarType: "google",
   });
   assert.deepEqual(toDeactivate, []);
+});
+
+test("assigning two people to one calendar stores one calendar id", () => {
+  const saved = assignPeopleToCalendar("school@group.calendar.google.com", ["liam", "chad"]);
+  assert.equal(saved.calendarId, "school@group.calendar.google.com");
+  assert.deepEqual(saved.audienceProfileIds, ["liam", "chad"]);
+  assert.equal(saved.profileId, "liam");
 });

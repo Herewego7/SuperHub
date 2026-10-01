@@ -342,6 +342,10 @@ export const calendarSettings = pgTable("calendar_settings", {
   // assigned profile's connected Google/Outlook calendar. Default on — most
   // families connecting a calendar expect app events to actually show up on it.
   twoWaySyncEnabled: boolean("two_way_sync_enabled").default(true),
+  // One household calendar receives events the app creates. Null until an adult picks one.
+  familyCalendarId: text("family_calendar_id"),
+  scanInbox: boolean("scan_inbox").notNull().default(true),
+  shareOriginals: boolean("share_originals").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
@@ -544,6 +548,9 @@ export const calendarAssignments = pgTable("calendar_assignments", {
   calendarColor: text("calendar_color"), // Color from the calendar provider
   emailAddress: text("email_address").notNull(), // Email address associated with the calendar
   isActive: boolean("is_active").default(true),
+  // Everyone this calendar is for. The row itself stays one calendar id.
+  audienceProfileIds: jsonb("audience_profile_ids").$type<string[]>().notNull().default([]),
+  watched: boolean("watched").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [

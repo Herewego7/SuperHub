@@ -23,6 +23,8 @@ interface ProfileCalendarRowProps {
   /** Start (or re-start) the Outlook OAuth flow for this profile. */
   onOutlookConnect: (profileId: string) => void;
   onOutlookDisconnect: (profileId: string) => void;
+  /** A kid is never the account owner, so the row shows no connect button. */
+  allowConnect?: boolean;
 }
 
 /**
@@ -37,6 +39,7 @@ export function ProfileCalendarRow({
   onGoogleDisconnect,
   onOutlookConnect,
   onOutlookDisconnect,
+  allowConnect = true,
 }: ProfileCalendarRowProps) {
   const { toast } = useToast();
   const googleConnected = !!profile.googleCalendarConnected;
@@ -95,22 +98,7 @@ export function ProfileCalendarRow({
       <div className="flex items-center gap-2 flex-wrap">
         <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: profile.color }} />
         <span className="text-sm font-medium flex-1 min-w-[4rem]">{profile.name}</span>
-        {/* modal={false}: a real, reproducible bug (2026-08-27) — this
-            dropdown lives inside pages that ALREADY manage their own
-            overlay/pointer-lock state (Settings' own Dialog, and the
-            onboarding wizard's full-screen replay overlay). Radix's default
-            modal DropdownMenu applies its OWN scroll-lock/pointer-blocking
-            on open, which conflicts with the ancestor's — dismissing the
-            menu by clicking OUTSIDE it (not Escape, not picking an option)
-            left `document.body`/`<html>` permanently `pointer-events: none`,
-            silently freezing every click on the entire page until a full
-            reload. Confirmed with a real (non-forced) Playwright click that
-            failed with "<html>...intercepts pointer events" in BOTH
-            Settings' Calendar Connections and the onboarding calendar step
-            — a pre-existing bug, not something new to either. `modal=false`
-            tells Radix this menu doesn't need its own focus-trap/pointer-
-            lock since it's always nested inside a page that already handles
-            that, which is the standard fix for this exact Radix issue class. */}
+        {allowConnect && (
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             {/* "Add another" once something is already connected: this menu is
@@ -145,6 +133,7 @@ export function ProfileCalendarRow({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        )}
       </div>
 
       {/* Connected items: Google / Outlook (two-way) + iCal feeds (read-only) */}
