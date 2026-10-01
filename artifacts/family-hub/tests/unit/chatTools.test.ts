@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkOffTitle, deleteEventTitle, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "../../src/lib/chatTools";
+import { checkOffTitle, createEventTitle, deleteEventTitle, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "../../src/lib/chatTools";
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
@@ -11,6 +11,12 @@ test("a kid tool list excludes inbox search", () => {
 
 test("a parent tool list includes inbox search", () => {
   assert.equal(toolsForRole(false).includes("search"), true);
+});
+
+test("a new event is offered to the family calendar", () => {
+  assert.equal(createEventTitle("add event Soccer practice"), "Soccer practice");
+  assert.equal(familyCalendarOffer("family@group.calendar.google.com"), "family@group.calendar.google.com");
+  assert.equal(familyCalendarOffer("none"), null);
 });
 
 test("a check-off credits the person on screen", () => {

@@ -33,6 +33,18 @@ export function pointsProfileId(profileIds: string[], profileKey: string): strin
   return profileIds[0] ?? null;
 }
 
+export function createEventTitle(text: string): string | null {
+  const match = text.trim().match(/^(?:add|create)\s+(?:an?\s+)?event\s+(?:called\s+)?(.+?)\.?$/i);
+  const title = match?.[1]?.trim();
+  return title ? title : null;
+}
+
+export function familyCalendarOffer(familyCalendarId: string | null | undefined): string | null {
+  const id = familyCalendarId?.trim();
+  if (!id || id === "none") return null;
+  return id;
+}
+
 export function checkOffTitle(text: string): string | null {
   const match = text.trim().match(/^check off (.+)$/i);
   const title = match?.[1]?.trim();

@@ -4,7 +4,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
 import { choreProgress, dinnerName, horizonEvents, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
-import { slipQuote, slipSender, suggestedSchool } from "@/lib/slipMail";
+import { openEmailHref, slipQuote, slipSender, suggestedSchool } from "@/lib/slipMail";
 
 type Props = {
   chores: Chore[];
@@ -22,6 +22,9 @@ type Props = {
 export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, kidName, personId, personSchool, onOpenChores }: Props) {
   const [earlierOpen, setEarlierOpen] = useState(false);
   const dayKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+  const { data: calendarSettings } = useQuery<{ shareOriginals?: boolean | null }>({
+    queryKey: ["/api/calendar-settings"],
+  });
   const { data: meals = [] } = useQuery<Meal[]>({
     queryKey: ["/api/meals", dayKey, dayKey],
     queryFn: async () => {
@@ -106,6 +109,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
               const sender = slipSender(todo.description);
               const school = suggestedSchool(quote);
               const offerSchool = Boolean(school && personId && !personSchool);
+              const emailHref = openEmailHref(calendarSettings?.shareOriginals === true, sender);
               return (
               <li key={todo.id} data-testid={`home-todo-${todo.id}`} className="flex items-start gap-3 rounded-2xl border border-border bg-card px-3 py-2">
                 <button
@@ -128,6 +132,9 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
                           <button type="button" data-testid="home-todo-mute" className="underline" onClick={() => muteSender.mutate(sender)}>
                             Mute sender
                           </button>
+                        )}
+                        {emailHref && (
+                          <a data-testid="home-todo-open-email" className="underline" href={emailHref}>Open email</a>
                         )}
                         {offerSchool && (
                           <button type="button" data-testid="home-todo-save-school" className="underline" onClick={() => saveSchool.mutate(school)}>

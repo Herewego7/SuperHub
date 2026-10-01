@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { checkOffTitle, deleteEventTitle, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "@/lib/chatTools";
+import { checkOffTitle, createEventTitle, deleteEventTitle, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "@/lib/chatTools";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, readThread, type ChatBubble } from "@/lib/chatThread";
@@ -53,6 +53,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     },
   });
   const { data: events = [] } = useQuery<{ id: string; title: string; source?: string | null }[]>({ queryKey: ["/api/events"] });
+  const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
   const { data: meals = [] } = useQuery<Meal[]>({
     queryKey: ["/api/meals", "chat-dinner"],
     queryFn: async () => {
@@ -118,6 +119,29 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     if (target && tools.includes("delete_event") && importedEventNeedsConfirm(target.source)) {
       setPendingDeleteId(target.id);
       next.push({ id: `${Date.now()}-c`, role: "assistant", text: `Delete ${target.title}? It came from outside the app. Reply yes to delete it.` });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    }
+    const createdTitle = createEventTitle(text);
+    if (createdTitle && tools.includes("create_event")) {
+      const calendarId = familyCalendarOffer(calendarSettings?.familyCalendarId);
+      const start = new Date();
+      start.setDate(start.getDate() + 1);
+      start.setHours(9, 0, 0, 0);
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      void apiRequest("POST", "/api/events", {
+        title: createdTitle,
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        profileIds: [],
+        drivingProfileIds: [],
+        calendarId,
+      });
+      void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      next.push({
+        id: `${Date.now()}-e`,
+        role: "assistant",
+        text: calendarId ? `Added ${createdTitle} on the family calendar.` : `Added ${createdTitle}.`,
+      });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const have = groceryAlreadyHave(text);
