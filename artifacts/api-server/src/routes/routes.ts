@@ -3142,6 +3142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         familyCalendarId: null,
         scanInbox: true,
         shareOriginals: false,
+        mealsOnCalendar: false,
         mutedSenders: [],
         dismissedSlipKeys: [],
       };
@@ -3214,6 +3215,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating family calendar:", error);
       res.status(500).json({ error: "Failed to update family calendar" });
+    }
+  });
+
+  app.patch("/api/calendar-settings/meals-on-calendar", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      if (typeof req.body.enabled !== "boolean") {
+        return res.status(400).json({ error: "enabled must be a boolean" });
+      }
+      const settings = await storage.updateCalendarSettings({ mealsOnCalendar: req.body.enabled, userId });
+      res.json(settings);
+    } catch (error) {
+      console.error("Error updating meals on calendar:", error);
+      res.status(500).json({ error: "Failed to update meals on calendar" });
     }
   });
 

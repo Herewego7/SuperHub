@@ -161,8 +161,8 @@ interface MealPlanViewProps {
 }
 
 function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekEndIso, onOpenGrocery }: MealPlanViewProps) {
-  const [mealsOnCalendar, setMealsOnCalendar] = useState(() => localStorage.getItem("superhub_meals_on_calendar") === "true");
-  const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
+  const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null; mealsOnCalendar?: boolean | null }>({ queryKey: ["/api/calendar-settings"] });
+  const mealsOnCalendar = calendarSettings?.mealsOnCalendar === true;
   const [editingMeal, setEditingMeal] = useState<MealWithIngredients | null>(null);
   const [creatingFor, setCreatingFor] = useState<{ date: string; slot: MealSlot } | null>(null);
 
@@ -735,8 +735,10 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
             data-testid="meals-on-calendar"
             onCheckedChange={(checked) => {
               const on = !!checked;
-              localStorage.setItem("superhub_meals_on_calendar", on ? "true" : "false");
-              setMealsOnCalendar(on);
+              queryClient.setQueryData(["/api/calendar-settings"], (old: { mealsOnCalendar?: boolean } | undefined) => ({ ...old, mealsOnCalendar: on }));
+              void apiRequest("PATCH", "/api/calendar-settings/meals-on-calendar", { enabled: on }).then(() => {
+                void queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+              });
               if (!on) return;
               const calendarId = familyCalendarOffer(calendarSettings?.familyCalendarId);
               void Promise.all(mealEvents(meals, true).map((meal) => {
