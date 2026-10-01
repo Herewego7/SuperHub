@@ -26,7 +26,7 @@ import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
 import { acceptSchool, choresDismissedBySlip, dismissSlip, ingestMessages, muteSender } from "../ingest/process";
-import { dinnerEventInsert } from "../meals/dinnerEvent";
+import { dinnerCalendarChange, dinnerEventInsert } from "../meals/dinnerEvent";
 import { slipKey } from "../ingest/parse";
 import { moveClock } from "../scheduler/eveningPlan";
 import { expandRecurringEvents, resolveSeriesEventId } from "../lib/eventRecurrence";
@@ -5346,6 +5346,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     displayOrder: z.number().optional(),
   })).optional();
 
+  async function syncDinnerCalendar(
+    userId: string,
+    previous: { date: string; slot: string; name: string } | null,
+    next: { date: string; slot: string; name: string } | null,
+  ) {
+    try {
+      const settings = await storage.getCalendarSettingsByUser(userId);
+      const events = await storage.getEventsByUser(userId);
+      const change = dinnerCalendarChange(previous, next, events, settings?.familyCalendarId, settings?.mealsOnCalendar === true);
+      if (change.updateId && change.create) await storage.updateEvent(change.updateId, change.create, userId);
+      for (const id of change.deleteIds) await storage.deleteEvent(id, userId);
+      if (!change.updateId && change.create) await storage.createEvent({ ...change.create, userId });
+    } catch (err) {
+      console.error("Dinner calendar sync failed:", err);
+    }
+  }
+
   app.post("/api/meals", isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
@@ -5376,8 +5393,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { ingredients: ingredientsRaw, ...rest } = req.body || {};
       const updates = insertMealSchema.partial().omit({ userId: true }).parse(rest);
+      const previous = await storage.getMeal(id, userId);
       const meal = await storage.updateMeal(id, updates, userId);
       if (!meal) return res.status(404).json({ message: "Meal not found" });
+      await syncDinnerCalendar(userId, previous ?? null, meal);
       let savedIngredients;
       if (Array.isArray(ingredientsRaw)) {
         const ingredients = mealIngredientPayloadSchema.parse(ingredientsRaw) || [];
@@ -5394,8 +5413,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/meals/:id", isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
+      const previous = await storage.getMeal(req.params.id, userId);
       const success = await storage.deleteMeal(req.params.id, userId);
       if (!success) return res.status(404).json({ message: "Meal not found" });
+      await syncDinnerCalendar(userId, previous ?? null, null);
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete meal" });
