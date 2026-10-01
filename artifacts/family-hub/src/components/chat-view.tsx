@@ -139,10 +139,28 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     const memory = isChild ? null : memoryFact(text, profiles);
     if (memory && tools.includes("remember_fact")) {
       const existing = profiles.find((person) => person.id === memory.profileId)?.facts ?? [];
-      void apiRequest("PATCH", `/api/profiles/${memory.profileId}`, { facts: rememberedFacts(existing, memory.fact) });
-      void queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
-      next.push({ id: `${Date.now()}-s`, role: "assistant", text: `I'll remember ${memory.name} ${memory.fact}.` });
-      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      if (existing.some((item) => item.toLowerCase() === memory.fact.toLowerCase())) {
+        next.push({ id: `${Date.now()}-s`, role: "assistant", text: `I already remember ${memory.name} ${memory.fact}.` });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
+      }
+      setBubbles(next);
+      setDraft("");
+      void apiRequest("PATCH", `/api/profiles/${memory.profileId}`, { facts: rememberedFacts(existing, memory.fact) })
+        .then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
+          const saved = [...next, { id: `${Date.now()}-s`, role: "assistant" as const, text: `I'll remember ${memory.name} ${memory.fact}.` }];
+          localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(saved));
+          setBubbles(saved);
+        })
+        .catch(() => {
+          const failed = [...next, { id: `${Date.now()}-s`, role: "assistant" as const, text: "I couldn't save that yet." }];
+          localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(failed));
+          setBubbles(failed);
+        });
+      return;
     }
     const remembered = memoryReply(text, profiles);
     if (remembered) {
