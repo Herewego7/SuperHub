@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, moveEventWhen, muteAddress, notRelevantTitle, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole } from "@/lib/chatTools";
-import { dinnerName, mailVisibleToKid, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
+import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole } from "@/lib/chatTools";
+import { dinnerName, mailVisibleToKid, openTodos, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, noteChatUnread, readThread, threadWithPlan, type ChatBubble } from "@/lib/chatThread";
@@ -246,6 +246,11 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
       }
       next.push({ id: `${Date.now()}-n`, role: "assistant", text: assigned.reply });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    }
+    const letters = tools.includes("get_newsletters") ? newsletterTitles(text, openTodos(chores, completions)) : null;
+    if (letters) {
+      next.push({ id: `${Date.now()}-l`, role: "assistant", text: letters.length ? letters.join("\n") : "No newsletters." });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const hits = tools.includes("search") ? searchHits(text, [...chores, ...events]) : null;

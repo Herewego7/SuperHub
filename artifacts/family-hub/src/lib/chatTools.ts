@@ -191,6 +191,11 @@ export function drivingReply(
   return `${names.slice(0, -1).join(", ")} and ${last} are driving ${event.title}.`;
 }
 
+export function newsletterTitles(text: string, rows: { title: string; category?: string | null }[]): string[] | null {
+  if (!/^newsletters?\.?$/i.test(text.trim())) return null;
+  return rows.filter((row) => row.category === "school_email").map((row) => row.title).slice(0, 5);
+}
+
 export function searchHits(text: string, rows: { title: string; description?: string | null }[]): string[] | null {
   const query = text.trim().match(/^search\s+(.+?)\.?$/i)?.[1]?.trim().toLowerCase();
   if (!query) return null;
