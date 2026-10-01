@@ -30,6 +30,12 @@ export function todosForHome<T extends HomeTodo>(chores: T[], selectedIds: strin
   });
 }
 
+/** A to-do with any completion is done. It does not come back the next day. */
+export function openTodos<T extends { id: string }>(todos: T[], completions: { choreId: string }[]): T[] {
+  const done = new Set(completions.map((completion) => completion.choreId));
+  return todos.filter((todo) => !done.has(todo.id));
+}
+
 const NOT_A_CHORE = new Set(["todo", "memory_verse", "affirmation", "bible_verse", "mission", "custom"]);
 
 /** All Family shows the household. One person sees only what they finished. */

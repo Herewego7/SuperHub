@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { choreProgress, choresForCount, dinnerName, earlierForHome, horizonEvents, mailVisibleToKid, schoolEmailNames, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, earlierForHome, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -26,6 +26,11 @@ test("chore progress counts a shared chore once", () => {
     day,
   );
   assert.deepEqual(progress, { done: 1, total: 1 });
+});
+
+test("a checked-off to-do leaves Home", () => {
+  const todos = [{ id: "open", title: "Buy milk" }, { id: "done", title: "Dishes" }];
+  assert.deepEqual(openTodos(todos, [{ choreId: "done" }]).map((todo) => todo.id), ["open"]);
 });
 
 test("earlier today for one person leaves out the rest of the household", () => {

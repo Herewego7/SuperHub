@@ -124,7 +124,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       return;
     }
     const title = checkOffTitle(text);
-    const chore = title ? chores.find((item) => item.title.toLowerCase() === title.toLowerCase() && item.taskType !== "todo") : undefined;
+    const titled = title ? chores.filter((item) => item.title.toLowerCase() === title.toLowerCase()) : [];
+    const chore = titled.find((item) => item.taskType !== "todo") ?? titled[0];
     if (chore && tools.includes("complete_task") && pointsProfileId(chore.profileIds ?? [], profileKey)) {
       complete.mutate(chore);
       next.push({ id: `${Date.now()}-a`, role: "assistant", text: `Checked off ${chore.title}.` });

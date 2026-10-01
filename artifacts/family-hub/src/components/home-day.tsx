@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, choresForCount, dinnerName, earlierForHome, horizonEvents, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, earlierForHome, horizonEvents, openTodos, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { openEmailHref, slipQuote, slipSender, suggestedSchool } from "@/lib/slipMail";
 
@@ -60,7 +60,8 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
 
   const complete = useMutation({
     mutationFn: async (choreId: string) => {
-      const profileId = chores.find((chore) => chore.id === choreId)?.profileIds[0];
+      const chore = chores.find((item) => item.id === choreId);
+      const profileId = chore?.profileIds[0] ?? selectedIds[0];
       if (!profileId) return;
       const at = new Date();
       const localDayStart = new Date(at);
@@ -78,7 +79,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
     },
   });
 
-  const todos = todosForHome(chores, selectedIds, familyIds).filter((todo) => !kidName || schoolEmailNames(todo, kidName));
+  const todos = openTodos(todosForHome(chores, selectedIds, familyIds), completions).filter((todo) => !kidName || schoolEmailNames(todo, kidName));
   const progress = choreProgress(choresForCount(chores, selectedIds, familyIds), completions, day);
   const start = new Date(day);
   start.setHours(0, 0, 0, 0);
