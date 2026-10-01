@@ -184,6 +184,7 @@ test("what's the plan names the day and dinner", () => {
   });
   assert.equal(friday, "Feed the dog\nDishes\nBuy milk\nPiano, 4:00 PM\nDinner. Pasta");
   assert.equal(dayReply("what's the plan for the weekend", { chores: [], events: [], dinner: null, day }), "I don't know that day.");
+  assert.equal(dayReply("what's the plan tonight", { chores: [], events: [{ title: "Soccer", startTime: day }], dinner: "Tacos", day }), "Soccer, 3:00 PM\nDinner. Tacos");
 });
 
 test("remember keeps a fact on that person", () => {

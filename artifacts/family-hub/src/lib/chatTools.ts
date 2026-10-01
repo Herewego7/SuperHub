@@ -432,7 +432,7 @@ export function moveEventWhen(text: string, from = new Date()): { title: string;
 
 export function moveDay(dayPart: string, from: Date): Date | undefined {
   if (!dayPart) return undefined;
-  if (/^today$/i.test(dayPart)) return new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  if (/^(?:today|tonight)$/i.test(dayPart)) return new Date(from.getFullYear(), from.getMonth(), from.getDate());
   if (/^tomorrow$/i.test(dayPart)) {
     const on = new Date(from.getFullYear(), from.getMonth(), from.getDate());
     on.setDate(on.getDate() + 1);
