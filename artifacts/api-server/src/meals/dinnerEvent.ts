@@ -38,6 +38,10 @@ export function dinnerEventDay(start: Date | string): string {
 type MealSpot = { date: string; slot: string; name: string };
 type MealEvent = { id: string; title: string; source?: string | null; startTime: Date | string };
 
+export function dinnersToCopy<T extends MealSpot>(meals: T[], events: MealEvent[]): T[] {
+  return meals.filter((meal) => meal.slot === "dinner" && matchingDinnerEvents(meal, events).length === 0);
+}
+
 export function matchingDinnerEvents(meal: MealSpot, events: MealEvent[]): MealEvent[] {
   return events.filter((event) => event.source === "meal" && event.title === meal.name && dinnerEventDay(event.startTime) === meal.date);
 }

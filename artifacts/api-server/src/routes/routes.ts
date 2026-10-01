@@ -26,7 +26,7 @@ import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
 import { acceptSchool, choresDismissedBySlip, dismissSlip, ingestMessages, muteSender } from "../ingest/process";
-import { dinnerCalendarChange, dinnerEventInsert } from "../meals/dinnerEvent";
+import { dinnerCalendarChange, dinnerEventInsert, dinnersToCopy } from "../meals/dinnerEvent";
 import { slipKey } from "../ingest/parse";
 import { moveClock } from "../scheduler/eveningPlan";
 import { expandRecurringEvents, resolveSeriesEventId } from "../lib/eventRecurrence";
@@ -3226,6 +3226,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "enabled must be a boolean" });
       }
       const settings = await storage.updateCalendarSettings({ mealsOnCalendar: req.body.enabled, userId });
+      if (req.body.enabled === true && typeof req.body.start === "string" && typeof req.body.end === "string") {
+        const meals = await storage.getMealsByUserAndDateRange(userId, req.body.start, req.body.end);
+        const events = await storage.getEventsByUser(userId);
+        for (const meal of dinnersToCopy(meals, events)) {
+          const event = dinnerEventInsert(meal, settings?.familyCalendarId, true);
+          if (event) await storage.createEvent({ ...event, userId });
+        }
+      }
       res.json(settings);
     } catch (error) {
       console.error("Error updating meals on calendar:", error);

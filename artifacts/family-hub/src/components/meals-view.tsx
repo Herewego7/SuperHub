@@ -1,6 +1,4 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
-import { mealEvents } from "@/lib/mealCalendar";
-import { familyCalendarOffer } from "@/lib/chatTools";
 import { Switch } from "@/components/ui/switch";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format, addDays, addWeeks, startOfWeek } from "date-fns";
@@ -736,25 +734,14 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
             onCheckedChange={(checked) => {
               const on = !!checked;
               queryClient.setQueryData(["/api/calendar-settings"], (old: { mealsOnCalendar?: boolean } | undefined) => ({ ...old, mealsOnCalendar: on }));
-              void apiRequest("PATCH", "/api/calendar-settings/meals-on-calendar", { enabled: on }).then(() => {
+              void apiRequest("PATCH", "/api/calendar-settings/meals-on-calendar", {
+                enabled: on,
+                start: weekStartIso,
+                end: weekEndIso,
+              }).then(() => {
                 void queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+                void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
               });
-              if (!on) return;
-              const calendarId = familyCalendarOffer(calendarSettings?.familyCalendarId);
-              void Promise.all(mealEvents(meals, true).map((meal) => {
-                const start = new Date(`${meal.date}T18:00:00`);
-                const end = new Date(start);
-                end.setHours(19, 0, 0, 0);
-                return apiRequest("POST", "/api/events", {
-                  title: meal.name,
-                  startTime: start.toISOString(),
-                  endTime: end.toISOString(),
-                  profileIds: [],
-                  drivingProfileIds: [],
-                  calendarId,
-                  source: "meal",
-                });
-              })).then(() => queryClient.invalidateQueries({ queryKey: ["/api/events"] }));
             }}
           />
         </label>
