@@ -3226,18 +3226,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "enabled must be a boolean" });
       }
       const settings = await storage.updateCalendarSettings({ mealsOnCalendar: req.body.enabled, userId });
-      if (req.body.enabled === true && typeof req.body.start === "string" && typeof req.body.end === "string") {
-        const meals = await storage.getMealsByUserAndDateRange(userId, req.body.start, req.body.end);
-        const events = await storage.getEventsByUser(userId);
-        for (const meal of dinnersToCopy(meals, events)) {
-          const event = dinnerEventInsert(meal, settings?.familyCalendarId, true);
-          if (event) await storage.createEvent({ ...event, userId });
-        }
-      }
       res.json(settings);
     } catch (error) {
       console.error("Error updating meals on calendar:", error);
       res.status(500).json({ error: "Failed to update meals on calendar" });
+    }
+  });
+
+  app.post("/api/calendar-settings/meals-on-calendar/copy", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const settings = await storage.getCalendarSettingsByUser(userId);
+      if (settings?.mealsOnCalendar !== true || typeof req.body.start !== "string" || typeof req.body.end !== "string") {
+        return res.json({ copied: 0 });
+      }
+      const meals = await storage.getMealsByUserAndDateRange(userId, req.body.start, req.body.end);
+      const events = await storage.getEventsByUser(userId);
+      let copied = 0;
+      for (const meal of dinnersToCopy(meals, events)) {
+        const event = dinnerEventInsert(meal, settings.familyCalendarId, true);
+        if (!event) continue;
+        await storage.createEvent({ ...event, userId });
+        copied += 1;
+      }
+      res.json({ copied });
+    } catch (error) {
+      console.error("Error copying dinners onto the calendar:", error);
+      res.status(500).json({ error: "Failed to copy dinners" });
     }
   });
 

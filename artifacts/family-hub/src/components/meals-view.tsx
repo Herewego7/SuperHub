@@ -164,8 +164,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
   useEffect(() => {
     if (!mealsOnCalendar) return;
     let cancelled = false;
-    void apiRequest("PATCH", "/api/calendar-settings/meals-on-calendar", {
-      enabled: true,
+    void apiRequest("POST", "/api/calendar-settings/meals-on-calendar/copy", {
       start: weekStartIso,
       end: weekEndIso,
     }).then(() => {
