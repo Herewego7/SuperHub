@@ -122,6 +122,24 @@ export type HorizonEvent = {
   recurrenceType?: string | null;
 };
 
+export function eventsOnHomeDay<T extends {
+  startTime: Date | string;
+  source?: string | null;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+}>(events: T[], day: Date, kidName: string | null, dinner: string | null): T[] {
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return events.filter((event) => {
+    if (event.source === "meal" && dinner) return false;
+    const at = new Date(event.startTime);
+    return at >= start && at < end && mailVisibleToKid(event, kidName);
+  });
+}
+
 export function horizonEvents<T extends HorizonEvent>(events: T[], day: Date): T[] {
   const start = new Date(day);
   start.setHours(0, 0, 0, 0);
