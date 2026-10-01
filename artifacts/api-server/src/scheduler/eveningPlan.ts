@@ -71,6 +71,17 @@ export function dueForPlan<T extends {
   });
 }
 
+export function eventsForPlan<T extends { profileIds?: string[] | null; drivingProfileIds?: string[] | null }>(
+  events: T[],
+  profileId: string,
+): T[] {
+  return events.filter((event) => {
+    const ids = event.profileIds ?? [];
+    const drivers = event.drivingProfileIds ?? [];
+    return ids.length === 0 || ids.includes(profileId) || drivers.includes(profileId);
+  });
+}
+
 export function choresForPlan<T extends { id: string; profileIds?: string[] | null; taskType?: string | null }>(
   chores: T[],
   completedIds: string[],
@@ -192,7 +203,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
       .filter((completion) => chores.some((chore) => chore.id === completion.choreId && chore.taskType === "todo"))
       .map((completion) => completion.choreId);
     const openChores = dueForPlan(choresForPlan(chores, doneToday, profile.id, finishedTodos), new Date(`${target}T12:00:00`));
-    const dayEvents = planDayEvents(events, target, tz)
+    const dayEvents = eventsForPlan(planDayEvents(events, target, tz), profile.id)
       .map((event) => ({
         title: event.movedFrom ? event.title : eventClockTitle(event.title, new Date(event.startTime), tz, event.isAllDay === true),
         description: event.description,

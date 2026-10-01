@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Event } from "@workspace/db";
-import { choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, moveClock, planBody, planDayEvents, planKeysForClaim, planOpenPath, planTitle, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
+import { choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, moveClock, planBody, planDayEvents, planKeysForClaim, planOpenPath, planTitle, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
 
 test("a morning plan is titled for today", () => {
   assert.equal(planTitle(false, "morningOf"), "Today's plan");
@@ -111,6 +111,18 @@ test("a changed start keeps the old clock time", () => {
   const next = new Date(2026, 9, 2, 17, 30);
   assert.equal(moveClock(previous, next), "4:00 PM");
   assert.equal(moveClock(previous, previous), null);
+});
+
+test("a plan keeps household events and the ones for that person", () => {
+  const rows = eventsForPlan(
+    [
+      { title: "Dinner out", profileIds: [] },
+      { title: "Liam soccer", profileIds: ["liam"] },
+      { title: "Carpool", profileIds: ["liam"], drivingProfileIds: ["chad"] },
+    ],
+    "chad",
+  );
+  assert.deepEqual(rows.map((row) => row.title), ["Dinner out", "Carpool"]);
 });
 
 test("a weekly event is on the plan the week after it starts", () => {
