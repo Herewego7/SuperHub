@@ -1,8 +1,9 @@
+import { todosForHome } from "@/lib/homeDay";
 import { assignmentProfileIds, outlookEventProfileIds, withoutUnwatched } from "@/lib/outlookAttribution";
 import { UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, upcomingRows, type UpcomingKind } from "@/lib/upcoming";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Profile, Event, InsertEvent, CalendarAssignment } from "@workspace/shared-types";
+import { Profile, Event, InsertEvent, CalendarAssignment, Chore } from "@workspace/shared-types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -1407,6 +1408,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
 
   // ── Data fetching ───────────────────────────────────────────────────────────
   const { data: localEvents = [] } = useQuery<Event[]>({ queryKey: ["/api/events"] });
+  const { data: chores = [] } = useQuery<Chore[]>({ queryKey: ["/api/chores"] });
   const { data: calendarAssignments = [] } = useQuery<CalendarAssignment[]>({
     queryKey: ["/api/calendar-assignments"],
     retry: false,
@@ -1705,6 +1707,19 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
     });
     return withoutUnwatched(picked, calendarAssignments);
   }, [allEventsWithCelebrations, selectedProfiles, calendarAssignments]);
+
+  const upcomingItems = useMemo(() => {
+    const familyIds = profiles.filter((profile) => !profile.isAllFamilyProfile).map((profile) => profile.id);
+    const todos = todosForHome(chores, selectedProfiles, familyIds).map((todo) => ({
+      id: todo.id,
+      title: todo.title,
+      startTime: currentDate,
+      kind: "todo" as const,
+      profileIds: todo.profileIds,
+      source: null,
+    }));
+    return [...visibleEvents, ...todos];
+  }, [chores, currentDate, profiles, selectedProfiles, visibleEvents]);
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const createEventMutation = useMutation({
@@ -2761,7 +2776,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
                   ))}
                 </div>
                 <ul className="flex flex-col">
-                  {upcomingRows(visibleEvents, upcomingKind, currentDate).map((event) => (
+                  {upcomingRows(upcomingItems, upcomingKind, currentDate).map((event) => (
                     <li key={event.id} className="border-b border-border px-3 py-2 text-sm">
                       <div className="text-xs text-muted-foreground">{format(event.startTime, "EEE, MMM d")}</div>
                       <span>{event.title}</span>

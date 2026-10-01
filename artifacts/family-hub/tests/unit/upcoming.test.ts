@@ -28,6 +28,19 @@ test("key dates hides timed events", () => {
   assert.deepEqual(rows.map((row) => row.id), ["picture"]);
 });
 
+test("the to-do chip keeps a to-do and hides a timed event", () => {
+  const today = new Date(2026, 9, 1);
+  const rows = upcomingRows(
+    [
+      { id: "slip", title: "Permission slip", startTime: today, kind: "todo" },
+      { id: "game", title: "Game", startTime: new Date(2026, 9, 4), isAllDay: false },
+    ],
+    "todos",
+    today,
+  );
+  assert.deepEqual(rows.map((row) => row.id), ["slip"]);
+});
+
 test("a scanned flyer is labeled Scan", () => {
   assert.equal(eventSourceChip("scan"), "Scan");
   assert.equal(eventSourceChip("meal"), null);
