@@ -116,6 +116,13 @@ test("add event at 4:30 uses that clock", () => {
     day: "tomorrow",
     on: new Date(2026, 9, 8),
   });
+  assert.deepEqual(createEventClock("Soccer this Friday at 4 pm", thursday), {
+    title: "Soccer",
+    hours: 16,
+    minutes: 0,
+    day: "tomorrow",
+    on: new Date(2026, 9, 2),
+  });
   assert.deepEqual(createEventClock("Soccer Friday at 4 pm", thursday), {
     title: "Soccer",
     hours: 16,
