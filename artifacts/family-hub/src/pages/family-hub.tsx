@@ -909,8 +909,10 @@ export default function FamilyHub() {
   }, [activeTab]);
 
   // Redirect legacy "celebrations" tab (now surfaced inside the Calendar tab).
+  // To-Dos left the bar; those items are on Home.
   useEffect(() => {
     if ((activeTab as string) === "celebrations") setActiveTab("calendar");
+    if ((activeTab as string) === "todos") setActiveTab("home");
   }, [activeTab]);
 
   // Reset all Tasks-tab drawer triggers when leaving the tab so components
@@ -2170,7 +2172,7 @@ export default function FamilyHub() {
         initialKind={createTask.kind}
         editChore={createTask.editChore}
         onGoToKind={(k) => {
-          navigateTo(k === "todo" ? "todos" : "chores");
+          navigateTo(k === "todo" ? "home" : "chores");
           setTimeout(() => robustScrollToTop(), 100);
         }}
       />
