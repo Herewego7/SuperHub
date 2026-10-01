@@ -171,6 +171,7 @@ export function FlyerSnapSheet({ open, onOpenChange, onImported, onViewDate }: F
             profileIds,
             calendarId: null,
             color: null,
+            source: "scan",
           });
         })
       );

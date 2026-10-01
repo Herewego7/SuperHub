@@ -24,6 +24,12 @@ function kindOf(row: Row): "todo" | "keyDate" | "event" | "newsletter" {
   return "event";
 }
 
+export function eventSourceChip(source: string | null | undefined): string | null {
+  if (source === "scan") return "Scan";
+  if (source === "school") return "School email";
+  return null;
+}
+
 export function upcomingRows<T extends Row>(rows: T[], kind: UpcomingKind, day: Date): T[] {
   const start = new Date(day);
   start.setHours(0, 0, 0, 0);

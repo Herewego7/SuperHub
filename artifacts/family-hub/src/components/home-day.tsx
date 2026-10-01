@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
 import { choreProgress, dinnerName, horizonEvents, schoolEmailNames, todosForHome } from "@/lib/homeDay";
+import { eventSourceChip } from "@/lib/upcoming";
 
 type Props = {
   chores: Chore[];
@@ -128,7 +129,12 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
         ) : (
           <ul className="flex flex-col gap-1">
             {todayEvents.slice(0, 6).map((event) => (
-              <li key={event.id} className="text-sm">{event.title}</li>
+              <li key={event.id} className="text-sm">
+                {event.title}
+                {eventSourceChip(event.source) && (
+                  <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(event.source)}</span>
+                )}
+              </li>
             ))}
           </ul>
         )}
@@ -141,7 +147,12 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
         ) : (
           <ul className="flex flex-col gap-1">
             {horizon.slice(0, 5).map((event) => (
-              <li key={event.id} className="text-sm">{event.title}</li>
+              <li key={event.id} className="text-sm">
+                {event.title}
+                {eventSourceChip(event.source) && (
+                  <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(event.source)}</span>
+                )}
+              </li>
             ))}
           </ul>
         )}

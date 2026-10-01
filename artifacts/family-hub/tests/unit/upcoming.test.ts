@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { horizonEvents } from "../../src/lib/homeDay";
-import { upcomingRows } from "../../src/lib/upcoming";
+import { eventSourceChip, upcomingRows } from "../../src/lib/upcoming";
 
 test("horizon skips a weekly routine and keeps a one-off in the next week", () => {
   const today = new Date(2026, 9, 1);
@@ -26,4 +26,9 @@ test("key dates hides timed events", () => {
     today,
   );
   assert.deepEqual(rows.map((row) => row.id), ["picture"]);
+});
+
+test("a scanned flyer is labeled Scan", () => {
+  assert.equal(eventSourceChip("scan"), "Scan");
+  assert.equal(eventSourceChip("meal"), null);
 });
