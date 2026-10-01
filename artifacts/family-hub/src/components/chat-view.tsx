@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
 import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, moveEventWhen, muteAddress, notRelevantTitle, pointsProfileId, schoolFact, searchHits, toolsForRole } from "@/lib/chatTools";
-import { dinnerName, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
+import { dinnerName, mailVisibleToKid, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, noteChatUnread, readThread, threadWithPlan, type ChatBubble } from "@/lib/chatThread";
@@ -150,7 +150,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       const mine = selectedIds.length === 0 || people.length === 0 || people.some((id) => selectedIds.includes(id));
       return mine && (!kid || schoolEmailNames(chore, kid.name));
     });
-    const planEvents = visibleForProfiles(events, selectedIds);
+    const planEvents = visibleForProfiles(events, selectedIds).filter((event) => mailVisibleToKid(event, kid?.name ?? null));
     const plan = tools.includes("get_plan")
       ? dayReply(text, { chores: planChores, events: planEvents, completions, dinner: dinnerName(meals, new Date()), day: new Date() })
       : null;
