@@ -305,6 +305,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       // invalidate so a just-planned meal shows up immediately, not after its
       // 30s staleTime happens to lapse.
       queryClient.invalidateQueries({ queryKey: ["/api/activity-log"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       if (created.ingredients && created.ingredients.length > 0) {
         setGroceryPrompt(created);
       }
@@ -341,6 +342,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       queryClient.setQueryData<MealWithIngredients[]>(mealsKey, (old) =>
         (old ?? []).map((m) => (m.id === updated.id ? updated : m)),
       );
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: mealsKey });
@@ -372,6 +374,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       queryClient.invalidateQueries({ queryKey: mealsKey });
       // Family History synthesizes "meal_planned" live from the meals table.
       queryClient.invalidateQueries({ queryKey: ["/api/activity-log"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       toast({ title: "Meal restored" });
       if (created.ingredients && created.ingredients.length > 0) {
         setGroceryPrompt(created);
@@ -400,6 +403,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       return { previous };
     },
     onSuccess: (_data, meal) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       toast({
         title: `Removed "${meal.name}"`,
         description: `No longer planned for ${format(new Date(meal.date + "T00:00:00"), "EEE, MMM d")}.`,
@@ -457,6 +461,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
     },
     onSuccess: ({ created, failed }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       // Family History synthesizes "meal_planned" live from the meals table.
       queryClient.invalidateQueries({ queryKey: ["/api/activity-log"] });
       if (failed > 0) {
@@ -2393,6 +2398,7 @@ function MealModal({ meal, creatingFor, weekStartIso, weekEndIso, onClose, onCre
         const k = q.queryKey[0];
         return (
           k === "/api/meals" ||
+          k === "/api/events" ||
           k === "/api/grocery-list/aggregate" ||
           k === "/api/grocery-items"
         );
