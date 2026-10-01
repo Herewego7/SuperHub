@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { choresForPlan, claimPlanSend, moveClock, planBody, planKeysForClaim, planOpenPath, planTitle, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
+import { choresForPlan, claimPlanSend, dueForPlan, moveClock, planBody, planKeysForClaim, planOpenPath, planTitle, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
 
 test("a morning plan is titled for today", () => {
   assert.equal(planTitle(false, "morningOf"), "Today's plan");
@@ -16,6 +16,19 @@ test("two people claimed together both stay sent", () => {
   const saved = planKeysForClaim(["dad:2026-10-02"], ["dad:2026-10-02"]);
   const second = claimPlanSend(planKeysForClaim([], saved), "kid", "2026-10-02");
   assert.deepEqual(second.sentKeys, ["dad:2026-10-02", "kid:2026-10-02"]);
+});
+
+test("tomorrow's plan skips a chore that is not due then", () => {
+  const thursday = new Date(2026, 9, 1, 12, 0);
+  const rows = dueForPlan(
+    [
+      { id: "dog", title: "Feed the dog", taskType: "chore", recurrenceType: "daily" },
+      { id: "mow", title: "Mow", taskType: "chore", daysOfWeek: [6] },
+      { id: "milk", title: "Buy milk", taskType: "todo" },
+    ],
+    thursday,
+  );
+  assert.deepEqual(rows.map((row) => row.id), ["dog", "milk"]);
 });
 
 test("a finished to-do stays out of tomorrow's plan", () => {

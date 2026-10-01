@@ -48,6 +48,27 @@ export function moveClock(previous: Date | null | undefined, next: Date | null |
   return `${hours}:${mm} ${suffix}`;
 }
 
+export function dueForPlan<T extends {
+  taskType?: string | null;
+  isActive?: boolean | null;
+  daysOfWeek?: number[] | null;
+  recurrenceType?: string | null;
+  targetCount?: number | null;
+  endDate?: Date | string | null;
+}>(chores: T[], target: Date): T[] {
+  const start = new Date(target);
+  start.setHours(0, 0, 0, 0);
+  return chores.filter((chore) => {
+    if (chore.isActive === false) return false;
+    if (chore.taskType === "todo") return true;
+    if (chore.taskType && chore.taskType !== "chore") return false;
+    if (chore.endDate && new Date(chore.endDate) < start) return false;
+    if (chore.targetCount && chore.targetCount > 0) return true;
+    if (chore.recurrenceType === "daily") return true;
+    return (chore.daysOfWeek ?? []).includes(start.getDay());
+  });
+}
+
 export function choresForPlan<T extends { id: string; profileIds?: string[] | null; taskType?: string | null }>(
   chores: T[],
   completedIds: string[],
@@ -149,7 +170,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const finishedTodos = completions
       .filter((completion) => chores.some((chore) => chore.id === completion.choreId && chore.taskType === "todo"))
       .map((completion) => completion.choreId);
-    const openChores = choresForPlan(chores, doneToday, profile.id, finishedTodos);
+    const openChores = dueForPlan(choresForPlan(chores, doneToday, profile.id, finishedTodos), new Date(`${target}T12:00:00`));
     const dayEvents = events
       .filter((event) => localDate(new Date(event.startTime), tz) === target)
       .map((event) => ({ title: event.title, description: event.description, movedFrom: event.movedFrom, source: event.source }));
