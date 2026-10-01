@@ -50,6 +50,12 @@ export function planBody(input: {
 
 const CATCH_UP_MINUTES = 30;
 
+function nextDayKey(day: string): string {
+  const date = new Date(`${day}T12:00:00`);
+  date.setDate(date.getDate() + 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function minutesSince(scheduled: string, currentHHMM: string): number {
   const [sh, sm] = scheduled.split(":").map(Number);
   const [ch, cm] = currentHHMM.split(":").map(Number);
@@ -74,7 +80,10 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const isChild = profile.role === "child" || profile.isChild === true;
     const chores = await storage.getChoresByUser(profile.userId);
     const events = await storage.getEventsByUser(profile.userId);
-    const body = planBody({ isChild, chores, events, dinner: null });
+    const meals = await storage.getMealsByUser(profile.userId);
+    const target = profile.eveningPlanTiming === "morningOf" ? day : nextDayKey(day);
+    const dinner = meals.find((meal) => meal.date === target && meal.slot === "dinner")?.name ?? null;
+    const body = planBody({ isChild, chores, events, dinner });
     try {
       await sendPushToUser(
         { userId: profile.userId, profileId: profile.id },

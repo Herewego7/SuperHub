@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
+import { mealEvents } from "@/lib/mealCalendar";
+import { Switch } from "@/components/ui/switch";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format, addDays, addWeeks, startOfWeek } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -109,6 +111,7 @@ interface MealsViewProps {
 }
 
 export function MealsView({ showGrocery: showGroceryProp, onShowGroceryChange, weekAnchor: weekAnchorProp, onWeekAnchorChange }: MealsViewProps = {}) {
+  const [mealsOnCalendar, setMealsOnCalendar] = useState(() => localStorage.getItem("superhub_meals_on_calendar") === "true");
   const [showGroceryLocal, setShowGroceryLocal] = useState(false);
   const showGrocery = showGroceryProp ?? showGroceryLocal;
   const setShowGrocery = onShowGroceryChange ?? setShowGroceryLocal;
@@ -722,7 +725,32 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
           Meal Ideas card. It's a tab-level destination, not a meal-ideas
           action — and inside that card it became the most prominent control
           on an empty Meals tab, outranking anything to do with adding a meal. */}
-      <div className="flex justify-end mb-3">
+      <div className="flex items-center justify-end gap-3 mb-3">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          Put dinners on the calendar
+          <Switch
+            checked={mealsOnCalendar}
+            data-testid="meals-on-calendar"
+            onCheckedChange={(checked) => {
+              const on = !!checked;
+              localStorage.setItem("superhub_meals_on_calendar", on ? "true" : "false");
+              setMealsOnCalendar(on);
+              if (!on) return;
+              for (const meal of mealEvents(meals, true)) {
+                const start = new Date(`${meal.date}T18:00:00`);
+                const end = new Date(start);
+                end.setHours(19, 0, 0, 0);
+                void apiRequest("POST", "/api/events", {
+                  title: meal.name,
+                  startTime: start.toISOString(),
+                  endTime: end.toISOString(),
+                  profileIds: [],
+                  source: "meal",
+                });
+              }
+            }}
+          />
+        </label>
         <Button
           variant="default" size="default"
           className="w-full sm:w-auto gap-2 h-10 rounded-full"

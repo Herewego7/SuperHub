@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
 import { checkOffTitle, toolsForRole } from "@/lib/chatTools";
+import { groceryAlreadyHave } from "@/lib/mealCalendar";
 import { appendUserMessage, readThread, type ChatBubble } from "@/lib/chatThread";
 
 const PLAN_KEY = "superhub_evening_plan";
@@ -32,6 +33,7 @@ export function ChatView({ profileKey, isChild, revision, onSent }: Props) {
   });
   const tools = toolsForRole(isChild);
   const { data: chores = [] } = useQuery<Chore[]>({ queryKey: ["/api/chores"] });
+  const { data: groceries = [] } = useQuery<{ id: string; name: string }[]>({ queryKey: ["/api/grocery-items"] });
 
   const complete = useMutation({
     mutationFn: async (chore: Chore) => {
@@ -61,6 +63,14 @@ export function ChatView({ profileKey, isChild, revision, onSent }: Props) {
     if (chore && tools.includes("complete_task")) {
       complete.mutate(chore);
       next.push({ id: `${Date.now()}-a`, role: "assistant", text: `Checked off ${chore.title}.` });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    }
+    const have = groceryAlreadyHave(text);
+    const grocery = have ? groceries.find((item) => item.name.toLowerCase() === have.toLowerCase()) : undefined;
+    if (grocery) {
+      void apiRequest("DELETE", `/api/grocery-items/${grocery.id}`);
+      void queryClient.invalidateQueries({ queryKey: ["/api/grocery-items"] });
+      next.push({ id: `${Date.now()}-g`, role: "assistant", text: `Removed ${grocery.name}.` });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     setBubbles(next);
