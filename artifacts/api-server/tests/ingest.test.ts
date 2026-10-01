@@ -39,6 +39,17 @@ test("a muted sender and a dismissed slip stay off the household list", () => {
   assert.equal(planned.todos.length, 0);
 });
 
+test("a slip clock is the event time", () => {
+  const planned = ingestMessages(
+    [{ subject: "Picture day", fromAddress: "office@school.edu", snippet: "Thursday at 3:30 PM.", accountId: "chad" }],
+    { mutedSenders: [], dismissedSlipKeys: [] },
+    [],
+    ["liam"],
+  );
+  assert.equal(planned.events[0]?.hours, 15);
+  assert.equal(planned.events[0]?.minutes, 30);
+});
+
 test("not relevant drops the slip already on Home", () => {
   const ids = choresDismissedBySlip(
     [

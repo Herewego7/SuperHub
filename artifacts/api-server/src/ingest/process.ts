@@ -28,7 +28,21 @@ export type PlannedEvent = {
   source: "school";
   externalId: string;
   profileIds: string[];
+  hours: number;
+  minutes: number;
 };
+
+export function slipClock(text: string): { hours: number; minutes: number } | null {
+  const match = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  if (!match) return null;
+  let hours = Number(match[1]);
+  const minutes = match[2] ? Number(match[2]) : 0;
+  const suffix = match[3].toLowerCase();
+  if (hours < 1 || hours > 12 || minutes > 59) return null;
+  if (suffix === "pm" && hours !== 12) hours += 12;
+  if (suffix === "am" && hours === 12) hours = 0;
+  return { hours, minutes };
+}
 
 export function muteSender(state: HouseholdMail, address: string): HouseholdMail {
   const next = address.trim().toLowerCase();
@@ -98,13 +112,16 @@ export function ingestMessages(
       daysOfWeek: [],
       slipKey: key,
     });
-    if (/\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(`${message.subject} ${message.snippet}`)) {
+    const clock = slipClock(`${message.subject} ${message.snippet}`);
+    if (clock) {
       events.push({
         title: message.subject.trim(),
         description: message.snippet,
         source: "school",
         externalId: key,
         profileIds,
+        hours: clock.hours,
+        minutes: clock.minutes,
       });
     }
   }

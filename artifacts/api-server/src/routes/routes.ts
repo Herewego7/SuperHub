@@ -3301,9 +3301,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const event of planned.events) {
         const start = new Date();
         start.setDate(start.getDate() + 1);
-        start.setHours(9, 0, 0, 0);
-        const end = new Date(start);
-        end.setHours(10, 0, 0, 0);
+        start.setHours(event.hours, event.minutes, 0, 0);
+        const end = new Date(start.getTime() + 60 * 60 * 1000);
         events.push(await storage.createEvent({
           userId,
           title: event.title,
