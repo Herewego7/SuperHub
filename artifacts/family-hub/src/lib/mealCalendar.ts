@@ -1,3 +1,5 @@
+import { moveDay } from "./chatTools";
+
 export function mealEvents<T extends { slot: string }>(meals: T[], writeToCalendar: boolean): T[] {
   if (!writeToCalendar) return [];
   return meals.filter((meal) => meal.slot === "dinner");
@@ -50,11 +52,21 @@ export function dinnerReply(
   meals: Array<{ date: string; slot: string; name: string }>,
   day: Date,
 ): string | null {
-  if (!/\bwhat(?:'s| is) for dinner\b/i.test(text.trim())) return null;
-  const tomorrow = new Date(day);
-  tomorrow.setDate(day.getDate() + 1);
-  const name = [day, tomorrow]
+  const asked = text.trim().match(/\bwhat(?:'s| is) for dinner(?:\s+(?:on|for))?\s*(.*?)\??$/i);
+  if (!asked) return null;
+  const when = asked[1].trim();
+  const days = when ? [/^today$/i.test(when) ? day : moveDay(when, day)] : [day, nextDay(day)];
+  const named = days[0];
+  if (when && !named) return "I don't know that day.";
+  const name = days
+    .filter((date): date is Date => !!date)
     .map((date) => meals.find((meal) => meal.date === dayKey(date) && meal.slot === "dinner")?.name)
     .find((found) => found);
   return name ? `Dinner. ${name}` : "Nothing planned for dinner.";
+}
+
+function nextDay(day: Date): Date {
+  const tomorrow = new Date(day);
+  tomorrow.setDate(day.getDate() + 1);
+  return tomorrow;
 }
