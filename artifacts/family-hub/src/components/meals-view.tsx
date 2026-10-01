@@ -161,6 +161,20 @@ interface MealPlanViewProps {
 function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekEndIso, onOpenGrocery }: MealPlanViewProps) {
   const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null; mealsOnCalendar?: boolean | null }>({ queryKey: ["/api/calendar-settings"] });
   const mealsOnCalendar = calendarSettings?.mealsOnCalendar === true;
+  useEffect(() => {
+    if (!mealsOnCalendar) return;
+    let cancelled = false;
+    void apiRequest("PATCH", "/api/calendar-settings/meals-on-calendar", {
+      enabled: true,
+      start: weekStartIso,
+      end: weekEndIso,
+    }).then(() => {
+      if (!cancelled) void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mealsOnCalendar, weekStartIso, weekEndIso]);
   const [editingMeal, setEditingMeal] = useState<MealWithIngredients | null>(null);
   const [creatingFor, setCreatingFor] = useState<{ date: string; slot: MealSlot } | null>(null);
 
@@ -734,13 +748,8 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
             onCheckedChange={(checked) => {
               const on = !!checked;
               queryClient.setQueryData(["/api/calendar-settings"], (old: { mealsOnCalendar?: boolean } | undefined) => ({ ...old, mealsOnCalendar: on }));
-              void apiRequest("PATCH", "/api/calendar-settings/meals-on-calendar", {
-                enabled: on,
-                start: weekStartIso,
-                end: weekEndIso,
-              }).then(() => {
+              void apiRequest("PATCH", "/api/calendar-settings/meals-on-calendar", { enabled: on }).then(() => {
                 void queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
-                void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
               });
             }}
           />
