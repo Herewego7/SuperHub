@@ -32,3 +32,15 @@ export function checkOffTitle(text: string): string | null {
   const title = match?.[1]?.trim();
   return title ? title : null;
 }
+
+export function deleteEventTitle(text: string): string | null {
+  const match = /^(?:please\s+)?(?:delete|remove|cancel)\s+(?:the\s+)?(?:event\s+)?["']?(.+?)["']?\.?$/i.exec(text.trim());
+  const title = match?.[1]?.trim();
+  if (!title || /^(?:yes|no)$/i.test(title)) return null;
+  return title;
+}
+
+/** Imported events stay until the person confirms. App-made rows do not. */
+export function importedEventNeedsConfirm(source: string | null | undefined): boolean {
+  return !!source && source !== "app" && source !== "meal";
+}

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { checkOffTitle, toolsForRole } from "@/lib/chatTools";
+import { checkOffTitle, deleteEventTitle, importedEventNeedsConfirm, toolsForRole } from "@/lib/chatTools";
 import { dinnerReply, groceryAlreadyHave } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, readThread, type ChatBubble } from "@/lib/chatThread";
@@ -23,6 +23,7 @@ type Props = {
 
 export function ChatView({ profileKey, isChild, revision, profileReady, onSent }: Props) {
   const [draft, setDraft] = useState("");
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [bubbles, setBubbles] = useState<ChatBubble[]>(() => readThread(profileKey));
   useEffect(() => {
     if (!profileReady || typeof sessionStorage === "undefined") return;
@@ -39,6 +40,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   const tools = toolsForRole(isChild);
   const { data: chores = [] } = useQuery<Chore[]>({ queryKey: ["/api/chores"] });
   const { data: groceries = [] } = useQuery<{ id: string; name: string }[]>({ queryKey: ["/api/grocery-items"] });
+  const { data: events = [] } = useQuery<{ id: string; title: string; source?: string | null }[]>({ queryKey: ["/api/events"] });
   const { data: meals = [] } = useQuery<Meal[]>({
     queryKey: ["/api/meals", "chat-dinner"],
     queryFn: async () => {
@@ -74,6 +76,17 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   function send(text: string) {
     const next = appendUserMessage(profileKey, text);
     if (!next) return;
+    if (pendingDeleteId && /^yes\.?$/i.test(text.trim())) {
+      void apiRequest("DELETE", `/api/events/${pendingDeleteId}`);
+      void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      setPendingDeleteId(null);
+      next.push({ id: `${Date.now()}-y`, role: "assistant", text: "Deleted." });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      onSent();
+      return;
+    }
     const title = checkOffTitle(text);
     const chore = title ? chores.find((item) => item.title.toLowerCase() === title.toLowerCase() && item.taskType !== "todo") : undefined;
     if (chore && tools.includes("complete_task")) {
@@ -84,6 +97,13 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     const dinner = dinnerReply(text, meals, new Date());
     if (dinner) {
       next.push({ id: `${Date.now()}-d`, role: "assistant", text: dinner });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    }
+    const removeTitle = deleteEventTitle(text);
+    const target = removeTitle ? events.find((event) => event.title.toLowerCase() === removeTitle.toLowerCase()) : undefined;
+    if (target && tools.includes("delete_event") && importedEventNeedsConfirm(target.source)) {
+      setPendingDeleteId(target.id);
+      next.push({ id: `${Date.now()}-c`, role: "assistant", text: `Delete ${target.title}? It came from outside the app. Reply yes to delete it.` });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const have = groceryAlreadyHave(text);

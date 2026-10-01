@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkOffTitle, toolsForRole } from "../../src/lib/chatTools";
+import { checkOffTitle, deleteEventTitle, importedEventNeedsConfirm, toolsForRole } from "../../src/lib/chatTools";
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
@@ -16,4 +16,11 @@ test("a parent tool list includes inbox search", () => {
 test("check off names the chore", () => {
   assert.equal(checkOffTitle("check off dishes"), "dishes");
   assert.equal(checkOffTitle("Who is driving soccer?"), null);
+});
+
+test("deleting an imported event asks first", () => {
+  assert.equal(deleteEventTitle("delete the soccer game"), "soccer game");
+  assert.equal(importedEventNeedsConfirm("ics"), true);
+  assert.equal(importedEventNeedsConfirm("meal"), false);
+  assert.equal(importedEventNeedsConfirm(null), false);
 });
