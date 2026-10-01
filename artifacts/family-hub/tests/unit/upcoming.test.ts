@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { horizonEvents } from "../../src/lib/homeDay";
-import { eventSourceChip, upcomingKindForMail, upcomingRows } from "../../src/lib/upcoming";
+import { eventSourceChip, upcomingClock, upcomingKindForMail, upcomingRows } from "../../src/lib/upcoming";
 
 test("horizon skips a weekly routine and keeps a one-off in the next week", () => {
   const today = new Date(2026, 9, 1);
@@ -55,6 +55,12 @@ test("a school email is a newsletter and a plain to-do is not", () => {
     today,
   );
   assert.deepEqual(rows.map((row) => row.id), ["slip"]);
+});
+
+test("upcoming shows a clock on an event and not on a to-do", () => {
+  assert.equal(upcomingClock({ startTime: new Date(2026, 9, 2, 16, 0), kind: "event" }), "4:00 PM");
+  assert.equal(upcomingClock({ startTime: new Date(2026, 9, 2, 16, 0), kind: "todo" }), null);
+  assert.equal(upcomingClock({ startTime: new Date(2026, 9, 2, 0, 0), kind: "event" }), null);
 });
 
 test("a scanned flyer is labeled Scan", () => {

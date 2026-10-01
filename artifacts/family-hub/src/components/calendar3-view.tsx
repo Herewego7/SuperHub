@@ -1,6 +1,6 @@
 import { mailVisibleToKid, openTodos, todosForHome } from "@/lib/homeDay";
 import { assignmentProfileIds, outlookEventProfileIds, withoutUnwatched } from "@/lib/outlookAttribution";
-import { UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, upcomingKindForMail, upcomingRows, type UpcomingKind } from "@/lib/upcoming";
+import { UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, upcomingClock, upcomingKindForMail, upcomingRows, type UpcomingKind } from "@/lib/upcoming";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Profile, Event, InsertEvent, CalendarAssignment, Chore } from "@workspace/shared-types";
@@ -2784,15 +2784,18 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
                   ))}
                 </div>
                 <ul className="flex flex-col">
-                  {upcomingRows(upcomingItems, upcomingKind, currentDate).map((event) => (
+                  {upcomingRows(upcomingItems, upcomingKind, currentDate).map((event) => {
+                    const clock = upcomingClock(event);
+                    return (
                     <li key={event.id} className="border-b border-border px-3 py-2 text-sm">
-                      <div className="text-xs text-muted-foreground">{format(event.startTime, "EEE, MMM d")}</div>
+                      <div className="text-xs text-muted-foreground">{format(event.startTime, "EEE, MMM d")}{clock ? ` · ${clock}` : ""}</div>
                       <span>{event.title}</span>
                       {eventSourceChip(event.source) && (
                         <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(event.source)}</span>
                       )}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </div>
             )}

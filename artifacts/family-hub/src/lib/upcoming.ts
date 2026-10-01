@@ -1,3 +1,5 @@
+import { eventClockLine } from "./chatTools";
+
 export const UPCOMING_KINDS = ["all", "todos", "keyDates", "events", "newsletters"] as const;
 export type UpcomingKind = (typeof UPCOMING_KINDS)[number];
 
@@ -26,6 +28,11 @@ function kindOf(row: Row): "todo" | "keyDate" | "event" | "newsletter" {
   if (row.kind) return row.kind;
   if (row.isAllDay) return "keyDate";
   return "event";
+}
+
+export function upcomingClock(row: { startTime: Date | string; kind?: string | null }): string | null {
+  if (row.kind === "todo") return null;
+  return eventClockLine("", row.startTime) || null;
 }
 
 export function eventSourceChip(source: string | null | undefined): string | null {
