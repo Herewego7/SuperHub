@@ -20,6 +20,7 @@ import { DEFAULT_TIMEZONE } from "./timezone";
 import { driverIdsOf } from "./eventDrivers";
 import { expandRecurringEvents } from "./eventRecurrence";
 import { eventsOnWatchedCalendars } from "./calendarAssignmentScope";
+import { withoutDismissedSlips } from "../ingest/process";
 import { storage } from "../storage";
 import { loadProfiles } from "./profileRows";
 
@@ -114,7 +115,8 @@ export async function buildDailyBrief(
   const scopeToSelfOnly = !!profile && isKidProfile(profile);
 
   // ---- Events ----
-  const allEvents = eventsOnWatchedCalendars(expandRecurringEvents(
+  const mailSettings = await storage.getCalendarSettingsByUser(userId);
+  const allEvents = eventsOnWatchedCalendars(expandRecurringEvents(withoutDismissedSlips(
     await db
       .select()
       .from(events)
@@ -127,6 +129,8 @@ export async function buildDailyBrief(
           ),
         ),
       ),
+      mailSettings?.dismissedSlipKeys ?? [],
+    ),
     now,
   ), await storage.getCalendarAssignmentsByUser(userId));
   const todaysAllEvents = allEvents

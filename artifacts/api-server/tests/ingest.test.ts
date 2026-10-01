@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, ingestMessages, muteSender, slipDate, slipDayOffset, slipSender } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, ingestMessages, muteSender, slipDate, slipDayOffset, slipSender, withoutDismissedSlips } from "../src/ingest/process.ts";
 
 test("two copies of the same slip from two adults become one to-do", () => {
   const planned = ingestMessages(
@@ -91,4 +91,12 @@ test("not relevant drops the slip already on Home", () => {
     "permission slip for the field trip",
   );
   assert.deepEqual(eventIds, ["evt"]);
+  const still = withoutDismissedSlips(
+    [
+      { title: "Permission slip for the field trip", source: "school", externalId: "permission slip for the field trip" },
+      { title: "Soccer", source: "app", externalId: null },
+    ],
+    ["permission slip for the field trip"],
+  );
+  assert.deepEqual(still.map((event) => event.title), ["Soccer"]);
 });
