@@ -159,7 +159,6 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     }
     setBubbles(next);
     setDraft("");
-    onSent();
   }
 
   const shown = bubbles;
