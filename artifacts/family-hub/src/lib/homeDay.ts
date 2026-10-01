@@ -7,6 +7,15 @@ export type HomeTodo = {
   isActive?: boolean | null;
 };
 
+export function visibleForProfiles<T extends { profileIds?: string[] | null }>(rows: T[], selectedIds: string[]): T[] {
+  if (selectedIds.length === 0) return rows;
+  return rows.filter((row) => {
+    const ids = row.profileIds ?? [];
+    if (ids.length === 0) return true;
+    return ids.some((id) => selectedIds.includes(id));
+  });
+}
+
 export function todosForHome<T extends HomeTodo>(chores: T[], selectedIds: string[], familyIds: string[]): T[] {
   const todos = chores.filter((chore) => chore.taskType === "todo" && chore.isActive !== false);
   const allSelected = familyIds.length > 0 && familyIds.every((id) => selectedIds.includes(id));

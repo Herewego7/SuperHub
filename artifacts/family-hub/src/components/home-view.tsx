@@ -1,4 +1,4 @@
-import { outlookEventProfileIds } from "@/lib/outlookAttribution";
+import { assignmentProfileIds, outlookEventProfileIds, withoutUnwatched } from "@/lib/outlookAttribution";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { ChoreIcon } from "@/components/customChoreIcons";
 import { objectUrl } from "@/lib/apiBase";
@@ -867,10 +867,11 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
             a.calendarId === googleCalendarId && a.calendarType === 'google'
           );
           if (assignment) {
-            const assignedProfile = profiles.find(p => p.id === assignment.profileId);
-            if (assignedProfile) {
-              assignedProfileIds = [assignment.profileId];
-              displayName = assignedProfile.name;
+            const people = assignmentProfileIds(assignment).filter((id) => profiles.some((profile) => profile.id === id));
+            if (people.length > 0) {
+              assignedProfileIds = people;
+              const assignedProfile = profiles.find(p => p.id === people[0]);
+              if (assignedProfile) displayName = assignedProfile.name;
             }
           }
         }
@@ -927,6 +928,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           profileIds: oPids,
           calendarId: oe.calendar?.name || 'Outlook Calendar',
           calendarName: oe.calendar?.name || 'Outlook Calendar',
+          outlookCalendarId: oe.calendar?.id ?? null,
           createdAt: new Date(),
           updatedAt: new Date(),
         } as any);
@@ -958,7 +960,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
       }
     });
 
-    return [...events, ...googleCalendarEvents, ...outlookCalendarEvents, ...icalEvents];
+    return withoutUnwatched([...events, ...googleCalendarEvents, ...outlookCalendarEvents, ...icalEvents], calendarAssignments);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleDataSig, outlookCalendarQueries, icalQueries, events, profiles, googleAccountEmailMap, calendarAssignments]);
 
