@@ -121,6 +121,7 @@ export function planBody(input: {
     lines.push(chore.title);
   }
   for (const event of input.events) {
+    if (event.source === "meal" && input.dinner) continue;
     if (input.isChild && event.source === "school" && !namesPerson(`${event.title}\n${event.description ?? ""}`, input.kidName)) continue;
     lines.push(event.movedFrom ? `${event.title}, moved from ${event.movedFrom}` : event.title);
   }

@@ -163,6 +163,16 @@ test("a moved event names the old time", () => {
   assert.equal(moved, "Soccer, 5:30 PM, moved from 4:00 PM");
 });
 
+test("a dinner on the calendar is not listed twice", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [],
+    events: [{ title: "Tacos, 6:00 PM", source: "meal" }, { title: "Soccer, 4:00 PM" }],
+    dinner: "Tacos",
+  });
+  assert.equal(body, "Soccer, 4:00 PM\nDinner. Tacos");
+});
+
 test("the plan link opens chat with the dinner line", () => {
   const path = planOpenPath("Feed the dog\nDinner. Tacos", "liam");
   const params = new URLSearchParams(path.slice(path.indexOf("?")));
