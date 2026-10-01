@@ -4,6 +4,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
 import { choreProgress, dinnerName, horizonEvents, schoolEmailNames, todosForHome } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
+import { slipQuote, slipSender, suggestedSchool } from "@/lib/slipMail";
 
 type Props = {
   chores: Chore[];
@@ -13,10 +14,12 @@ type Props = {
   familyIds: string[];
   day: Date;
   kidName?: string | null;
+  personId?: string | null;
+  personSchool?: string | null;
   onOpenChores: () => void;
 };
 
-export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, kidName, onOpenChores }: Props) {
+export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, kidName, personId, personSchool, onOpenChores }: Props) {
   const [earlierOpen, setEarlierOpen] = useState(false);
   const dayKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
   const { data: meals = [] } = useQuery<Meal[]>({
@@ -24,6 +27,22 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/meals?start=${dayKey}&end=${dayKey}`);
       return res.json();
+    },
+  });
+
+  const muteSender = useMutation({
+    mutationFn: async (address: string) => {
+      await apiRequest("POST", "/api/ingest/mute", { address });
+    },
+  });
+
+  const saveSchool = useMutation({
+    mutationFn: async (school: string) => {
+      if (!personId) return;
+      await apiRequest("POST", "/api/ingest/school", { profileId: personId, school });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
     },
   });
 
@@ -82,7 +101,12 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           <p className="text-sm text-muted-foreground">Nothing waiting.</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {todos.map((todo) => (
+            {todos.map((todo) => {
+              const quote = slipQuote(todo.description);
+              const sender = slipSender(todo.description);
+              const school = suggestedSchool(quote);
+              const offerSchool = Boolean(school && personId && !personSchool);
+              return (
               <li key={todo.id} data-testid={`home-todo-${todo.id}`} className="flex items-start gap-3 rounded-2xl border border-border bg-card px-3 py-2">
                 <button
                   type="button"
@@ -92,7 +116,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
                 />
                 <div className="min-w-0">
                   <div className="text-[15px] font-medium">{todo.title}</div>
-                  {todo.description && <div data-testid="home-todo-quote" className="text-sm text-muted-foreground">{todo.description}</div>}
+                  {quote && <div data-testid="home-todo-quote" className="text-sm text-muted-foreground">{quote}</div>}
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     {todo.category === "school_email" ? (
                       <>
@@ -100,6 +124,16 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
                         <button type="button" data-testid="home-todo-not-relevant" className="underline" onClick={() => dismissSlip.mutate(todo.title)}>
                           Not relevant
                         </button>
+                        {sender && (
+                          <button type="button" data-testid="home-todo-mute" className="underline" onClick={() => muteSender.mutate(sender)}>
+                            Mute sender
+                          </button>
+                        )}
+                        {offerSchool && (
+                          <button type="button" data-testid="home-todo-save-school" className="underline" onClick={() => saveSchool.mutate(school)}>
+                            Save {school}
+                          </button>
+                        )}
                       </>
                     ) : (
                       "To-do"
@@ -107,7 +141,8 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
                   </div>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>

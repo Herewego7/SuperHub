@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { choresDismissedBySlip, dismissSlip, ingestMessages, muteSender } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, ingestMessages, muteSender, slipSender } from "../src/ingest/process.ts";
 
 test("two copies of the same slip from two adults become one to-do", () => {
   const planned = ingestMessages(
@@ -14,7 +14,14 @@ test("two copies of the same slip from two adults become one to-do", () => {
   );
   assert.equal(planned.todos.length, 1);
   assert.equal(planned.todos[0]?.category, "school_email");
+  assert.equal(slipSender(planned.todos[0]?.description), "office@school.edu");
   assert.equal(planned.events.length, 0);
+});
+
+test("accepting a school twice leaves one name on the person", () => {
+  const first = acceptSchool(null, "Lincoln Elementary");
+  assert.equal(acceptSchool(first, "Lincoln Elementary"), "Lincoln Elementary");
+  assert.equal(acceptSchool(first, "Washington High"), "Lincoln Elementary");
 });
 
 test("a muted sender and a dismissed slip stay off the household list", () => {

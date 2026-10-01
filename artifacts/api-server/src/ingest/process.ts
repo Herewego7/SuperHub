@@ -40,6 +40,34 @@ export function choresDismissedBySlip<T extends { id: string; title: string; cat
   return chores.filter((chore) => chore.category === "school_email" && slipKey(chore.title) === key).map((chore) => chore.id);
 }
 
+export function slipBody(fromAddress: string | undefined, snippet: string): string {
+  const address = fromAddress?.trim();
+  if (!address) return snippet;
+  return `From: ${address}\n${snippet}`;
+}
+
+export function slipSender(description: string | null | undefined): string | null {
+  const match = description?.match(/^From: (\S+)\n/);
+  return match?.[1] ?? null;
+}
+
+export function slipQuote(description: string | null | undefined): string {
+  if (!description) return "";
+  return description.replace(/^From: \S+\n/, "");
+}
+
+export function suggestedSchool(text: string): string | null {
+  const match = text.match(/\b([A-Z][\w'.-]*(?:\s+[A-Z][\w'.-]*){0,4}\s+(?:School|Academy|Elementary|Middle|High))\b/);
+  return match?.[1] ?? null;
+}
+
+export function acceptSchool(current: string | null | undefined, suggestion: string): string | null {
+  const next = suggestion.trim();
+  if (!next) return current?.trim() || null;
+  if (current?.trim()) return current.trim();
+  return next;
+}
+
 export function dismissSlip(state: HouseholdMail, key: string): HouseholdMail {
   if (!key || state.dismissedSlipKeys.includes(key)) return state;
   return { ...state, dismissedSlipKeys: [...state.dismissedSlipKeys, key] };
@@ -62,7 +90,7 @@ export function ingestMessages(
     seen.add(key);
     todos.push({
       title: message.subject.trim(),
-      description: message.snippet,
+      description: slipBody(message.fromAddress, message.snippet),
       taskType: "todo",
       category: "school_email",
       points: 0,

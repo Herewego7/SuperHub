@@ -34,6 +34,7 @@ export type Profile = {
   color: string;
   photoUrl: string | null;
   email: string | null;
+  school?: string | null;
   initials: string;
   isActive: boolean | null;
   isAllFamilyProfile: boolean | null;

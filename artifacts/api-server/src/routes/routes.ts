@@ -25,7 +25,7 @@ import { geocodeCity } from "../lib/geocode";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
-import { choresDismissedBySlip, dismissSlip, ingestMessages, muteSender } from "../ingest/process";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, ingestMessages, muteSender } from "../ingest/process";
 import { slipKey } from "../ingest/parse";
 import { expandRecurringEvents, resolveSeriesEventId } from "../lib/eventRecurrence";
 import { planRecurringEdit, planRecurringDelete, type EditScope } from "../lib/recurringEdit";
@@ -291,6 +291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         color: z.string().optional(),
         initials: z.string().optional(),
         email: z.string().nullable().optional(),
+        school: z.string().nullable().optional(),
         photoUrl: z.string().nullable().optional(),
         isActive: z.boolean().optional(),
         isAllFamilyProfile: z.boolean().optional(),
@@ -3315,6 +3316,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error muting a sender:", error);
       res.status(500).json({ error: "Failed to mute sender" });
+    }
+  });
+
+  app.post("/api/ingest/school", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const profileId = typeof req.body.profileId === "string" ? req.body.profileId : "";
+      const suggestion = typeof req.body.school === "string" ? req.body.school : "";
+      if (!profileId || !suggestion.trim()) return res.status(400).json({ error: "profileId and school are required" });
+      const existing = await storage.getProfile(profileId);
+      if (!existing || existing.userId !== userId) return res.status(404).json({ message: "Profile not found" });
+      const school = acceptSchool(existing.school, suggestion);
+      if (school === (existing.school?.trim() || null)) return res.json(existing);
+      const profile = await storage.updateProfile(profileId, { school }, userId);
+      res.json(profile);
+    } catch (error) {
+      console.error("Error saving a school:", error);
+      res.status(500).json({ error: "Failed to save school" });
     }
   });
 

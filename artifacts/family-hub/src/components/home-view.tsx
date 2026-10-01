@@ -2362,6 +2362,14 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           const person = picked[0];
           return person.role === "child" || person.isChild ? person.name : null;
         })()}
+        personId={(() => {
+          const picked = profiles.filter((p) => !p.isAllFamilyProfile && selectedProfiles.includes(p.id));
+          return picked.length === 1 ? picked[0].id : null;
+        })()}
+        personSchool={(() => {
+          const picked = profiles.filter((p) => !p.isAllFamilyProfile && selectedProfiles.includes(p.id));
+          return picked.length === 1 ? picked[0].school ?? null : null;
+        })()}
         onOpenChores={() => setActiveTab("chores")}
       />
 
