@@ -437,6 +437,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       replyAfter(
         apiRequest("POST", "/api/ingest/not-relevant", { title: dismissed }).then(() => {
           void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+          void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
         }),
         `Removed ${dismissed}.`,
       );
