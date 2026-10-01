@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dinnerReply, groceryAlreadyHave, mealEvents } from "../../src/lib/mealCalendar";
+import { dinnerReply, groceryAlreadyHave, groceryHaveAction, mealEvents } from "../../src/lib/mealCalendar";
 
 test("the calendar switch off leaves the meal off the event list", () => {
   const events = mealEvents([{ name: "Tacos", slot: "dinner" }], false);
@@ -14,6 +14,12 @@ test("the calendar switch on keeps the dinner", () => {
 
 test("chat hears that the family already has tortillas", () => {
   assert.equal(groceryAlreadyHave("We already have tortillas."), "tortillas");
+});
+
+test("a meal ingredient is checked off instead of deleted", () => {
+  const action = groceryHaveAction("tortillas", [], [{ name: "Tortillas" }]);
+  assert.deepEqual(action, { kind: "have", name: "Tortillas" });
+  assert.equal(groceryHaveAction("cheese", [{ id: "c", name: "Cheese" }], []).kind, "delete");
 });
 
 test("chat names tonight's dinner and does not mention the inbox", () => {

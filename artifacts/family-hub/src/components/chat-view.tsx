@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
 import { checkOffTitle, deleteEventTitle, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "@/lib/chatTools";
-import { dinnerReply, groceryAlreadyHave } from "@/lib/mealCalendar";
+import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, readThread, type ChatBubble } from "@/lib/chatThread";
 
@@ -40,6 +40,18 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   const tools = toolsForRole(isChild);
   const { data: chores = [] } = useQuery<Chore[]>({ queryKey: ["/api/chores"] });
   const { data: groceries = [] } = useQuery<{ id: string; name: string }[]>({ queryKey: ["/api/grocery-items"] });
+  const { data: mealGroceries = [] } = useQuery<{ name: string }[]>({
+    queryKey: ["/api/grocery-list/aggregate", "chat"],
+    queryFn: async () => {
+      const start = new Date();
+      const end = new Date();
+      start.setDate(start.getDate() - 1);
+      end.setDate(end.getDate() + 7);
+      const key = (day: Date) => `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+      const res = await apiRequest("GET", `/api/grocery-list/aggregate?start=${key(start)}&end=${key(end)}`);
+      return res.json();
+    },
+  });
   const { data: events = [] } = useQuery<{ id: string; title: string; source?: string | null }[]>({ queryKey: ["/api/events"] });
   const { data: meals = [] } = useQuery<Meal[]>({
     queryKey: ["/api/meals", "chat-dinner"],
@@ -109,11 +121,15 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const have = groceryAlreadyHave(text);
-    const grocery = have ? groceries.find((item) => item.name.toLowerCase() === have.toLowerCase()) : undefined;
+    const grocery = have ? groceryHaveAction(have, groceries, mealGroceries) : null;
     if (grocery) {
-      void apiRequest("DELETE", `/api/grocery-items/${grocery.id}`);
+      if (grocery.kind === "delete") void apiRequest("DELETE", `/api/grocery-items/${grocery.id}`);
+      if (grocery.kind === "check") void apiRequest("PATCH", `/api/grocery-items/${grocery.id}`, { isChecked: true });
+      if (grocery.kind === "have") void apiRequest("POST", "/api/grocery-items", { name: grocery.name, isChecked: true });
       void queryClient.invalidateQueries({ queryKey: ["/api/grocery-items"] });
-      next.push({ id: `${Date.now()}-g`, role: "assistant", text: `Removed ${grocery.name}.` });
+      void queryClient.invalidateQueries({ queryKey: ["/api/grocery-list/aggregate"] });
+      const label = grocery.kind === "have" ? grocery.name : have;
+      next.push({ id: `${Date.now()}-g`, role: "assistant", text: `Removed ${label}.` });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     setBubbles(next);
