@@ -1,6 +1,6 @@
 import { todosForHome } from "@/lib/homeDay";
 import { assignmentProfileIds, outlookEventProfileIds, withoutUnwatched } from "@/lib/outlookAttribution";
-import { UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, upcomingRows, type UpcomingKind } from "@/lib/upcoming";
+import { UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, upcomingKindForMail, upcomingRows, type UpcomingKind } from "@/lib/upcoming";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Profile, Event, InsertEvent, CalendarAssignment, Chore } from "@workspace/shared-types";
@@ -1714,11 +1714,14 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
       id: todo.id,
       title: todo.title,
       startTime: currentDate,
-      kind: "todo" as const,
+      kind: upcomingKindForMail(todo.category),
       profileIds: todo.profileIds,
       source: null,
     }));
-    return [...visibleEvents, ...todos];
+    const events = visibleEvents.map((event) => (
+      event.source === "school" ? { ...event, kind: "newsletter" as const } : event
+    ));
+    return [...events, ...todos];
   }, [chores, currentDate, profiles, selectedProfiles, visibleEvents]);
 
   // ── Mutations ───────────────────────────────────────────────────────────────

@@ -18,6 +18,10 @@ type Row = {
   kind?: "todo" | "keyDate" | "event" | "newsletter";
 };
 
+export function upcomingKindForMail(categoryOrSource: string | null | undefined): "newsletter" | "todo" {
+  return categoryOrSource === "school_email" || categoryOrSource === "school" ? "newsletter" : "todo";
+}
+
 function kindOf(row: Row): "todo" | "keyDate" | "event" | "newsletter" {
   if (row.kind) return row.kind;
   if (row.isAllDay) return "keyDate";
