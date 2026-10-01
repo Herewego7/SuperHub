@@ -63,10 +63,11 @@ test("a kid plan leaves out a school email line", () => {
       { title: "Permission slip", taskType: "todo", category: "school_email" },
       { title: "Feed the dog", taskType: "chore", category: "pets" },
     ],
-    events: [],
+    events: [{ title: "Picture day", source: "school" }],
     dinner: "Tacos",
   });
   assert.equal(body.includes("Permission slip"), false);
+  assert.equal(body.includes("Picture day"), false);
   assert.equal(body.includes("Feed the dog"), true);
   assert.equal(body.includes("Tacos"), true);
 });

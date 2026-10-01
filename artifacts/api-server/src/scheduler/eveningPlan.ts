@@ -64,7 +64,7 @@ export function choresForPlan<T extends { id: string; profileIds?: string[] | nu
 export function planBody(input: {
   isChild: boolean;
   chores: { title: string; taskType?: string | null; category?: string | null }[];
-  events: { title: string; movedFrom?: string | null }[];
+  events: { title: string; movedFrom?: string | null; source?: string | null }[];
   dinner?: string | null;
 }): string {
   const lines: string[] = [];
@@ -74,6 +74,7 @@ export function planBody(input: {
     lines.push(chore.title);
   }
   for (const event of input.events) {
+    if (input.isChild && event.source === "school") continue;
     lines.push(event.movedFrom ? `${event.title} moved from ${event.movedFrom}` : event.title);
   }
   const dinnerLine = input.dinner ? `Dinner. ${input.dinner}` : null;
@@ -136,7 +137,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const openChores = choresForPlan(chores, doneToday, profile.id);
     const dayEvents = events
       .filter((event) => localDate(new Date(event.startTime), tz) === target)
-      .map((event) => ({ title: event.title, movedFrom: event.movedFrom }));
+      .map((event) => ({ title: event.title, movedFrom: event.movedFrom, source: event.source }));
     const body = planBody({ isChild, chores: openChores, events: dayEvents, dinner });
     try {
       await sendPushToUser(
