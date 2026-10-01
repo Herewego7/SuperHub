@@ -38,6 +38,19 @@ export function planKeysForClaim(saved: string[] | null | undefined, held: strin
   return keys;
 }
 
+export function choresForPlan<T extends { id: string; profileIds?: string[] | null }>(
+  chores: T[],
+  completedIds: string[],
+  profileId: string,
+): T[] {
+  const done = new Set(completedIds);
+  return chores.filter((chore) => {
+    if (done.has(chore.id)) return false;
+    const ids = chore.profileIds ?? [];
+    return ids.length === 0 || ids.includes(profileId);
+  });
+}
+
 export function planBody(input: {
   isChild: boolean;
   chores: { title: string; taskType?: string | null; category?: string | null }[];
@@ -96,14 +109,19 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     if (!claim.send) continue;
     const isChild = profile.role === "child" || profile.isChild === true;
     const chores = await storage.getChoresByUser(profile.userId);
+    const completions = await storage.getChoreCompletionsByUser(profile.userId);
     const events = await storage.getEventsByUser(profile.userId);
     const meals = await storage.getMealsByUser(profile.userId);
     const target = profile.eveningPlanTiming === "morningOf" ? day : nextDayKey(day);
     const dinner = meals.find((meal) => meal.date === target && meal.slot === "dinner")?.name ?? null;
+    const doneToday = completions
+      .filter((completion) => completion.completedAt && localDate(new Date(completion.completedAt), tz) === target)
+      .map((completion) => completion.choreId);
+    const openChores = choresForPlan(chores, doneToday, profile.id);
     const dayEvents = events
       .filter((event) => localDate(new Date(event.startTime), tz) === target)
       .map((event) => ({ title: event.title }));
-    const body = planBody({ isChild, chores, events: dayEvents, dinner });
+    const body = planBody({ isChild, chores: openChores, events: dayEvents, dinner });
     try {
       await sendPushToUser(
         { userId: profile.userId, profileId: profile.id },

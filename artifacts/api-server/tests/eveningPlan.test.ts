@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { claimPlanSend, planBody, planKeysForClaim, planOpenPath, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
+import { choresForPlan, claimPlanSend, planBody, planKeysForClaim, planOpenPath, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
 
 test("a profile with a plan time does not also receive a daily brief", () => {
   const kinds = pushesForProfile({ planTime: "19:00", dailyBriefTime: "07:30" });
@@ -11,6 +11,19 @@ test("two people claimed together both stay sent", () => {
   const saved = planKeysForClaim(["dad:2026-10-02"], ["dad:2026-10-02"]);
   const second = claimPlanSend(planKeysForClaim([], saved), "kid", "2026-10-02");
   assert.deepEqual(second.sentKeys, ["dad:2026-10-02", "kid:2026-10-02"]);
+});
+
+test("the plan keeps this person's open chores", () => {
+  const rows = choresForPlan(
+    [
+      { id: "dog", title: "Feed the dog", profileIds: ["liam"] },
+      { id: "done", title: "Dishes", profileIds: ["liam"] },
+      { id: "dad", title: "Pay the bill", profileIds: ["chad"] },
+    ],
+    ["done"],
+    "liam",
+  );
+  assert.deepEqual(rows.map((row) => row.id), ["dog"]);
 });
 
 test("dinner stays in the plan when the list is long", () => {
