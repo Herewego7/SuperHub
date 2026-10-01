@@ -25,7 +25,7 @@ import { geocodeCity } from "../lib/geocode";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, ingestMessages, muteSender, slipDate, slipDayOffset, withoutDismissedSlips } from "../ingest/process";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, ingestMessages, muteSender, slipDate, slipDayOffset, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
 import { dinnerCalendarChange, dinnerEventInsert, dinnersToCopy } from "../meals/dinnerEvent";
 import { slipKey } from "../ingest/parse";
 import { moveClock } from "../scheduler/eveningPlan";
@@ -829,7 +829,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // The completed-to-dos history drawer asks for everything; every other
       // caller gets the working set.
       const includeArchived = req.query.includeArchived === "1";
-      const chores = includeArchived ? all : all.filter((c) => !(c as any).archivedAt);
+      const settings = await storage.getCalendarSettingsByUser(userId);
+      const chores = withoutDismissedChores(
+        includeArchived ? all : all.filter((c) => !(c as any).archivedAt),
+        settings?.dismissedSlipKeys ?? [],
+      );
       res.json(chores);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch chores" });

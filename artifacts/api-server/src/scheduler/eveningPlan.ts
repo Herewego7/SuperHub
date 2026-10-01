@@ -13,7 +13,7 @@ import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { loadProfiles } from "../lib/profileRows";
 import { expandRecurringEvents } from "../lib/eventRecurrence";
 import { eventsOnWatchedCalendars } from "../lib/calendarAssignmentScope";
-import { withoutDismissedSlips } from "../ingest/process";
+import { withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
 import { storage } from "../storage";
 
 export type PlanPush = "evening-plan" | "daily-brief";
@@ -204,7 +204,10 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const finishedTodos = completions
       .filter((completion) => chores.some((chore) => chore.id === completion.choreId && chore.taskType === "todo"))
       .map((completion) => completion.choreId);
-    const openChores = dueForPlan(choresForPlan(chores, doneToday, profile.id, finishedTodos), new Date(`${target}T12:00:00`));
+    const openChores = dueForPlan(
+      choresForPlan(withoutDismissedChores(chores, settings?.dismissedSlipKeys ?? []), doneToday, profile.id, finishedTodos),
+      new Date(`${target}T12:00:00`),
+    );
     const assignments = await storage.getCalendarAssignmentsByUser(profile.userId);
     const dayEvents = eventsForPlan(
       eventsOnWatchedCalendars(planDayEvents(withoutDismissedSlips(events, settings?.dismissedSlipKeys ?? []), target, tz), assignments),
