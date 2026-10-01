@@ -27,7 +27,7 @@ import { Profile, InsertProfile, LocationSettings, insertLocationSettingsSchema,
 import { regionToTimezone, deviceTimezone, guessCountry, countryFromName, regionLabel, COUNTRIES, type CountryCode } from "@/lib/regions";
 import { ObjectUploader } from "./ObjectUploader";
 import { motion, AnimatePresence } from "framer-motion";
-import { Settings, Plus, Edit, X, Upload, User, Users, UserPlus, MapPin, Calendar, ChevronDown, ChevronUp, Lock, LogOut, Trash2, AlertTriangle, Bell, LayoutDashboard, GripVertical, Gift, ShieldCheck, CheckCircle, XCircle, Sun, Moon, Monitor, Camera, Save, Compass, Search, Share2, KeyRound, Star, HelpCircle, Link2, Bug, Sparkles, Home, ListTodo, CheckSquare, UtensilsCrossed } from "lucide-react";
+import { Settings, Plus, Edit, X, Upload, User, Users, UserPlus, MapPin, Calendar, ChevronDown, ChevronUp, Lock, LogOut, Trash2, AlertTriangle, Bell, LayoutDashboard, GripVertical, Gift, ShieldCheck, CheckCircle, XCircle, Sun, Moon, Monitor, Camera, Save, Compass, Search, Share2, KeyRound, Star, HelpCircle, Link2, Bug, Sparkles, Home, ListTodo, UtensilsCrossed, MessageCircle } from "lucide-react";
 import { useTheme, type ThemeMode } from "@/hooks/use-theme";
 import { isScreensaverEnabled, setScreensaverEnabled, SCREENSAVER_IDLE_MS } from "@/lib/screensaver";
 import { EmojiPicker } from "./EmojiPicker";
@@ -54,11 +54,12 @@ const ALL_TABS: {
   icon: React.ComponentType<{ className?: string }>; shortLabel?: string;
 }[] = [
   { id: "home",      label: "Home",        alwaysVisible: true,  icon: Home },
-  { id: "calendar", label: "Calendar",    alwaysVisible: false, icon: Calendar, shortLabel: "Cal" },
-  { id: "chores",    label: "Chores",      alwaysVisible: false, icon: ListTodo },
-  { id: "todos",     label: "To-Dos",      alwaysVisible: false, icon: CheckSquare },
-  { id: "meals",     label: "Meals",       alwaysVisible: false, icon: UtensilsCrossed },
+  { id: "calendar", label: "Calendar",    alwaysVisible: true, icon: Calendar, shortLabel: "Cal" },
+  { id: "chores",    label: "Chores",      alwaysVisible: true, icon: ListTodo },
+  { id: "meals",     label: "Meals",       alwaysVisible: true, icon: UtensilsCrossed },
+  { id: "chat",      label: "Chat",        alwaysVisible: true, icon: MessageCircle },
 ];
+const FIXED_NAV_IDS = ["home", "calendar", "chores", "meals", "chat"];
 
 function formatStarsPerDollar(centsPerPoint: number): string {
   const perDollar = 100 / centsPerPoint;
@@ -898,12 +899,7 @@ function deriveInitials(name: string): string {
 }
 
 // "behaviour" deliberately omitted — see the matching note on ALL_TABS above.
-const TOGGLEABLE_TABS: { id: string; label: string }[] = [
-  { id: "calendar",    label: "Calendar"      },
-  { id: "chores",       label: "Chores"        },
-  { id: "todos",        label: "To-Dos"        },
-  { id: "meals",        label: "Meals"         },
-];
+const TOGGLEABLE_TABS: { id: string; label: string }[] = [];
 
 // Keyword index for the Settings search box — each section's list is a
 // superset of its title plus the individual features/fields it contains, so
@@ -4136,7 +4132,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
 
               {/* Visible Tabs + Default Tab */}
               <div>
-                <p className="text-sm font-medium text-foreground mb-2">Tab Order & Visibility</p>
+                <p className="text-sm font-medium text-foreground mb-2">Tabs</p>
                 {/* The nav bar as it will actually look, updating as the list
                     below is reordered, unchecked, or switched to icons-only.
                     It replaces two sentences that narrated those controls —
@@ -4151,7 +4147,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                   className="flex items-center justify-center gap-0.5 flex-nowrap overflow-hidden mb-3 px-1.5 py-2 rounded-lg bg-background/60 border border-border"
                   data-testid="nav-preview"
                 >
-                  {localTabOrder.map(tabId => {
+                  {FIXED_NAV_IDS.map(tabId => {
                     const tab = ALL_TABS.find(t => t.id === tabId);
                     if (!tab) return null;
                     if (!tab.alwaysVisible && hiddenTabs.includes(tabId)) return null;
@@ -4171,7 +4167,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                   })}
                 </div>
                 <div ref={tabListRef}>
-                {localTabOrder.map(tabId => {
+                {FIXED_NAV_IDS.map(tabId => {
                   const tab = ALL_TABS.find(t => t.id === tabId);
                   if (!tab) return null;
                   const isVisible = tab.alwaysVisible || !hiddenTabs.includes(tabId);
@@ -4189,14 +4185,6 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                             : 'bg-background/60 hover:bg-background'
                       }`}
                     >
-                      <span
-                        className="flex items-center justify-center -my-1 -ml-1 p-2 flex-shrink-0 cursor-grab active:cursor-grabbing touch-none select-none"
-                        style={{ touchAction: 'none' }}
-                        onPointerDown={(e) => handleGripPointerDown(e, tabId)}
-                        data-testid={`tab-drag-handle-${tabId}`}
-                      >
-                        <GripVertical className="w-5 h-5 text-muted-foreground" />
-                      </span>
                       <Checkbox
                         id={`tab-${tabId}`}
                         checked={isVisible}
