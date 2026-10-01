@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, importedEventNeedsConfirm, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
+import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
 import { dinnerName, mailVisibleToKid, openTodos, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
@@ -201,7 +201,10 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     const moving = moveEventWhen(text);
     const moved = moving ? talkEvents.find((event) => event.title.toLowerCase() === moving.title.toLowerCase()) : undefined;
     if (moved && moving && tools.includes("update_event")) {
-      if (moved.id.startsWith("google-")) {
+      const action = moveEventAction(moved.source, moved.id);
+      if (action === "keep-meal") {
+        next.push({ id: `${Date.now()}-m`, role: "assistant", text: `${moved.title} stays on the meal plan.` });
+      } else if (action === "keep-google") {
         next.push({ id: `${Date.now()}-m`, role: "assistant", text: `${moved.title} stays on Google Calendar.` });
       } else {
         const start = new Date(moved.startTime ?? Date.now());
@@ -209,7 +212,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         const duration = Math.max(end.getTime() - start.getTime(), 60 * 60 * 1000);
         start.setHours(moving.hours, moving.minutes, 0, 0);
         const finish = new Date(start.getTime() + duration);
-        if (importedEventNeedsConfirm(moved.source)) {
+        if (action === "confirm") {
           setPendingDeleteId(null);
           setPendingMove({ id: moved.id, start: start.toISOString(), end: finish.toISOString() });
           next.push({ id: `${Date.now()}-m`, role: "assistant", text: `Move ${moved.title}? It came from outside the app. Reply yes to move it.` });

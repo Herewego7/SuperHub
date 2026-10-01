@@ -274,6 +274,13 @@ export function importedEventNeedsConfirm(source: string | null | undefined): bo
   return !!source && source !== "app" && source !== "meal";
 }
 
+export function moveEventAction(source: string | null | undefined, id: string): "keep-meal" | "keep-google" | "confirm" | "move" {
+  if (source === "meal") return "keep-meal";
+  if (id.startsWith("google-")) return "keep-google";
+  if (importedEventNeedsConfirm(source)) return "confirm";
+  return "move";
+}
+
 export function deleteEventAction(source: string | null | undefined, id: string): "keep" | "confirm" | "delete" {
   if (id.startsWith("google-") || source === "meal") return "keep";
   if (importedEventNeedsConfirm(source)) return "confirm";
