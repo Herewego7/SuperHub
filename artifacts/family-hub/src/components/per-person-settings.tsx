@@ -4,6 +4,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { objectUrl } from "@/lib/apiBase";
 import { isKidProfile } from "@/lib/parentGate";
+import { planScheduleLabel } from "@/lib/eveningPlanLabel";
 import { Input } from "@/components/ui/input";
 import { ChevronDown, ChevronRight, Moon, Sunrise, CalendarDays, Flame, Star } from "lucide-react";
 import type { Profile } from "@workspace/shared-types";
@@ -224,6 +225,39 @@ export function PerPersonSettingsSection({
                       ))}
                     </div>
                   ) : null}
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="text-sm font-medium">Evening plan</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-tight">
+                    One plan instead of the morning brief. Leave the time blank to keep the brief.
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Input
+                      type="time"
+                      className="w-32 h-8 shrink-0 appearance-none"
+                      defaultValue={p.eveningPlanTime ?? ""}
+                      onBlur={(e) => { const v = e.target.value || null; if (v !== (p.eveningPlanTime ?? null)) save(p.id, { eveningPlanTime: v }); }}
+                      data-testid={`input-evening-plan-${p.id}`}
+                    />
+                    <select
+                      value={p.eveningPlanTiming === "morningOf" ? "morningOf" : "eveningBefore"}
+                      onChange={(e) => save(p.id, { eveningPlanTiming: e.target.value })}
+                      className="h-8 shrink-0 rounded-md border border-input bg-background px-2 text-sm"
+                      data-testid={`select-evening-plan-timing-${p.id}`}
+                    >
+                      <option value="eveningBefore">Evening before</option>
+                      <option value="morningOf">Morning of</option>
+                    </select>
+                  </div>
+                  {planScheduleLabel(p.eveningPlanTime, p.eveningPlanTiming) && (
+                    <p className="text-xs text-muted-foreground" data-testid={`evening-plan-label-${p.id}`}>
+                      {planScheduleLabel(p.eveningPlanTime, p.eveningPlanTiming)}
+                    </p>
+                  )}
                 </div>
 
                 {/* Weekly recap */}

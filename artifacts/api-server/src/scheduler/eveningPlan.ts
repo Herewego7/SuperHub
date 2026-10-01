@@ -33,7 +33,7 @@ export function claimPlanSend(sentKeys: string[], profileId: string, day: string
 export function planBody(input: {
   isChild: boolean;
   chores: { title: string; taskType?: string | null; category?: string | null }[];
-  events: { title: string }[];
+  events: { title: string; movedFrom?: string | null }[];
   dinner?: string | null;
 }): string {
   const lines: string[] = [];
@@ -42,7 +42,9 @@ export function planBody(input: {
     if (input.isChild && chore.category === "school_email") continue;
     lines.push(chore.title);
   }
-  for (const event of input.events) lines.push(event.title);
+  for (const event of input.events) {
+    lines.push(event.movedFrom ? `${event.title} moved from ${event.movedFrom}` : event.title);
+  }
   if (input.dinner) lines.push(`Dinner. ${input.dinner}`);
   const body = lines.slice(0, 6).join("\n");
   return body || "Nothing on the plan.";

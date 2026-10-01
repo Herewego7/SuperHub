@@ -29,6 +29,15 @@ test("a kid plan leaves out a school email line", () => {
   assert.equal(body.includes("Tacos"), true);
 });
 
+test("a moved event names the old time", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [],
+    events: [{ title: "Soccer", movedFrom: "4:00 PM" }],
+  });
+  assert.equal(body.includes("Soccer moved from 4:00 PM"), true);
+});
+
 test("the plan link opens chat with the dinner line", () => {
   const path = planOpenPath("Feed the dog\nDinner. Tacos");
   const params = new URLSearchParams(path.slice(path.indexOf("?")));

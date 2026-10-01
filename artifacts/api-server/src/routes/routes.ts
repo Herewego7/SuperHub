@@ -298,6 +298,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         outlookCalendarConnected: z.boolean().optional(),
         bedtimeCutoff: hhmm,
         dailyBriefTime: hhmm,
+        eveningPlanTime: hhmm,
+        eveningPlanTiming: z.enum(["eveningBefore", "morningOf"]).optional(),
         dailyBriefSections: z.object({
           events: z.boolean().optional(),
           chores: z.boolean().optional(),
