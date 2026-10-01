@@ -65,17 +65,19 @@ export function createEventTitle(text: string): string | null {
   return title ? title : null;
 }
 
-export function createEventClock(title: string): { title: string; hours?: number; minutes?: number } {
-  const match = title.match(/^(.*?)\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i);
-  if (!match) return { title };
-  let hours = Number(match[2]);
-  const minutes = match[3] ? Number(match[3]) : 0;
-  const suffix = match[4].toLowerCase();
+export function createEventClock(title: string): { title: string; hours?: number; minutes?: number; day: "today" | "tomorrow" } {
+  const match = title.match(/^(.*?)(?:\s+(today|tomorrow))?(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm))?$/i);
+  if (!match || (!match[2] && !match[3])) return { title, day: "tomorrow" };
   const name = match[1].trim();
-  if (!name || hours < 1 || hours > 12 || minutes > 59) return { title };
+  const day = match[2]?.toLowerCase() === "today" ? "today" : "tomorrow";
+  if (!match[3]) return name ? { title: name, day } : { title, day: "tomorrow" };
+  let hours = Number(match[3]);
+  const minutes = match[4] ? Number(match[4]) : 0;
+  const suffix = match[5].toLowerCase();
+  if (!name || hours < 1 || hours > 12 || minutes > 59) return { title, day: "tomorrow" };
   if (suffix === "pm" && hours !== 12) hours += 12;
   if (suffix === "am" && hours === 12) hours = 0;
-  return { title: name, hours, minutes };
+  return { title: name, hours, minutes, day };
 }
 
 export function familyCalendarOffer(familyCalendarId: string | null | undefined): string | null {

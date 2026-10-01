@@ -230,7 +230,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     if (created && tools.includes("create_event")) {
       const calendarId = familyCalendarOffer(calendarSettings?.familyCalendarId);
       const start = new Date();
-      start.setDate(start.getDate() + 1);
+      if (created.day !== "today") start.setDate(start.getDate() + 1);
       start.setHours(created.hours ?? 9, created.minutes ?? 0, 0, 0);
       const end = new Date(start.getTime() + 60 * 60 * 1000);
       void apiRequest("POST", "/api/events", {
