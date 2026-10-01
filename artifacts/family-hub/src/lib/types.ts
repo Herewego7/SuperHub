@@ -1,4 +1,4 @@
-export type TabType = "home" | "calendar" | "chores" | "todos" | "people" | "meals" | "behaviour";
+export type TabType = "home" | "calendar" | "chores" | "todos" | "people" | "meals" | "behaviour" | "chat";
 export type ChoresSubTabType = "chores" | "rewards" | "trophies" | "bonus";
 
 export interface EventDisplay {

@@ -539,6 +539,32 @@
   background: #5E8FAD;
 }
 
+.hearth-theme .superhub-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  background: hsl(var(--card));
+  border-top: 1px solid hsl(var(--border));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.hearth-theme .superhub-tabbar-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 52px;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  border: 0;
+  padding: 6px 0;
+}
+
 /* ── Hearth dark mode ── */
 /* .dark is on <html>, .hearth-theme is on a child div — use descendant selector */
 .dark .hearth-theme {

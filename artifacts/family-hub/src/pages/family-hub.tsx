@@ -7,6 +7,7 @@ import { Profile, CustomProfileGroup, ChoreCompletion, ActivityLogEntryType, Cho
 import { ChoreManagementDrawer } from "@/components/chore-management-drawer";
 import { EventModal, type EventFormData } from "@/components/event-modal";
 import { TabType, ChoresSubTabType } from "@/lib/types";
+import { BOTTOM_NAV_IDS } from "@/lib/bottomNav";
 import { consumeTabDeepLinkFromUrl, onTabDeepLink, consumeCelebrationDeepLinkFromUrl, onCelebrationDeepLink } from "@/lib/pushDeepLink";
 import { ProfileCircle } from "@/components/profile-circle";
 import { SettingsModal } from "@/components/settings-modal";
@@ -33,7 +34,7 @@ import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { ReminderEditor } from "@/components/health-reminders-section";
 import { RecentShoutoutsCard } from "@/components/recent-shoutouts-card";
-import { Settings, Home, Calendar, ListTodo, Gift, Trophy, ChevronLeft, ChevronRight, LogOut, UtensilsCrossed, Sparkles, ArrowLeft, Star, Plus, ListChecks, StickyNote, Camera, CalendarPlus, EyeOff, ScrollText, Maximize2, Minimize2, CheckSquare, Smile } from "lucide-react";
+import { Settings, Home, Calendar, ListTodo, Gift, Trophy, ChevronLeft, ChevronRight, LogOut, UtensilsCrossed, Sparkles, ArrowLeft, Star, Plus, ListChecks, StickyNote, Camera, CalendarPlus, EyeOff, ScrollText, Maximize2, Minimize2, CheckSquare, Smile, MessageCircle } from "lucide-react";
 import { format, addDays, subDays, isToday, differenceInWeeks, addWeeks, subWeeks, startOfWeek, isSameDay } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
@@ -67,7 +68,7 @@ const INACTIVITY_MS = 30 * 60 * 1000; // 30 minutes
 // 'behaviour' deliberately excluded — the Behavior tab is hidden from the
 // nav/Settings entirely for now (still fully functional in code, just not
 // discoverable) per an explicit request; see ALL_NAV_TAB_CONFIGS below.
-const DEFAULT_TAB_ORDER = ['home', 'calendar', 'chores', 'todos', 'meals'];
+const DEFAULT_TAB_ORDER = ['home', 'calendar', 'chores', 'meals', 'chat'];
 
 interface NavTabConfig {
   id: TabType;
@@ -86,11 +87,11 @@ interface NavTabConfig {
 // on it — this list is purely what the tab-pill row renders, so leaving an
 // entry out is enough to make it undiscoverable without removing anything.
 const ALL_NAV_TAB_CONFIGS: NavTabConfig[] = [
-  { id: 'home',      icon: Home,           label: 'Home',                             testId: 'home-tab',      alwaysVisible: true },
-  { id: 'calendar', icon: Calendar,       label: 'Calendar',    shortLabel: 'Cal',   testId: 'calendar-tab' },
-  { id: 'chores',    icon: ListTodo,        label: 'Chores',                           testId: 'chores-tab'    },
-  { id: 'todos',     icon: CheckSquare,     label: 'To-Dos',                           testId: 'todos-tab'     },
-  { id: 'meals',     icon: UtensilsCrossed, label: 'Meals',                            testId: 'meals-tab'     },
+  { id: 'home',      icon: Home,            label: 'Home',     testId: 'home-tab',     alwaysVisible: true },
+  { id: 'calendar',  icon: Calendar,        label: 'Calendar', testId: 'calendar-tab', alwaysVisible: true },
+  { id: 'chores',    icon: ListTodo,        label: 'Chores',   testId: 'chores-tab',   alwaysVisible: true },
+  { id: 'meals',     icon: UtensilsCrossed, label: 'Meals',    testId: 'meals-tab',    alwaysVisible: true },
+  { id: 'chat',      icon: MessageCircle,   label: 'Chat',     testId: 'chat-tab',     alwaysVisible: true },
 ];
 
 export default function FamilyHub() {
@@ -192,8 +193,11 @@ export default function FamilyHub() {
   };
 
   const [activeTab, setActiveTab] = useState<TabType>(() => {
-    return (localStorage.getItem('familyHub_defaultTab') as TabType) ?? 'home';
+    const saved = localStorage.getItem('familyHub_defaultTab') as TabType | null;
+    if (!saved || saved === "todos" || saved === "people") return "home";
+    return saved;
   });
+  const [chatUnread, setChatUnread] = useState(0);
   const [choresSubTab, setChoresSubTab] = useState<ChoresSubTabType>("chores");
   const [pendingOpenEventId, setPendingOpenEventId] = useState<string | null>(null);
   const { spotlight, spotlightOverlay } = useSpotlight();
@@ -703,9 +707,6 @@ export default function FamilyHub() {
   const [showSnapFlyer, setShowSnapFlyer] = useState(false);
   const [showAddRemoveStars, setShowAddRemoveStars] = useState(false);
 
-  // Ref for the scrollable nav pill container so we can auto-scroll the
-  // active tab into view on mobile when the active tab changes.
-  const navScrollRef = useRef<HTMLDivElement>(null);
   const calendarRef = useRef<Calendar3ViewHandle>(null);
   const [hiddenTabs, setHiddenTabsState] = useState<Set<string>>(() => {
     // try/catch like every other localStorage JSON read in the app — this one
@@ -742,14 +743,9 @@ export default function FamilyHub() {
     localStorage.setItem('familyHub_navIconsOnly', String(value));
   };
 
-  // The same visible/ordered tab list the pill row renders.
-  const visibleNavTabs = [...ALL_NAV_TAB_CONFIGS]
-    .filter(tab => tab.alwaysVisible || !hiddenTabs.has(tab.id))
-    .sort((a, b) => {
-      const ai = tabOrder.indexOf(a.id);
-      const bi = tabOrder.indexOf(b.id);
-      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-    });
+  // The bottom bar is a fixed set. Older hidden-tab and reorder
+  // preferences do not drop Chat or bring To-Dos back.
+  const visibleNavTabs = BOTTOM_NAV_IDS.map((id) => ALL_NAV_TAB_CONFIGS.find((tab) => tab.id === id)!);
 
   const { data: profiles = [], isLoading } = useQuery<Profile[]>({
     queryKey: ["/api/profiles"],
@@ -877,6 +873,11 @@ export default function FamilyHub() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    const raw = Number(localStorage.getItem("superhub_chat_unread") || "0");
+    setChatUnread(Number.isFinite(raw) && raw > 0 ? raw : 0);
+  }, [activeTab]);
+
   // Redirect legacy "celebrations" tab (now surfaced inside the Calendar tab).
   useEffect(() => {
     if ((activeTab as string) === "celebrations") setActiveTab("calendar");
@@ -929,17 +930,6 @@ export default function FamilyHub() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rewardSuggestionsSpotlightTrigger]);
-
-  // Whenever the active tab changes, scroll it into view inside the
-  // horizontally-scrollable nav strip (important on narrow/phone screens).
-  useEffect(() => {
-    const container = navScrollRef.current;
-    if (!container) return;
-    const active = container.querySelector<HTMLElement>('[data-active="true"]');
-    if (active) {
-      active.scrollIntoView({ inline: "nearest", behavior: "smooth", block: "nearest" });
-    }
-  }, [activeTab]);
 
   if (isLoading) {
     return (
@@ -1422,102 +1412,6 @@ export default function FamilyHub() {
               </Button>
             )}
           </div>
-
-          {/* Tab Navigation
-               Desktop (sm+): centered pill row, same as before.
-               Mobile (<sm): full-width, horizontally scrollable strip with
-               the scrollbar hidden. The active tab is scrolled into view
-               automatically via the useEffect above.
-               Back and Customize used to render here too (left/right of the
-               pills) — moved up to the date-nav row above so they no longer
-               crowd/cut off the pill row on narrow phones; this row is now
-               purely the tab switcher. */}
-          <div className="flex items-center justify-center">
-            <nav
-              ref={navScrollRef}
-              className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex justify-center min-w-0"
-            >
-              <div className="flex min-w-max bg-white dark:bg-card rounded-full p-1 border border-black/[0.07] dark:border-border shadow-md mx-auto">
-                {visibleNavTabs.map(tab => {
-                    const TabIcon = tab.icon;
-                    return (
-                      <Button
-                        key={tab.id}
-                        variant={activeTab === tab.id ? "default" : "ghost"}
-                        size="sm"
-                        onClick={() => navigateTo(tab.id as TabType)}
-                        data-active={activeTab === tab.id}
-                        data-testid={tab.testId}
-                        className={`relative rounded-full font-medium transition-all text-xs sm:text-sm ${
-                          // shadcn's shared Button base class always includes
-                          // `gap-2` (8px between every child, via flex gap) —
-                          // that's on TOP of whatever margin the icon itself
-                          // carries, so the two used to stack into far more
-                          // icon-to-label space than intended. Overriding gap
-                          // here (twMerge drops the base's gap-2 in favor of
-                          // this one) is now the ONLY source of that spacing;
-                          // the icon itself carries no margin at all anymore.
-                          navIconsOnly ? 'gap-0' : 'gap-1 sm:gap-1.5'
-                        } ${
-                          navIconsOnly
-                            ? 'px-2.5 py-1.5'
-                            // Compact-but-labeled at mobile widths (icon + text
-                            // still shown, just smaller/tighter) so all 5 tabs
-                            // fit on one line without ever needing to drop to
-                            // icons-only — measured to comfortably fit down to
-                            // a 375px-wide iPhone SE. headerCondensed only
-                            // affects the sm:+ (tablet/desktop) padding, same
-                            // as before.
-                            : headerCondensed ? 'px-1.5 py-1 sm:px-4' : 'px-1.5 py-1.5 sm:px-6 sm:py-2'
-                        } ${
-                          activeTab === tab.id
-                            ? 'bg-[#5E8FAD] text-white shadow-sm hover:bg-[#5E8FAD]'
-                            // The ghost variant's base is `hover:bg-accent`,
-                            // and iOS keeps :hover applied after a tap — so
-                            // the tab you last tapped kept a filled pill even
-                            // once you'd moved to another one, making two
-                            // tabs look selected at once. Scoped to devices
-                            // that actually have a pointer; on touch there is
-                            // now no hover state to get stuck.
-                            : 'text-muted-foreground hover:bg-transparent [@media(hover:hover)]:hover:bg-accent [@media(hover:hover)]:hover:text-foreground'
-                        }`}
-                        title={navIconsOnly ? tab.label : undefined}
-                        // Icons-only drops the visible text, so the tab has no
-                        // accessible name left. A title is not a substitute:
-                        // VoiceOver does not announce it reliably and iOS has
-                        // no hover to show it.
-                        aria-label={navIconsOnly ? tab.label : undefined}
-                      >
-                        {/* Button's base class also carries `[&_svg]:size-4`
-                            — a descendant selector that beats a plain
-                            w-3.5/h-3.5 class on the icon itself on CSS
-                            specificity alone (a class-plus-tag selector on an
-                            ancestor outranks a same-specificity class
-                            directly on the element), so the icon silently
-                            stayed 16px regardless of what size class was
-                            passed here. An inline style can't lose that fight
-                            — it always wins over any class-based rule. */}
-                        <TabIcon
-                          className="shrink-0"
-                          style={navIconsOnly ? undefined : { width: 14, height: 14 }}
-                        />
-                        {!navIconsOnly && (tab.shortLabel ? (
-                          <>
-                            <span className="sm:hidden">{tab.shortLabel}</span>
-                            <span className="hidden sm:inline">{tab.label}</span>
-                          </>
-                        ) : tab.label)}
-                        {tab.id === 'home' && unseenShoutoutCount > 0 && activeTab !== 'home' && (
-                          <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-destructive-foreground leading-none">
-                            {unseenShoutoutCount > 9 ? "9+" : unseenShoutoutCount}
-                          </span>
-                        )}
-                      </Button>
-                    );
-                  })}
-              </div>
-            </nav>
-          </div>
         </div>
       </header>
 
@@ -1544,8 +1438,11 @@ export default function FamilyHub() {
           every phone and tablet width is below it, so those layouts are
           byte-for-byte unchanged. */}
       <main
-        className="w-full max-w-screen-2xl mx-auto px-3 sm:px-6 pt-3 pb-24 overflow-x-hidden"
-        style={activeTab === "calendar" ? undefined : { minHeight: `calc(100vh - ${stickyHeaderH}px)` }}
+        className="w-full max-w-screen-2xl mx-auto px-3 sm:px-6 pt-3 overflow-x-hidden"
+        style={{
+          paddingBottom: "calc(8.5rem + env(safe-area-inset-bottom, 0px))",
+          ...(activeTab === "calendar" ? {} : { minHeight: `calc(100vh - ${stickyHeaderH}px)` }),
+        }}
       >
         {activeTab === "home" && (
           <HomeView
@@ -1866,6 +1763,12 @@ export default function FamilyHub() {
           </div>
         )}
 
+        {activeTab === "chat" && (
+          <div data-testid="chat-panel" className="py-8 text-center text-sm text-muted-foreground">
+            Ask or change the day
+          </div>
+        )}
+
         {activeTab === "people" && (
           <PeopleView
             selectedProfiles={selectedProfiles}
@@ -1994,6 +1897,43 @@ export default function FamilyHub() {
           shell, so it can never cover the login or onboarding screens. */}
       <ScreensaverOverlay />
 
+      <nav className="superhub-tabbar" aria-label="Sections" data-testid="bottom-tab-bar">
+        {visibleNavTabs.map((tab) => {
+          const TabIcon = tab.icon;
+          const selected = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => navigateTo(tab.id as TabType)}
+              data-active={selected}
+              data-testid={tab.testId}
+              aria-current={selected ? "page" : undefined}
+              className="superhub-tabbar-item"
+              style={selected ? { color: "#5E8FAD" } : undefined}
+            >
+              <span className="relative">
+                <TabIcon className="shrink-0" style={{ width: 22, height: 22 }} />
+                {tab.id === "home" && unseenShoutoutCount > 0 && activeTab !== "home" && (
+                  <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold leading-none text-destructive-foreground">
+                    {unseenShoutoutCount > 9 ? "9+" : unseenShoutoutCount}
+                  </span>
+                )}
+                {tab.id === "chat" && chatUnread > 0 && (
+                  <span
+                    data-testid="chat-tab-unread"
+                    className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#5E8FAD] px-0.5 text-[10px] font-bold leading-none text-white"
+                  >
+                    {chatUnread > 9 ? "9+" : chatUnread}
+                  </span>
+                )}
+              </span>
+              <span className="text-[11px] font-medium leading-none">{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
       {/* ── Global floating + button (visible on all tabs) ──
           hearth-theme + opaque-vars (both classes on this same div, not just
           inherited from the app-scroll-container ancestor that already has
@@ -2001,7 +1941,7 @@ export default function FamilyHub() {
           CSS selector to match — without it, bg-primary/ring-primary here
           resolve to hearth-theme's bare "H S% L%" var and render invisible in
           dark mode. See index.css's "hearth-theme opaque-vars fix" comment. */}
-      <div className="hearth-theme opaque-vars fixed right-5 z-40" style={{ bottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))" }}>
+      <div className="hearth-theme opaque-vars fixed right-5 z-[41]" style={{ bottom: "calc(4.25rem + env(safe-area-inset-bottom, 0px))" }}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -2075,6 +2015,23 @@ export default function FamilyHub() {
               <span className="mr-2">👏</span>
               Give praise
             </DropdownMenuItem>
+            <div className="px-2 pt-1 pb-2" onKeyDown={(e) => e.stopPropagation()}>
+              <label className="relative block">
+                <input
+                  data-testid="menu-chat-field"
+                  placeholder="Ask or change the day"
+                  className="w-full rounded-full border border-border bg-background py-2 pl-3 pr-8 text-sm"
+                />
+                {chatUnread > 0 && (
+                  <span
+                    data-testid="menu-chat-unread"
+                    className="absolute right-1.5 top-1/2 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full bg-[#5E8FAD] px-1 text-[10px] font-bold text-white"
+                  >
+                    {chatUnread > 9 ? "9+" : chatUnread}
+                  </span>
+                )}
+              </label>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
