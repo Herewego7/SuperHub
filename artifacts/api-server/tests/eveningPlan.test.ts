@@ -81,6 +81,7 @@ test("a second run the same day does not send again", () => {
   const second = claimPlanSend(first.sentKeys, "chad", "2026-10-02");
   assert.equal(first.send, true);
   assert.equal(second.send, false);
+  assert.deepEqual(planKeysForClaim(["chad:2026-09-01", "chad:2026-10-02"], [], "2026-10-02"), ["chad:2026-10-02"]);
 });
 
 test("a kid plan leaves out a school email line", () => {

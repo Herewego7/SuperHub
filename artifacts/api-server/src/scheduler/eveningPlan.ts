@@ -35,10 +35,15 @@ export function claimPlanSend(sentKeys: string[], profileId: string, day: string
   return { send: true, sentKeys: [...sentKeys, key] };
 }
 
-export function planKeysForClaim(saved: string[] | null | undefined, held: string[] | null | undefined): string[] {
+export function planKeysForClaim(saved: string[] | null | undefined, held: string[] | null | undefined, today?: string): string[] {
   const keys: string[] = [];
   for (const key of [...(saved ?? []), ...(held ?? [])]) {
-    if (key && !keys.includes(key)) keys.push(key);
+    if (!key || keys.includes(key)) continue;
+    if (today) {
+      const day = key.slice(key.lastIndexOf(":") + 1);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(day) && day < today) continue;
+    }
+    keys.push(key);
   }
   return keys;
 }
@@ -190,7 +195,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const day = localDate(now, tz);
     const elapsed = minutesSince(profile.eveningPlanTime, localHHMM(now, tz));
     if (elapsed < 0 || elapsed > CATCH_UP_MINUTES) continue;
-    const claim = claimPlanSend(planKeysForClaim(settings?.planSentKeys, held.get(profile.userId)), profile.id, day);
+    const claim = claimPlanSend(planKeysForClaim(settings?.planSentKeys, held.get(profile.userId), day), profile.id, day);
     if (!claim.send) continue;
     const isChild = profile.role === "child" || profile.isChild === true;
     const chores = await storage.getChoresByUser(profile.userId);
