@@ -24,6 +24,7 @@ import { celebrationsWithMeta, isValidMonthDay, resolveOccurrence } from "../lib
 import { geocodeCity } from "../lib/geocode";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
+import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
 import { expandRecurringEvents, resolveSeriesEventId } from "../lib/eventRecurrence";
 import { planRecurringEdit, planRecurringDelete, type EditScope } from "../lib/recurringEdit";
 import { alignStartToWeeklyDays } from "../lib/recurrenceRule";
@@ -3122,7 +3123,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req);
       const settings = await storage.getCalendarSettingsByUser(userId);
       // Return default settings if none exist
-      const defaultSettings = settings || { startHour: 8, endHour: 22, weekStartsOn: 0, twoWaySyncEnabled: true };
+      const defaultSettings = settings || {
+        startHour: 8,
+        endHour: 22,
+        weekStartsOn: 0,
+        twoWaySyncEnabled: true,
+        familyCalendarId: null,
+        scanInbox: true,
+        shareOriginals: false,
+      };
       res.json(defaultSettings);
     } catch (error) {
       console.error("Error fetching calendar settings:", error);
@@ -3177,6 +3186,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating two-way sync setting:", error);
       res.status(500).json({ error: "Failed to update two-way sync setting" });
+    }
+  });
+
+  app.patch("/api/calendar-settings/family-calendar", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const calendarId = req.body.calendarId;
+      if (calendarId !== null && typeof calendarId !== "string") {
+        return res.status(400).json({ error: "calendarId must be a string or null" });
+      }
+      const settings = await storage.updateCalendarSettings({ familyCalendarId: calendarId, userId });
+      res.json(settings);
+    } catch (error) {
+      console.error("Error updating family calendar:", error);
+      res.status(500).json({ error: "Failed to update family calendar" });
+    }
+  });
+
+  app.patch("/api/calendar-settings/inbox", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const patch: { scanInbox?: boolean; shareOriginals?: boolean; userId: string } = { userId };
+      if (typeof req.body.scanInbox === "boolean") patch.scanInbox = req.body.scanInbox;
+      if (typeof req.body.shareOriginals === "boolean") patch.shareOriginals = req.body.shareOriginals;
+      if (patch.scanInbox === undefined && patch.shareOriginals === undefined) {
+        return res.status(400).json({ error: "scanInbox or shareOriginals must be a boolean" });
+      }
+      const settings = await storage.updateCalendarSettings(patch);
+      res.json(settings);
+    } catch (error) {
+      console.error("Error updating inbox settings:", error);
+      res.status(500).json({ error: "Failed to update inbox settings" });
     }
   });
 
@@ -4151,11 +4192,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/calendar-assignments", isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
-      if (req.body.profileId) {
-        const isOwner = await validateProfileOwnership(req.body.profileId, userId);
+      const profileIds = Array.isArray(req.body.profileIds)
+        ? req.body.profileIds.filter((id: unknown) => typeof id === "string")
+        : req.body.profileId
+          ? [req.body.profileId]
+          : [];
+      for (const profileId of profileIds) {
+        const isOwner = await validateProfileOwnership(profileId, userId);
         if (!isOwner) return res.status(403).json({ error: "Forbidden" });
       }
-      const assignment = insertCalendarAssignmentSchema.parse(req.body);
+      const folded = assignPeopleToCalendar(String(req.body.calendarId ?? ""), profileIds);
+      const assignment = insertCalendarAssignmentSchema.parse({
+        ...req.body,
+        profileId: folded.profileId,
+        audienceProfileIds: folded.audienceProfileIds,
+      });
       const savedAssignment = await storage.saveCalendarAssignment(assignment);
       res.status(201).json(savedAssignment);
     } catch (error) {

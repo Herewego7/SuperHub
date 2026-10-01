@@ -3906,6 +3906,9 @@ export class MemStorage implements IStorage {
       endHour: settings.endHour ?? 22,
       weekStartsOn: settings.weekStartsOn ?? 0,
       twoWaySyncEnabled: settings.twoWaySyncEnabled ?? false,
+      familyCalendarId: settings.familyCalendarId ?? null,
+      scanInbox: settings.scanInbox ?? true,
+      shareOriginals: settings.shareOriginals ?? false,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -4028,6 +4031,8 @@ export class MemStorage implements IStorage {
     const savedAssignment: CalendarAssignment = {
       ...assignment,
       id: randomUUID(),
+      audienceProfileIds: assignment.audienceProfileIds ?? [],
+      watched: assignment.watched ?? true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
