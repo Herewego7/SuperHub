@@ -311,7 +311,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: mealsKey });
+      queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
     },
   });
 
@@ -345,7 +345,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: mealsKey });
+      queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
     },
   });
 
@@ -371,7 +371,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       return res.json();
     },
     onSuccess: (created: MealWithIngredients) => {
-      queryClient.invalidateQueries({ queryKey: mealsKey });
+      queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
       // Family History synthesizes "meal_planned" live from the meals table.
       queryClient.invalidateQueries({ queryKey: ["/api/activity-log"] });
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
@@ -419,7 +419,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       toast({ title: "Failed to remove meal", variant: "destructive" });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: mealsKey });
+      queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
     },
   });
 
