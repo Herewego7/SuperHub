@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { claimPlanSend, planBody, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
+import { claimPlanSend, planBody, planOpenPath, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
 
 test("a profile with a plan time does not also receive a daily brief", () => {
   const kinds = pushesForProfile({ planTime: "19:00", dailyBriefTime: "07:30" });
@@ -27,4 +27,11 @@ test("a kid plan leaves out a school email line", () => {
   assert.equal(body.includes("Permission slip"), false);
   assert.equal(body.includes("Feed the dog"), true);
   assert.equal(body.includes("Tacos"), true);
+});
+
+test("the plan link opens chat with the dinner line", () => {
+  const path = planOpenPath("Feed the dog\nDinner. Tacos");
+  const params = new URLSearchParams(path.slice(path.indexOf("?")));
+  assert.equal(params.get("openTab"), "chat");
+  assert.equal(params.get("openPlan")?.includes("Dinner. Tacos"), true);
 });

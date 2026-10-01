@@ -104,6 +104,8 @@ export type TabDeepLink = {
    *  card to scroll to or spotlight at all (2026-09-14). The handler selects
    *  this profile first so the card is guaranteed to be there. */
   profileId?: string;
+  /** Evening-plan push body. Staged into the chat thread before Chat mounts. */
+  plan?: string;
 };
 
 export function setPendingTabDeepLink(link: TabDeepLink): void {
@@ -124,14 +126,16 @@ export function consumeTabDeepLinkFromUrl(): TabDeepLink | null {
   const subTab = params.get("openSubTab") ?? undefined;
   const action = (params.get("openAction") as TabDeepLink["action"] | null) ?? undefined;
   const profileId = params.get("openProfile") ?? undefined;
+  const plan = params.get("openPlan") ?? undefined;
   params.delete("openTab");
   params.delete("openSubTab");
   params.delete("openAction");
   params.delete("openProfile");
+  params.delete("openPlan");
   const next = params.toString();
   const newUrl = window.location.pathname + (next ? `?${next}` : "") + window.location.hash;
   window.history.replaceState({}, "", newUrl);
-  return { tab, subTab, action, profileId };
+  return { tab, subTab, action, profileId, plan };
 }
 
 export function onTabDeepLink(handler: (link: TabDeepLink) => void): () => void {

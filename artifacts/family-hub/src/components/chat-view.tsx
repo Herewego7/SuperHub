@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
 import { checkOffTitle, toolsForRole } from "@/lib/chatTools";
-import { groceryAlreadyHave } from "@/lib/mealCalendar";
+import { dinnerReply, groceryAlreadyHave } from "@/lib/mealCalendar";
+import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, readThread, type ChatBubble } from "@/lib/chatThread";
 
 const PLAN_KEY = "superhub_evening_plan";
@@ -16,24 +17,39 @@ type Props = {
   profileKey: string;
   isChild: boolean;
   revision: number;
+  profileReady: boolean;
   onSent: () => void;
 };
 
-export function ChatView({ profileKey, isChild, revision, onSent }: Props) {
+export function ChatView({ profileKey, isChild, revision, profileReady, onSent }: Props) {
   const [draft, setDraft] = useState("");
-  const [bubbles, setBubbles] = useState<ChatBubble[]>(() => {
-  const thread = readThread(profileKey);
-  const plan = typeof sessionStorage === "undefined" ? null : sessionStorage.getItem(PLAN_KEY);
-    if (!plan) return thread;
+  const [bubbles, setBubbles] = useState<ChatBubble[]>(() => readThread(profileKey));
+  useEffect(() => {
+    if (!profileReady || typeof sessionStorage === "undefined") return;
+    const plan = sessionStorage.getItem(PLAN_KEY);
+    if (!plan) return;
     sessionStorage.removeItem(PLAN_KEY);
-    if (thread.some((bubble) => bubble.text === plan)) return thread;
-    const next = [{ id: "evening-plan", role: "assistant" as const, text: plan }, ...thread];
-    localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
-    return next;
-  });
+    setBubbles((current) => {
+      if (current.some((bubble) => bubble.text === plan)) return current;
+      const next = [{ id: "evening-plan", role: "assistant" as const, text: plan }, ...current];
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      return next;
+    });
+  }, [profileReady, profileKey]);
   const tools = toolsForRole(isChild);
   const { data: chores = [] } = useQuery<Chore[]>({ queryKey: ["/api/chores"] });
   const { data: groceries = [] } = useQuery<{ id: string; name: string }[]>({ queryKey: ["/api/grocery-items"] });
+  const { data: meals = [] } = useQuery<Meal[]>({
+    queryKey: ["/api/meals", "chat-dinner"],
+    queryFn: async () => {
+      const start = new Date();
+      const end = new Date();
+      end.setDate(start.getDate() + 1);
+      const key = (day: Date) => `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+      const res = await apiRequest("GET", `/api/meals?start=${key(start)}&end=${key(end)}`);
+      return res.json();
+    },
+  });
 
   const complete = useMutation({
     mutationFn: async (chore: Chore) => {
@@ -63,6 +79,11 @@ export function ChatView({ profileKey, isChild, revision, onSent }: Props) {
     if (chore && tools.includes("complete_task")) {
       complete.mutate(chore);
       next.push({ id: `${Date.now()}-a`, role: "assistant", text: `Checked off ${chore.title}.` });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    }
+    const dinner = dinnerReply(text, meals, new Date());
+    if (dinner) {
+      next.push({ id: `${Date.now()}-d`, role: "assistant", text: dinner });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const have = groceryAlreadyHave(text);

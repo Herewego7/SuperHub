@@ -3,6 +3,7 @@ import { PushNotifications } from "@capacitor/push-notifications";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { apiRequest } from "@/lib/queryClient";
 import { setPendingCelebrationDeepLink, setPendingTabDeepLink } from "@/lib/pushDeepLink";
+import { stageEveningPlan } from "@/components/chat-view";
 
 /**
  * Native (Capacitor) notifications for the iOS app.
@@ -126,7 +127,7 @@ export async function initNativeNotifications(): Promise<void> {
   // Previously nothing listened for this at all, so tapping a notification
   // just opened the app to whatever screen it happened to launch on.
   await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
-    const data = action?.notification?.data as { kind?: string; celebrationId?: string } | undefined;
+    const data = action?.notification?.data as { kind?: string; celebrationId?: string; body?: string } | undefined;
     if (data?.kind === "celebration-reminder" && data.celebrationId) {
       setPendingCelebrationDeepLink(data.celebrationId);
     } else if (data?.kind === "bedtime-reminder") {
@@ -152,6 +153,9 @@ export async function initNativeNotifications(): Promise<void> {
       setPendingTabDeepLink({ tab: "home", action: "praiseSection" });
     } else if (data?.kind === "note") {
       setPendingTabDeepLink({ tab: "home", action: "notesSection" });
+    } else if (data?.kind === "evening-plan") {
+      if (data.body) stageEveningPlan(data.body);
+      setPendingTabDeepLink({ tab: "chat" });
     }
   });
 }

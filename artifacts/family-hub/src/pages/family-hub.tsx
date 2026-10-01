@@ -10,6 +10,7 @@ import { TabType, ChoresSubTabType } from "@/lib/types";
 import { BOTTOM_NAV_IDS } from "@/lib/bottomNav";
 import { ChatView } from "@/components/chat-view";
 import { appendUserMessage } from "@/lib/chatThread";
+import { stageEveningPlan } from "@/components/chat-view";
 import { consumeTabDeepLinkFromUrl, onTabDeepLink, consumeCelebrationDeepLinkFromUrl, onCelebrationDeepLink } from "@/lib/pushDeepLink";
 import { ProfileCircle } from "@/components/profile-circle";
 import { SettingsModal } from "@/components/settings-modal";
@@ -392,9 +393,13 @@ export default function FamilyHub() {
   // pattern as ?openSettings above); native has no URL at all, so
   // nativeNotifications.ts fires the same custom event pushDeepLink.ts's
   // celebration deep link already uses.
-  const VALID_DEEP_LINK_TABS: TabType[] = ["home", "calendar", "chores", "todos", "meals", "behaviour"];
+  const VALID_DEEP_LINK_TABS: TabType[] = ["home", "calendar", "chores", "todos", "meals", "behaviour", "chat"];
   const VALID_DEEP_LINK_SUBTABS: ChoresSubTabType[] = ["chores", "rewards", "trophies", "bonus"];
-  const handleTabDeepLink = (link: { tab: string; subTab?: string; action?: string; profileId?: string }) => {
+  const handleTabDeepLink = (link: { tab: string; subTab?: string; action?: string; profileId?: string; plan?: string }) => {
+    if (link.plan) {
+      stageEveningPlan(link.plan);
+      setChatRevision((n) => n + 1);
+    }
     if (!(VALID_DEEP_LINK_TABS as string[]).includes(link.tab)) return;
     const subTab = link.subTab && (VALID_DEEP_LINK_SUBTABS as string[]).includes(link.subTab)
       ? (link.subTab as ChoresSubTabType)
@@ -1790,6 +1795,7 @@ export default function FamilyHub() {
             profileKey={chatProfileKey}
             isChild={chatIsChild}
             revision={chatRevision}
+            profileReady={hasInitialized}
             onSent={() => setChatRevision((n) => n + 1)}
           />
         )}

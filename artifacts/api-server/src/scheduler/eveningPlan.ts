@@ -48,6 +48,10 @@ export function planBody(input: {
   return body || "Nothing on the plan.";
 }
 
+export function planOpenPath(body: string): string {
+  return `/?openTab=chat&openPlan=${encodeURIComponent(body)}`;
+}
+
 const CATCH_UP_MINUTES = 30;
 
 function nextDayKey(day: string): string {
@@ -90,7 +94,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
         {
           title: isChild ? "Tomorrow" : "Tomorrow's plan",
           body,
-          url: "/?tab=chat",
+          url: planOpenPath(body),
           tag: `evening-plan-${profile.id}`,
           data: { kind: "evening-plan", profileId: profile.id, body },
         },

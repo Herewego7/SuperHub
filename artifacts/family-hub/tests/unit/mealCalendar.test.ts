@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { groceryAlreadyHave, mealEvents } from "../../src/lib/mealCalendar";
+import { dinnerReply, groceryAlreadyHave, mealEvents } from "../../src/lib/mealCalendar";
 
 test("the calendar switch off leaves the meal off the event list", () => {
   const events = mealEvents([{ name: "Tacos", slot: "dinner" }], false);
@@ -14,4 +14,10 @@ test("the calendar switch on keeps the dinner", () => {
 
 test("chat hears that the family already has tortillas", () => {
   assert.equal(groceryAlreadyHave("We already have tortillas."), "tortillas");
+});
+
+test("chat names tonight's dinner and does not mention the inbox", () => {
+  const reply = dinnerReply("what's for dinner?", [{ date: "2026-10-01", slot: "dinner", name: "Tacos" }], new Date(2026, 9, 1));
+  assert.equal(reply, "Dinner. Tacos");
+  assert.equal(reply?.includes("newsletter"), false);
 });
