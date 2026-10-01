@@ -111,7 +111,6 @@ interface MealsViewProps {
 }
 
 export function MealsView({ showGrocery: showGroceryProp, onShowGroceryChange, weekAnchor: weekAnchorProp, onWeekAnchorChange }: MealsViewProps = {}) {
-  const [mealsOnCalendar, setMealsOnCalendar] = useState(() => localStorage.getItem("superhub_meals_on_calendar") === "true");
   const [showGroceryLocal, setShowGroceryLocal] = useState(false);
   const showGrocery = showGroceryProp ?? showGroceryLocal;
   const setShowGrocery = onShowGroceryChange ?? setShowGroceryLocal;
@@ -161,6 +160,7 @@ interface MealPlanViewProps {
 }
 
 function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekEndIso, onOpenGrocery }: MealPlanViewProps) {
+  const [mealsOnCalendar, setMealsOnCalendar] = useState(() => localStorage.getItem("superhub_meals_on_calendar") === "true");
   const [editingMeal, setEditingMeal] = useState<MealWithIngredients | null>(null);
   const [creatingFor, setCreatingFor] = useState<{ date: string; slot: MealSlot } | null>(null);
 
@@ -726,7 +726,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
           action — and inside that card it became the most prominent control
           on an empty Meals tab, outranking anything to do with adding a meal. */}
       <div className="flex items-center justify-end gap-3 mb-3">
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
           Put dinners on the calendar
           <Switch
             checked={mealsOnCalendar}
@@ -753,7 +753,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
         </label>
         <Button
           variant="default" size="default"
-          className="w-full sm:w-auto gap-2 h-10 rounded-full"
+          className="shrink-0 gap-2 h-10 rounded-full"
           onClick={onOpenGrocery}
           data-testid="meals-open-grocery"
         >
