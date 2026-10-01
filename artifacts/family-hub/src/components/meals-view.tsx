@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
 import { mealEvents } from "@/lib/mealCalendar";
+import { familyCalendarOffer } from "@/lib/chatTools";
 import { Switch } from "@/components/ui/switch";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format, addDays, addWeeks, startOfWeek } from "date-fns";
@@ -161,6 +162,7 @@ interface MealPlanViewProps {
 
 function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekEndIso, onOpenGrocery }: MealPlanViewProps) {
   const [mealsOnCalendar, setMealsOnCalendar] = useState(() => localStorage.getItem("superhub_meals_on_calendar") === "true");
+  const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
   const [editingMeal, setEditingMeal] = useState<MealWithIngredients | null>(null);
   const [creatingFor, setCreatingFor] = useState<{ date: string; slot: MealSlot } | null>(null);
 
@@ -736,6 +738,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
               localStorage.setItem("superhub_meals_on_calendar", on ? "true" : "false");
               setMealsOnCalendar(on);
               if (!on) return;
+              const calendarId = familyCalendarOffer(calendarSettings?.familyCalendarId);
               void Promise.all(mealEvents(meals, true).map((meal) => {
                 const start = new Date(`${meal.date}T18:00:00`);
                 const end = new Date(start);
@@ -745,6 +748,8 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
                   startTime: start.toISOString(),
                   endTime: end.toISOString(),
                   profileIds: [],
+                  drivingProfileIds: [],
+                  calendarId,
                   source: "meal",
                 });
               })).then(() => queryClient.invalidateQueries({ queryKey: ["/api/events"] }));
