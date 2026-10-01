@@ -56,6 +56,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
     },
   });
 
