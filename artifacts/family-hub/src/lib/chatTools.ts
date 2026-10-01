@@ -1,4 +1,5 @@
 /** Chat tools carried over from Bot Life. Mail tools stay off a kid's thread. */
+import { dinnerName } from "./homeDay";
 
 export const CHAT_TOOLS = [
   "get_plan",
@@ -166,6 +167,7 @@ export function dayReply(
     events: { title: string; startTime: Date | string }[];
     completions?: { choreId: string; completedAt?: Date | string | null }[];
     dinner?: string | null;
+    meals?: { date: string; slot: string; name: string }[];
     day: Date;
   },
 ): string | null {
@@ -207,7 +209,8 @@ export function dayReply(
   }
   const kept = lines.slice(0, 5);
   const askedToday = start.toDateString() === new Date(input.day).toDateString();
-  if (input.dinner && askedToday) kept.push(`Dinner. ${input.dinner}`);
+  const dinner = input.meals ? dinnerName(input.meals, start) : askedToday ? input.dinner : null;
+  if (dinner) kept.push(`Dinner. ${dinner}`);
   return kept.join("\n") || "Nothing on the plan.";
 }
 

@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
 import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
-import { dinnerName, mailVisibleToKid, openTodos, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
+import { mailVisibleToKid, openTodos, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, noteChatUnread, readThread, threadWithPlan, type ChatBubble } from "@/lib/chatThread";
@@ -169,7 +169,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     });
     const planEvents = talkEvents;
     const plan = tools.includes("get_plan")
-      ? dayReply(text, { chores: planChores, events: planEvents, completions, dinner: dinnerName(meals, new Date()), day: new Date() })
+      ? dayReply(text, { chores: planChores, events: planEvents, completions, meals, day: new Date() })
       : null;
     if (plan) {
       next.push({ id: `${Date.now()}-p`, role: "assistant", text: plan });

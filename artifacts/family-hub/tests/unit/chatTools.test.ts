@@ -164,10 +164,13 @@ test("what's the plan names the day and dinner", () => {
     ],
     completions: [{ choreId: "done", completedAt: day }, { choreId: "eggs", completedAt: day }],
     events: [{ title: "Soccer", startTime: day }, { title: "Piano", startTime: new Date(2026, 9, 2, 16, 0) }],
-    dinner: "Tacos",
+    meals: [
+      { date: "2026-10-01", slot: "dinner", name: "Tacos" },
+      { date: "2026-10-02", slot: "dinner", name: "Pasta" },
+    ],
     day,
   });
-  assert.equal(friday, "Feed the dog\nDishes\nBuy milk\nPiano");
+  assert.equal(friday, "Feed the dog\nDishes\nBuy milk\nPiano\nDinner. Pasta");
   assert.equal(dayReply("what's the plan for the weekend", { chores: [], events: [], dinner: null, day }), "I don't know that day.");
 });
 
