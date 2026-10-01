@@ -1,4 +1,5 @@
 import { decideProfileIdCleanup } from "./lib/profileCleanup";
+import { insertProfileRow, loadProfiles, updateProfileRow } from "./lib/profileRows";
 import { driverWriteFields, driverIdsOf } from "./lib/eventDrivers";
 import { markSchedulerWorkDirty } from "./lib/workGate";
 import { settingsRowForUser } from "./lib/settingsOwnership";
@@ -564,24 +565,20 @@ export type ResetCategory = (typeof RESET_CATEGORIES)[number];
 
 export class DatabaseStorage implements IStorage {
   async getProfiles(): Promise<Profile[]> {
-    return await db.select().from(profiles);
+    return loadProfiles();
   }
 
   async getProfilesByUser(userId: string): Promise<Profile[]> {
-    return await db.select().from(profiles).where(eq(profiles.userId, userId));
+    return loadProfiles(eq(profiles.userId, userId));
   }
 
   async getProfile(id: string): Promise<Profile | undefined> {
-    const [profile] = await db.select().from(profiles).where(eq(profiles.id, id));
+    const [profile] = await loadProfiles(eq(profiles.id, id));
     return profile || undefined;
   }
 
   async createProfile(insertProfile: InsertProfile): Promise<Profile> {
-    const [profile] = await db
-      .insert(profiles)
-      .values(insertProfile)
-      .returning();
-    return profile;
+    return insertProfileRow(insertProfile);
   }
 
   async updateProfile(id: string, insertProfile: Partial<InsertProfile>, userId?: string): Promise<Profile | undefined> {
@@ -591,21 +588,14 @@ export class DatabaseStorage implements IStorage {
     const whereCondition = userId 
       ? and(eq(profiles.id, id), eq(profiles.userId, userId))
       : eq(profiles.id, id);
-    const [profile] = await db
-      .update(profiles)
-      .set(insertProfile)
-      .where(whereCondition)
-      .returning();
-    return profile || undefined;
+    return updateProfileRow(insertProfile, whereCondition);
   }
 
   async deleteProfile(id: string, userId?: string): Promise<boolean> {
     try {
       // If userId is provided, verify ownership first
       if (userId) {
-        const [profile] = await db.select().from(profiles).where(
-          and(eq(profiles.id, id), eq(profiles.userId, userId))
-        );
+        const [profile] = await loadProfiles(and(eq(profiles.id, id), eq(profiles.userId, userId)));
         if (!profile) {
           return false;
         }

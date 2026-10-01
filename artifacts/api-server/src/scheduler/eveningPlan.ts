@@ -10,6 +10,7 @@ import { localDate, localHHMM } from "../lib/choreToday";
 import { logger } from "../lib/logger";
 import { createWorkGate } from "../lib/workGate";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
+import { loadProfiles } from "../lib/profileRows";
 import { storage } from "../storage";
 
 export type PlanPush = "evening-plan" | "daily-brief";
@@ -143,7 +144,7 @@ function minutesSince(scheduled: string, currentHHMM: string): number {
 }
 
 export async function runEveningPlanTick(now: Date = new Date()): Promise<boolean> {
-  const candidates = await db.select().from(profiles).where(isNotNull(profiles.eveningPlanTime));
+  const candidates = await loadProfiles(isNotNull(profiles.eveningPlanTime));
   if (candidates.length === 0) return false;
   const held = new Map<string, string[]>();
   for (const profile of candidates) {

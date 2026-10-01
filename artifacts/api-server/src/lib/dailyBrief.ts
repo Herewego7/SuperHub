@@ -18,6 +18,7 @@ import {
 import { isKidProfile } from "./profileRole";
 import { DEFAULT_TIMEZONE } from "./timezone";
 import { driverIdsOf } from "./eventDrivers";
+import { loadProfiles } from "./profileRows";
 
 export interface DailyBriefItem {
   id: string;
@@ -161,7 +162,7 @@ export async function buildDailyBrief(
   if (sections.chores) {
     const targetProfiles: Profile[] = scopeToSelfOnly
       ? [profile!]
-      : (await db.select().from(profiles).where(eq(profiles.userId, userId)))
+      : (await loadProfiles(eq(profiles.userId, userId)))
           .filter((p) => !p.isAllFamilyProfile);
 
     let totalDue = 0;

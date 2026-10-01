@@ -11,6 +11,7 @@ import {
 } from "../lib/choreToday";
 import { isKidProfile } from "../lib/profileRole";
 import { logger } from "../lib/logger";
+import { loadProfiles } from "../lib/profileRows";
 import { createWorkGate } from "../lib/workGate";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 
@@ -89,7 +90,7 @@ export async function runBedtimeRemindersTick(now: Date = new Date()): Promise<b
       body = `Chores remaining: ${describeRemaining(regular, target, inspiration)}`;
     } else {
       const familyProfiles = (
-        await db.select().from(profiles).where(eq(profiles.userId, p.userId))
+        await loadProfiles(eq(profiles.userId, p.userId))
       ).filter((fp) => !fp.isAllFamilyProfile);
       const byPerson: { name: string; regular: number; target: number; inspiration: number }[] = [];
       let total = 0;
