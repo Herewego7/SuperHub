@@ -52,6 +52,9 @@ test("a new event is offered to the family calendar", () => {
 test("a check-off credits the person on screen", () => {
   assert.equal(pointsProfileId(["liam", "ava"], "liam"), "liam");
   assert.equal(pointsProfileId(["liam"], "family"), "liam");
+  assert.equal(pointsProfileId([], "liam"), "liam");
+  assert.equal(pointsProfileId([], "liam,ava"), "liam");
+  assert.equal(pointsProfileId([], "family"), null);
 });
 
 test("check off names the chore", () => {

@@ -125,7 +125,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     }
     const title = checkOffTitle(text);
     const chore = title ? chores.find((item) => item.title.toLowerCase() === title.toLowerCase() && item.taskType !== "todo") : undefined;
-    if (chore && tools.includes("complete_task")) {
+    if (chore && tools.includes("complete_task") && pointsProfileId(chore.profileIds ?? [], profileKey)) {
       complete.mutate(chore);
       next.push({ id: `${Date.now()}-a`, role: "assistant", text: `Checked off ${chore.title}.` });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));

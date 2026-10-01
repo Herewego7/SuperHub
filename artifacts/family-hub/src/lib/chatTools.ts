@@ -29,6 +29,7 @@ export function toolsForRole(isChild: boolean): string[] {
 
 export function pointsProfileId(profileIds: string[], profileKey: string): string | null {
   const selected = profileKey.split(",").filter((id) => id && id !== "family");
+  if (profileIds.length === 0) return selected[0] ?? null;
   if (selected.length === 1 && profileIds.includes(selected[0])) return selected[0];
   return profileIds[0] ?? null;
 }
