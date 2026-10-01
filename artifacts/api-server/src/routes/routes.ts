@@ -25,7 +25,7 @@ import { geocodeCity } from "../lib/geocode";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, ingestMessages, muteSender, slipDate, slipDayOffset } from "../ingest/process";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, ingestMessages, muteSender, slipDate, slipDayOffset } from "../ingest/process";
 import { dinnerCalendarChange, dinnerEventInsert, dinnersToCopy } from "../meals/dinnerEvent";
 import { slipKey } from "../ingest/parse";
 import { moveClock } from "../scheduler/eveningPlan";
@@ -3340,6 +3340,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const chores = await storage.getChoresByUser(userId);
       for (const id of choresDismissedBySlip(chores, key)) {
         await storage.deleteChore(id, userId);
+      }
+      const events = await storage.getEventsByUser(userId);
+      for (const id of eventsDismissedBySlip(events, key)) {
+        await storage.deleteEvent(id, userId);
       }
       const saved = await storage.updateCalendarSettings({ dismissedSlipKeys: next.dismissedSlipKeys, userId });
       res.json(saved);

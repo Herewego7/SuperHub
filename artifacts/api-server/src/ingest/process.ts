@@ -89,6 +89,12 @@ export function choresDismissedBySlip<T extends { id: string; title: string; cat
   return chores.filter((chore) => chore.category === "school_email" && slipKey(chore.title) === key).map((chore) => chore.id);
 }
 
+export function eventsDismissedBySlip<T extends { id: string; title: string; source?: string | null; externalId?: string | null }>(events: T[], key: string): string[] {
+  return events
+    .filter((event) => event.source === "school" && (event.externalId === key || slipKey(event.title) === key))
+    .map((event) => event.id);
+}
+
 export function slipBody(fromAddress: string | undefined, snippet: string): string {
   const address = fromAddress?.trim();
   if (!address) return snippet;
