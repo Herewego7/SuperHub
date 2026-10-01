@@ -92,7 +92,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     if (!pending) return;
     sentPending.current = true;
     sessionStorage.removeItem(PENDING_KEY);
-    send(pending);
+    send(pending, true);
   }, [profileReady, choresFetched, eventsFetched, mealsFetched, profileKey]);
 
   const complete = useMutation({
@@ -117,8 +117,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     },
   });
 
-  function send(text: string) {
-    const next = appendUserMessage(profileKey, text);
+  function send(text: string, alreadyAppended = false) {
+    const next = alreadyAppended ? readThread(profileKey) : appendUserMessage(profileKey, text);
     if (!next) return;
     const replyAfter = (request: Promise<unknown>, ok: string, remount = false) => {
       setBubbles(next);

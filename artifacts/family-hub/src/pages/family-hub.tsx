@@ -9,7 +9,7 @@ import { EventModal, type EventFormData } from "@/components/event-modal";
 import { TabType, ChoresSubTabType } from "@/lib/types";
 import { BOTTOM_NAV_IDS } from "@/lib/bottomNav";
 import { ChatView, stagePendingChat } from "@/components/chat-view";
-import { clearChatUnread, unreadFor } from "@/lib/chatThread";
+import { appendUserMessage, clearChatUnread, unreadFor } from "@/lib/chatThread";
 import { stageEveningPlan } from "@/components/chat-view";
 import { devicePersonIds, readDevicePerson, writeDevicePerson } from "@/lib/devicePerson";
 import { consumeTabDeepLinkFromUrl, onTabDeepLink, consumeCelebrationDeepLinkFromUrl, onCelebrationDeepLink } from "@/lib/pushDeepLink";
@@ -770,7 +770,7 @@ export default function FamilyHub() {
   const chatIsChild = profiles.filter((p) => selectedProfiles.includes(p.id) && !p.isAllFamilyProfile).every((p) => p.role === "child" || p.isChild) &&
     profiles.some((p) => selectedProfiles.includes(p.id) && !p.isAllFamilyProfile);
   const sendChatFromMenu = () => {
-    if (!chatDraft.trim()) return;
+    if (!appendUserMessage(chatProfileKey, chatDraft)) return;
     stagePendingChat(chatDraft);
     setChatDraft("");
     setPlusOpen(false);
