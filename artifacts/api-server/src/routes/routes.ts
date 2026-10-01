@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, RESET_CATEGORIES, type ResetCategory, type DbOrTx } from "../storage";
-import { insertProfileSchema, insertEventSchema, insertChoreSchema, insertChoreCompletionSchema, insertCalendarSettingsSchema, insertLocationSettingsSchema, insertDailyContentSchema, insertDailyContentAssignmentSchema, insertDailyContentCompletionSchema, insertGoogleCalendarTokensSchema, insertOutlookCalendarTokensSchema, insertCalendarAssignmentSchema, insertRewardSchema, insertRewardRedemptionSchema, insertMealSchema, insertMealIngredientSchema, insertGroceryItemSchema, insertGroceryStapleSchema, insertSavedMealSchema, insertCelebrationSchema, insertCelebrationGiftIdeaSchema, insertCelebrationPhotoSchema, insertWishlistItemSchema, db, chores as choresTbl, choreCompletions as choreCompletionsTbl, activityLog as activityLogTbl, profiles as profilesTbl, rewardRedemptions as rewardRedemptionsTbl, rewards as rewardsTbl, shoutouts as shoutoutsTbl, pointAdjustments as pointAdjustmentsTbl, meals as mealsTbl, walletTransactions as walletTransactionsTbl, dailyContent as dailyContentTbl, dailyContentAssignments as dailyContentAssignmentsTbl } from "@workspace/db";
+import { insertProfileSchema, insertEventSchema, insertChoreSchema, insertChoreCompletionSchema, insertCalendarSettingsSchema, insertLocationSettingsSchema, insertDailyContentSchema, insertDailyContentAssignmentSchema, insertDailyContentCompletionSchema, insertGoogleCalendarTokensSchema, insertOutlookCalendarTokensSchema, insertCalendarAssignmentSchema, insertRewardSchema, insertRewardRedemptionSchema, insertMealSchema, insertMealIngredientSchema, insertGroceryItemSchema, insertGroceryStapleSchema, insertSavedMealSchema, insertCelebrationSchema, insertCelebrationGiftIdeaSchema, insertCelebrationPhotoSchema, insertWishlistItemSchema, db, chores as choresTbl, choreCompletions as choreCompletionsTbl, activityLog as activityLogTbl, profiles as profilesTbl, rewardRedemptions as rewardRedemptionsTbl, rewards as rewardsTbl, shoutouts as shoutoutsTbl, pointAdjustments as pointAdjustmentsTbl, meals as mealsTbl, events as eventsTbl, walletTransactions as walletTransactionsTbl, dailyContent as dailyContentTbl, dailyContentAssignments as dailyContentAssignmentsTbl } from "@workspace/db";
 import { eq, and, gte, lt, or, inArray } from "drizzle-orm";
 import { GoogleCalendarService } from "../googleCalendar";
 import { OutlookCalendarService } from "../outlookCalendar";
@@ -27,6 +27,7 @@ import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
 import { acceptSchool, choresDismissedBySlip, dismissSlip, ingestMessages, muteSender } from "../ingest/process";
 import { slipKey } from "../ingest/parse";
+import { moveClock } from "../scheduler/eveningPlan";
 import { expandRecurringEvents, resolveSeriesEventId } from "../lib/eventRecurrence";
 import { planRecurringEdit, planRecurringDelete, type EditScope } from "../lib/recurringEdit";
 import { alignStartToWeeklyDays } from "../lib/recurrenceRule";
@@ -500,6 +501,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (processedData.endTime) {
         processedData.endTime = new Date(processedData.endTime);
+      }
+      if (processedData.startTime instanceof Date) {
+        const [existing] = await db.select({ startTime: eventsTbl.startTime }).from(eventsTbl).where(eq(eventsTbl.id, seriesId)).limit(1);
+        const label = moveClock(existing?.startTime, processedData.startTime);
+        if (label) processedData.movedFrom = label;
       }
       
 

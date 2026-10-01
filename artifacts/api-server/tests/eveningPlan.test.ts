@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { choresForPlan, claimPlanSend, planBody, planKeysForClaim, planOpenPath, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
+import { choresForPlan, claimPlanSend, moveClock, planBody, planKeysForClaim, planOpenPath, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
 
 test("a profile with a plan time does not also receive a daily brief", () => {
   const kinds = pushesForProfile({ planTime: "19:00", dailyBriefTime: "07:30" });
@@ -64,6 +64,13 @@ test("a kid plan leaves out a school email line", () => {
   assert.equal(body.includes("Permission slip"), false);
   assert.equal(body.includes("Feed the dog"), true);
   assert.equal(body.includes("Tacos"), true);
+});
+
+test("a changed start keeps the old clock time", () => {
+  const previous = new Date(2026, 9, 2, 16, 0);
+  const next = new Date(2026, 9, 2, 17, 30);
+  assert.equal(moveClock(previous, next), "4:00 PM");
+  assert.equal(moveClock(previous, previous), null);
 });
 
 test("a moved event names the old time", () => {

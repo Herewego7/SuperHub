@@ -162,6 +162,7 @@ export const events = pgTable("events", {
   calendarName: text("calendar_name"), // Display name of the calendar
   isAllDay: boolean("is_all_day").default(false),
   source: text("source"), // e.g. "school", "ics", "pdf" - tag for imported events
+  movedFrom: text("moved_from"),
   externalId: text("external_id"), // External UID for dedup on re-import
   createdAt: timestamp("created_at").defaultNow(),
   // Recurrence — the row itself is always the FIRST occurrence; further

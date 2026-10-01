@@ -38,6 +38,16 @@ export function planKeysForClaim(saved: string[] | null | undefined, held: strin
   return keys;
 }
 
+export function moveClock(previous: Date | null | undefined, next: Date | null | undefined): string | null {
+  if (!previous || !next || previous.getTime() === next.getTime()) return null;
+  let hours = previous.getHours();
+  const minutes = previous.getMinutes();
+  const suffix = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  const mm = String(minutes).padStart(2, "0");
+  return `${hours}:${mm} ${suffix}`;
+}
+
 export function choresForPlan<T extends { id: string; profileIds?: string[] | null }>(
   chores: T[],
   completedIds: string[],
@@ -120,7 +130,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const openChores = choresForPlan(chores, doneToday, profile.id);
     const dayEvents = events
       .filter((event) => localDate(new Date(event.startTime), tz) === target)
-      .map((event) => ({ title: event.title }));
+      .map((event) => ({ title: event.title, movedFrom: event.movedFrom }));
     const body = planBody({ isChild, chores: openChores, events: dayEvents, dinner });
     try {
       await sendPushToUser(

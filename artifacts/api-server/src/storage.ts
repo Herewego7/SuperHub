@@ -3682,6 +3682,7 @@ export class MemStorage implements IStorage {
     const event: Event = {
       ...insertEvent,
       id,
+      movedFrom: insertEvent.movedFrom ?? null,
       createdAt: new Date(),
     };
     this.events.set(id, event);
