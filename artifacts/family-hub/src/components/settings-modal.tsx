@@ -1868,7 +1868,10 @@ export function CalendarConnectionsSection({
                   />
                 </div>
                 <div className="flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-md bg-muted/50 mb-2">
-                  <p className="text-xs text-foreground">Scan inbox</p>
+                  <p className="text-xs text-foreground">
+                    Scan inbox
+                    <span className="ml-2 text-muted-foreground" data-testid="scan-inbox-state">{scanInbox ? "On" : "Scan off"}</span>
+                  </p>
                   <Switch
                     checked={scanInbox}
                     onCheckedChange={(checked) => inboxMutation.mutate({ scanInbox: !!checked })}
