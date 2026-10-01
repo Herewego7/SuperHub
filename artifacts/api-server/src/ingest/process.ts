@@ -96,12 +96,19 @@ function wallNow(now: Date, timeZone: string): Date {
   return new Date(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"));
 }
 
+function dayShift(note: string, from: Date): number {
+  const weekday = slipDayOffset(note, from);
+  if (weekday != null) return weekday;
+  if (/\btoday\b/i.test(note)) return 0;
+  return 1;
+}
+
 /** The clock in the email is the family's wall time, not the server's. */
 export function schoolEventStart(note: string, hours: number, minutes: number, now: Date, timeZone: string): Date {
   const start = wallNow(now, timeZone);
   const named = slipDate(note, start);
   if (named) start.setFullYear(named.getFullYear(), named.getMonth(), named.getDate());
-  else start.setDate(start.getDate() + (slipDayOffset(note, start) ?? 1));
+  else start.setDate(start.getDate() + dayShift(note, start));
   const date = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
   return zonedWallClock(date, hours, minutes, timeZone);
 }

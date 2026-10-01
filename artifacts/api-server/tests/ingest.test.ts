@@ -76,6 +76,8 @@ test("a written month and day is that calendar date", () => {
   assert.equal(slipDate("10/8/2025", thursday)?.getFullYear(), 2025);
   const late = schoolEventStart("Thursday at 3:30 PM", 15, 30, new Date("2026-10-01T03:00:00.000Z"), "America/Chicago");
   assert.equal(late.toISOString(), "2026-10-01T20:30:00.000Z");
+  const today = schoolEventStart("Picture day today at 3:30 PM", 15, 30, new Date("2026-10-01T20:00:00.000Z"), "America/Chicago");
+  assert.equal(today.toISOString(), "2026-10-01T20:30:00.000Z");
 });
 
 test("not relevant drops the slip already on Home", () => {
