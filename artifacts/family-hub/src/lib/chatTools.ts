@@ -128,11 +128,11 @@ function eventOn(name: string, from: Date): { title: string; on: Date } | null {
 }
 
 export function createEventClock(title: string, from = new Date()): { title: string; hours?: number; minutes?: number; day: "today" | "tomorrow"; on?: Date } {
-  const match = title.match(/^(.*?)(?:\s+(today|tomorrow))?(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm))?$/i);
+  const match = title.match(/^(.*?)(?:\s+(today|tonight|tomorrow))?(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm))?$/i);
   const placed = eventOn((match?.[1] ?? title).trim(), from);
   if (!match || (!match[2] && !match[3] && !placed)) return { title, day: "tomorrow" };
   const name = (placed?.title ?? match[1] ?? "").trim();
-  const day = match?.[2]?.toLowerCase() === "today" ? "today" : "tomorrow";
+  const day = match?.[2] && match[2].toLowerCase() !== "tomorrow" ? "today" : "tomorrow";
   if (!match?.[3]) return name ? { title: name, day, ...(placed ? { on: placed.on } : {}) } : { title, day: "tomorrow" };
   let hours = Number(match[3]);
   const minutes = match[4] ? Number(match[4]) : 0;

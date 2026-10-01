@@ -106,6 +106,7 @@ test("add event at 4:30 uses that clock", () => {
   const thursday = new Date(2026, 9, 1);
   assert.deepEqual(createEventClock("Soccer at 4:30 pm"), { title: "Soccer", hours: 16, minutes: 30, day: "tomorrow" });
   assert.deepEqual(createEventClock("Soccer today at 4 pm"), { title: "Soccer", hours: 16, minutes: 0, day: "today" });
+  assert.deepEqual(createEventClock("Soccer tonight at 6 pm"), { title: "Soccer", hours: 18, minutes: 0, day: "today" });
   assert.deepEqual(createEventClock("Soccer practice"), { title: "Soccer practice", day: "tomorrow" });
   assert.deepEqual(createEventClock("Soccer on October 8 at 4:30 pm", thursday), {
     title: "Soccer",

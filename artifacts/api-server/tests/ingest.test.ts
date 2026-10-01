@@ -78,6 +78,8 @@ test("a written month and day is that calendar date", () => {
   assert.equal(late.toISOString(), "2026-10-01T20:30:00.000Z");
   const today = schoolEventStart("Picture day today at 3:30 PM", 15, 30, new Date("2026-10-01T20:00:00.000Z"), "America/Chicago");
   assert.equal(today.toISOString(), "2026-10-01T20:30:00.000Z");
+  const tonight = schoolEventStart("Picture day tonight at 6:30 PM", 18, 30, new Date("2026-10-01T20:00:00.000Z"), "America/Chicago");
+  assert.equal(tonight.toISOString(), "2026-10-01T23:30:00.000Z");
 });
 
 test("not relevant drops the slip already on Home", () => {
