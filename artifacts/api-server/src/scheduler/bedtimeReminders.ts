@@ -39,10 +39,7 @@ function minutesSince(scheduled: string, currentHHMM: string): number {
 export async function runBedtimeRemindersTick(now: Date = new Date()): Promise<boolean> {
   pruneSent(now);
 
-  const candidates = await db
-    .select()
-    .from(profiles)
-    .where(isNotNull(profiles.bedtimeCutoff));
+  const candidates = await loadProfiles(isNotNull(profiles.bedtimeCutoff));
   if (candidates.length === 0) return false;
 
   const tzCache = new Map<string, string>();

@@ -5,6 +5,7 @@ import { sendPushToUser } from "../lib/push";
 import { buildDailyBrief } from "../lib/dailyBrief";
 import { localDate, localHHMM } from "../lib/choreToday";
 import { logger } from "../lib/logger";
+import { loadProfiles } from "../lib/profileRows";
 import { createWorkGate } from "../lib/workGate";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 
@@ -35,10 +36,7 @@ function minutesSince(scheduled: string, currentHHMM: string): number {
 export async function runDailyBriefTick(now: Date = new Date()): Promise<boolean> {
   pruneSent(now);
 
-  const candidates = await db
-    .select()
-    .from(profiles)
-    .where(isNotNull(profiles.dailyBriefTime));
+  const candidates = await loadProfiles(isNotNull(profiles.dailyBriefTime));
   if (candidates.length === 0) return false;
 
   const tzCache = new Map<string, string>();

@@ -5,6 +5,7 @@ import { sendPushToUser } from "../lib/push";
 import { buildWeeklyRecap } from "../lib/weeklyRecap";
 import { localDate, localHHMM, localDayOfWeek } from "../lib/choreToday";
 import { logger } from "../lib/logger";
+import { loadProfiles } from "../lib/profileRows";
 import { createWorkGate } from "../lib/workGate";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 
@@ -35,10 +36,7 @@ function minutesSince(scheduled: string, currentHHMM: string): number {
 export async function runWeeklyRecapTick(now: Date = new Date()): Promise<boolean> {
   pruneSent(now);
 
-  const candidates = await db
-    .select()
-    .from(profiles)
-    .where(isNotNull(profiles.weeklyRecapTime));
+  const candidates = await loadProfiles(isNotNull(profiles.weeklyRecapTime));
   if (candidates.length === 0) return false;
 
   const tzCache = new Map<string, string>();

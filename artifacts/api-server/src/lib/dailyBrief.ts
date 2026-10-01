@@ -295,10 +295,7 @@ export async function buildBriefsForUser(
   now: Date = new Date(),
 ): Promise<DailyBrief[]> {
   const tz = await getUserTimezone(userId);
-  const userProfiles = await db
-    .select()
-    .from(profiles)
-    .where(eq(profiles.userId, userId));
+  const userProfiles = await loadProfiles(eq(profiles.userId, userId));
   const real = userProfiles.filter((p) => !p.isAllFamilyProfile);
   const family = await buildDailyBrief(userId, null, now, tz);
   const perProfile = await Promise.all(
