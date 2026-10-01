@@ -853,6 +853,7 @@ export const groceryItems = pgTable("grocery_items", {
   name: text("name").notNull(),
   quantity: text("quantity"),
   isChecked: boolean("is_checked").default(false),
+  alreadyHave: boolean("already_have").default(false),
   sourceMealIds: jsonb("source_meal_ids").$type<string[]>().default([]),
   createdAt: timestamp("created_at").defaultNow(),
   // Manual aisle override — null means "use the client's keyword-based guess."

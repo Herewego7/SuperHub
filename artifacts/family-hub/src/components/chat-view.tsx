@@ -149,8 +149,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     const grocery = have ? groceryHaveAction(have, groceries, mealGroceries) : null;
     if (grocery) {
       if (grocery.kind === "delete") void apiRequest("DELETE", `/api/grocery-items/${grocery.id}`);
-      if (grocery.kind === "check") void apiRequest("PATCH", `/api/grocery-items/${grocery.id}`, { isChecked: true });
-      if (grocery.kind === "have") void apiRequest("POST", "/api/grocery-items", { name: grocery.name, isChecked: true });
+      if (grocery.kind === "check") void apiRequest("PATCH", `/api/grocery-items/${grocery.id}`, { alreadyHave: true });
+      if (grocery.kind === "have") void apiRequest("POST", "/api/grocery-items", { name: grocery.name, alreadyHave: true });
       void queryClient.invalidateQueries({ queryKey: ["/api/grocery-items"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/grocery-list/aggregate"] });
       const label = grocery.kind === "have" ? grocery.name : have;

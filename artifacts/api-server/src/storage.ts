@@ -2888,6 +2888,7 @@ export class DatabaseStorage implements IStorage {
       name: it.name,
       quantity: it.quantity ?? null,
       isChecked: it.isChecked ?? false,
+      alreadyHave: it.alreadyHave ?? false,
       sourceMealIds: Array.isArray(it.sourceMealIds) ? it.sourceMealIds : [],
       category: it.category ?? null,
     }));

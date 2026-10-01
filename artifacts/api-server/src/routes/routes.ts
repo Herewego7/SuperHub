@@ -5481,12 +5481,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userMeals = await storage.getMealsByUserAndDateRange(userId, String(start), String(end));
       const ingredients = await storage.getIngredientsByMealIds(userMeals.map(m => m.id));
       const aggregated = aggregateIngredients(ingredients);
-      const items = aggregated.map(a => ({
-        name: a.name,
-        quantity: a.quantity,
-        isChecked: false,
-        sourceMealIds: a.sourceMealIds,
-      }));
+      const existing = await storage.getGroceryItemsByUser(userId);
+      const kept = existing.filter((item) => item.alreadyHave);
+      const keptNames = new Set(kept.map((item) => item.name.trim().toLowerCase()));
+      const items = [
+        ...aggregated
+          .filter((a) => !keptNames.has(a.name.trim().toLowerCase()))
+          .map((a) => ({
+            name: a.name,
+            quantity: a.quantity,
+            isChecked: false,
+            alreadyHave: false,
+            sourceMealIds: a.sourceMealIds,
+          })),
+        ...kept.map((item) => ({
+          name: item.name,
+          quantity: item.quantity,
+          isChecked: false,
+          alreadyHave: true,
+          sourceMealIds: item.sourceMealIds ?? [],
+        })),
+      ];
       const created = await storage.replaceGroceryItemsForUser(userId, items);
       res.status(201).json(created);
     } catch (error) {

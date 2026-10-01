@@ -3425,10 +3425,13 @@ function GroceryListView({ weekStartIso, weekEndIso, weekLabel, onBack }: Grocer
 
   const merged = useMemo<MergedGroceryRow[]>(() => {
     const rowsByKey = new Map<string, MergedGroceryRow>();
+    const gone = new Set(
+      persisted.filter((item) => item.alreadyHave).map((item) => item.name.trim().toLowerCase()),
+    );
 
     for (const agg of aggregated) {
       const key = agg.name.trim().toLowerCase();
-      if (!key) continue;
+      if (!key || gone.has(key)) continue;
       rowsByKey.set(key, {
         key,
         name: agg.name,
@@ -3444,7 +3447,7 @@ function GroceryListView({ weekStartIso, weekEndIso, weekLabel, onBack }: Grocer
 
     for (const item of persisted) {
       const key = item.name.trim().toLowerCase();
-      if (!key) continue;
+      if (!key || gone.has(key)) continue;
       const existing = rowsByKey.get(key);
       if (existing) {
         existing.persistedId = item.id;

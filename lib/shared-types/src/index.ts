@@ -587,6 +587,7 @@ export type GroceryItem = {
   name: string;
   quantity: string | null;
   isChecked: boolean | null;
+  alreadyHave?: boolean | null;
   sourceMealIds: string[] | null;
   createdAt: Date | null;
   category: string | null;
@@ -597,6 +598,7 @@ export type InsertGroceryItem = {
   name: string;
   quantity?: string | null;
   isChecked?: boolean | null;
+  alreadyHave?: boolean | null;
   sourceMealIds?: string[] | null;
   category?: string | null;
 };

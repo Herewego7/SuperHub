@@ -29,6 +29,18 @@ export function groceryHaveAction(
   return null;
 }
 
+/** Names the household already has leave the shopping list. The meal still lists them. */
+export function groceryListAfterHave<T extends { name: string }>(
+  rows: T[],
+  saved: { name: string; alreadyHave?: boolean | null }[],
+): T[] {
+  const gone = new Set(
+    saved.filter((item) => item.alreadyHave).map((item) => item.name.trim().toLowerCase()),
+  );
+  if (gone.size === 0) return rows;
+  return rows.filter((row) => !gone.has(row.name.trim().toLowerCase()));
+}
+
 function dayKey(day: Date): string {
   return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
 }
