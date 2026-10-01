@@ -157,7 +157,10 @@ test("a moved event names the old time", () => {
     chores: [],
     events: [{ title: "Soccer", movedFrom: "4:00 PM" }],
   });
-  assert.equal(body.includes("Soccer moved from 4:00 PM"), true);
+  assert.equal(body.includes("Soccer, moved from 4:00 PM"), true);
+  const titled = eventClockTitle("Soccer", new Date("2026-10-02T22:30:00Z"), "America/Chicago");
+  const moved = planBody({ isChild: false, chores: [], events: [{ title: titled, movedFrom: "4:00 PM" }] });
+  assert.equal(moved, "Soccer, 5:30 PM, moved from 4:00 PM");
 });
 
 test("the plan link opens chat with the dinner line", () => {

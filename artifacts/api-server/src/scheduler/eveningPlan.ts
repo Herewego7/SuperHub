@@ -122,7 +122,7 @@ export function planBody(input: {
   }
   for (const event of input.events) {
     if (input.isChild && event.source === "school" && !namesPerson(`${event.title}\n${event.description ?? ""}`, input.kidName)) continue;
-    lines.push(event.movedFrom ? `${event.title} moved from ${event.movedFrom}` : event.title);
+    lines.push(event.movedFrom ? `${event.title}, moved from ${event.movedFrom}` : event.title);
   }
   const dinnerLine = input.dinner ? `Dinner. ${input.dinner}` : null;
   const room = dinnerLine ? 5 : 6;
@@ -214,7 +214,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
       profile.id,
     )
       .map((event) => ({
-        title: event.movedFrom ? event.title : eventClockTitle(event.title, new Date(event.startTime), tz, event.isAllDay === true),
+        title: eventClockTitle(event.title, new Date(event.startTime), tz, event.isAllDay === true),
         description: event.description,
         movedFrom: event.movedFrom,
         source: event.source,
