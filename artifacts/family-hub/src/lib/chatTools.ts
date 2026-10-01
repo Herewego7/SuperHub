@@ -175,6 +175,15 @@ export function drivingReply(
   return `${names.slice(0, -1).join(", ")} and ${last} are driving ${event.title}.`;
 }
 
+export function searchHits(text: string, rows: { title: string; description?: string | null }[]): string[] | null {
+  const query = text.trim().match(/^search\s+(.+?)\.?$/i)?.[1]?.trim().toLowerCase();
+  if (!query) return null;
+  return rows
+    .filter((row) => `${row.title}\n${row.description ?? ""}`.toLowerCase().includes(query))
+    .map((row) => row.title)
+    .slice(0, 5);
+}
+
 export function muteAddress(text: string): string | null {
   const match = text.trim().match(/^mute\s+(\S+@\S+)$/i);
   const address = match?.[1]?.replace(/\.+$/, "");
