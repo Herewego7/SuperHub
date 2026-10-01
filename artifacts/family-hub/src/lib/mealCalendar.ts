@@ -6,7 +6,7 @@ export function mealEvents<T extends { slot: string }>(meals: T[], writeToCalend
 }
 
 export function groceryAlreadyHave(text: string): string | null {
-  const match = /\b(?:already have|have|got)\s+(.+?)\.?$/i.exec(text.trim());
+  const match = /^(?:(?:i|we)\s+)?(?:already have|have|got)\s+(.+?)\.?$/i.exec(text.trim());
   const name = match?.[1]?.trim();
   return name ? name : null;
 }
