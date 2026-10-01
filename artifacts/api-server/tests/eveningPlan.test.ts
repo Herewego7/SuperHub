@@ -115,6 +115,7 @@ test("a changed start keeps the old clock time", () => {
 test("a plan event names its clock in the family timezone", () => {
   assert.equal(eventClockTitle("Soccer", new Date("2026-10-02T21:00:00Z"), "America/Chicago"), "Soccer, 4:00 PM");
   assert.equal(eventClockTitle("Picture day", new Date("2026-10-02T05:00:00Z"), "America/Chicago"), "Picture day");
+  assert.equal(eventClockTitle("Picture day", new Date("2026-10-02T00:00:00Z"), "America/Chicago", true), "Picture day");
 });
 
 test("a moved event names the old time", () => {

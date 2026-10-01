@@ -117,7 +117,8 @@ export function planBody(input: {
   return kept.join("\n") || "Nothing on the plan.";
 }
 
-export function eventClockTitle(title: string, startTime: Date, tz: string): string {
+export function eventClockTitle(title: string, startTime: Date, tz: string, allDay = false): string {
+  if (allDay) return title;
   const hhmm = localHHMM(startTime, tz);
   if (!/^\d{2}:\d{2}$/.test(hhmm) || hhmm === "00:00") return title;
   const [rawHours, minutes] = hhmm.split(":").map(Number);
@@ -184,7 +185,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const dayEvents = events
       .filter((event) => localDate(new Date(event.startTime), tz) === target)
       .map((event) => ({
-        title: event.movedFrom ? event.title : eventClockTitle(event.title, new Date(event.startTime), tz),
+        title: event.movedFrom ? event.title : eventClockTitle(event.title, new Date(event.startTime), tz, event.isAllDay === true),
         description: event.description,
         movedFrom: event.movedFrom,
         source: event.source,

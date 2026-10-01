@@ -220,6 +220,7 @@ test("a home event names its clock, and the horizon names the day", () => {
   const at = new Date(2026, 9, 2, 16, 0);
   assert.equal(eventClockLine("Soccer", at), "Soccer, 4:00 PM");
   assert.equal(eventClockLine("Picture day", new Date(2026, 9, 2, 0, 0)), "Picture day");
+  assert.equal(eventClockLine("Picture day", new Date(2026, 9, 1, 19, 0), false, true), "Picture day");
   assert.match(eventClockLine("Soccer", at, true), /^Soccer, .+, 4:00 PM$/);
 });
 

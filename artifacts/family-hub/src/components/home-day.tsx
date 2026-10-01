@@ -170,7 +170,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           <ul className="flex flex-col gap-1">
             {todayEvents.slice(0, 6).map((event) => (
               <li key={event.id} className="text-sm">
-                {eventClockLine(event.title, event.startTime)}
+                {eventClockLine(event.title, event.startTime, false, event.isAllDay === true)}
                 {eventSourceChip(event.source) && (
                   <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(event.source)}</span>
                 )}
@@ -188,7 +188,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           <ul className="flex flex-col gap-1">
             {horizon.slice(0, 5).map((event) => (
               <li key={event.id} className="text-sm">
-                {eventClockLine(event.title, event.startTime, true)}
+                {eventClockLine(event.title, event.startTime, true, event.isAllDay === true)}
                 {eventSourceChip(event.source) && (
                   <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(event.source)}</span>
                 )}

@@ -61,6 +61,7 @@ test("upcoming shows a clock on an event and not on a to-do", () => {
   assert.equal(upcomingClock({ startTime: new Date(2026, 9, 2, 16, 0), kind: "event" }), "4:00 PM");
   assert.equal(upcomingClock({ startTime: new Date(2026, 9, 2, 16, 0), kind: "todo" }), null);
   assert.equal(upcomingClock({ startTime: new Date(2026, 9, 2, 0, 0), kind: "event" }), null);
+  assert.equal(upcomingClock({ startTime: new Date(2026, 9, 1, 19, 0), kind: "event", isAllDay: true }), null);
 });
 
 test("a scanned flyer is labeled Scan", () => {

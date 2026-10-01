@@ -153,11 +153,11 @@ export function checkOffTitle(text: string): string | null {
   return title ? title : null;
 }
 
-export function eventClockLine(title: string, startTime: Date | string, withDay = false): string {
+export function eventClockLine(title: string, startTime: Date | string, withDay = false, allDay = false): string {
   const at = new Date(startTime);
   if (Number.isNaN(at.getTime())) return title;
   const day = withDay ? at.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
-  if (at.getHours() === 0 && at.getMinutes() === 0) return day ? `${title}, ${day}` : title;
+  if (allDay || (at.getHours() === 0 && at.getMinutes() === 0)) return day ? `${title}, ${day}` : title;
   let hours = at.getHours();
   const suffix = hours >= 12 ? "PM" : "AM";
   hours = hours % 12 || 12;
@@ -198,7 +198,7 @@ export function dayReply(
       targetCount?: number | null;
       endDate?: Date | string | null;
     }[];
-    events: { title: string; startTime: Date | string }[];
+    events: { title: string; startTime: Date | string; isAllDay?: boolean | null }[];
     completions?: { choreId: string; completedAt?: Date | string | null }[];
     dinner?: string | null;
     meals?: { date: string; slot: string; name: string }[];
@@ -239,7 +239,7 @@ export function dayReply(
   }
   for (const event of input.events) {
     const at = new Date(event.startTime);
-    if (at >= start && at < end) lines.push(eventClockLine(event.title, at));
+    if (at >= start && at < end) lines.push(eventClockLine(event.title, at, false, event.isAllDay === true));
   }
   const kept = lines.slice(0, 5);
   const askedToday = start.toDateString() === new Date(input.day).toDateString();
