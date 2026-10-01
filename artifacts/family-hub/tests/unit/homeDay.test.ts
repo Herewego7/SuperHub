@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { choreProgress, dinnerName, horizonEvents, schoolEmailNames, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, horizonEvents, schoolEmailNames, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -26,6 +26,18 @@ test("chore progress counts a shared chore once", () => {
     day,
   );
   assert.deepEqual(progress, { done: 1, total: 1 });
+});
+
+test("one person's chore count leaves out someone else's chore", () => {
+  const day = new Date(2026, 9, 1);
+  const rows = [
+    { id: "liam", taskType: "chore", profileIds: ["liam"], isActive: true, daysOfWeek: [4], recurrenceType: null },
+    { id: "parent", taskType: "chore", profileIds: ["parent"], isActive: true, daysOfWeek: [4], recurrenceType: null },
+  ];
+  const one = choreProgress(choresForCount(rows, ["liam"], ["liam", "parent"]), [], day);
+  const all = choreProgress(choresForCount(rows, ["liam", "parent"], ["liam", "parent"]), [], day);
+  assert.deepEqual(one, { done: 0, total: 1 });
+  assert.deepEqual(all, { done: 0, total: 2 });
 });
 
 test("horizon skips a weekly routine and keeps a one-off next week", () => {

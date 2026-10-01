@@ -32,6 +32,13 @@ export function todosForHome<T extends HomeTodo>(chores: T[], selectedIds: strin
 
 const NOT_A_CHORE = new Set(["todo", "memory_verse", "affirmation", "bible_verse", "mission", "custom"]);
 
+/** All Family counts the household. One person counts only their chores. */
+export function choresForCount<T extends { profileIds: string[] }>(chores: T[], selectedIds: string[], familyIds: string[]): T[] {
+  const allSelected = familyIds.length > 0 && familyIds.every((id) => selectedIds.includes(id));
+  if (selectedIds.length === 0 || allSelected) return chores;
+  return chores.filter((chore) => chore.profileIds.length === 0 || chore.profileIds.some((id) => selectedIds.includes(id)));
+}
+
 export function choreProgress(
   chores: Array<HomeTodo & { daysOfWeek?: number[]; recurrenceType?: string | null; targetCount?: number | null; endDate?: Date | string | null }>,
   completions: Array<{ choreId: string; completedAt?: Date | string | null }>,

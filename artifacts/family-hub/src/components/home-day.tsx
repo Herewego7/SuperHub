@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, dinnerName, horizonEvents, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, horizonEvents, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { openEmailHref, slipQuote, slipSender, suggestedSchool } from "@/lib/slipMail";
 
@@ -79,7 +79,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   });
 
   const todos = todosForHome(chores, selectedIds, familyIds).filter((todo) => !kidName || schoolEmailNames(todo, kidName));
-  const progress = choreProgress(chores, completions, day);
+  const progress = choreProgress(choresForCount(chores, selectedIds, familyIds), completions, day);
   const start = new Date(day);
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
