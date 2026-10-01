@@ -1,4 +1,4 @@
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, isNotNull, lte, or } from "drizzle-orm";
 import { db } from "../db";
 import {
   profiles,
@@ -18,6 +18,7 @@ import {
 import { isKidProfile } from "./profileRole";
 import { DEFAULT_TIMEZONE } from "./timezone";
 import { driverIdsOf } from "./eventDrivers";
+import { expandRecurringEvents } from "./eventRecurrence";
 import { loadProfiles } from "./profileRows";
 
 export interface DailyBriefItem {
@@ -111,16 +112,21 @@ export async function buildDailyBrief(
   const scopeToSelfOnly = !!profile && isKidProfile(profile);
 
   // ---- Events ----
-  const allEvents = await db
-    .select()
-    .from(events)
-    .where(
-      and(
-        eq(events.userId, userId),
-        gte(events.startTime, wideStart),
-        lte(events.startTime, wideEnd),
+  const allEvents = expandRecurringEvents(
+    await db
+      .select()
+      .from(events)
+      .where(
+        and(
+          eq(events.userId, userId),
+          or(
+            and(gte(events.startTime, wideStart), lte(events.startTime, wideEnd)),
+            isNotNull(events.recurrenceType),
+          ),
+        ),
       ),
-    );
+    now,
+  );
   const todaysAllEvents = allEvents
     .filter((e) => localDate(e.startTime, tz) === today)
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());

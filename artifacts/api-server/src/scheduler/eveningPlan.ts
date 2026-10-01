@@ -11,6 +11,7 @@ import { logger } from "../lib/logger";
 import { createWorkGate } from "../lib/workGate";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { loadProfiles } from "../lib/profileRows";
+import { expandRecurringEvents } from "../lib/eventRecurrence";
 import { storage } from "../storage";
 
 export type PlanPush = "evening-plan" | "daily-brief";
@@ -127,6 +128,15 @@ export function eventClockTitle(title: string, startTime: Date, tz: string, allD
   return `${title}, ${hours}:${String(minutes).padStart(2, "0")} ${suffix}`;
 }
 
+export function planDayEvents<T extends Parameters<typeof expandRecurringEvents>[0][number]>(
+  events: T[],
+  target: string,
+  tz: string,
+  now?: Date,
+): T[] {
+  return expandRecurringEvents(events, now).filter((event) => localDate(new Date(event.startTime), tz) === target) as T[];
+}
+
 export function planTitle(isChild: boolean, timing: string | null | undefined): string {
   const today = timing === "morningOf";
   if (isChild) return today ? "Today" : "Tomorrow";
@@ -182,8 +192,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
       .filter((completion) => chores.some((chore) => chore.id === completion.choreId && chore.taskType === "todo"))
       .map((completion) => completion.choreId);
     const openChores = dueForPlan(choresForPlan(chores, doneToday, profile.id, finishedTodos), new Date(`${target}T12:00:00`));
-    const dayEvents = events
-      .filter((event) => localDate(new Date(event.startTime), tz) === target)
+    const dayEvents = planDayEvents(events, target, tz)
       .map((event) => ({
         title: event.movedFrom ? event.title : eventClockTitle(event.title, new Date(event.startTime), tz, event.isAllDay === true),
         description: event.description,

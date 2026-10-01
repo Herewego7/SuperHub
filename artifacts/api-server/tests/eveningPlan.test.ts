@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, moveClock, planBody, planKeysForClaim, planOpenPath, planTitle, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
+import type { Event } from "@workspace/db";
+import { choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, moveClock, planBody, planDayEvents, planKeysForClaim, planOpenPath, planTitle, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
 
 test("a morning plan is titled for today", () => {
   assert.equal(planTitle(false, "morningOf"), "Today's plan");
@@ -110,6 +111,21 @@ test("a changed start keeps the old clock time", () => {
   const next = new Date(2026, 9, 2, 17, 30);
   assert.equal(moveClock(previous, next), "4:00 PM");
   assert.equal(moveClock(previous, previous), null);
+});
+
+test("a weekly event is on the plan the week after it starts", () => {
+  const start = new Date("2026-10-01T21:00:00Z");
+  const event = {
+    id: "soccer",
+    title: "Soccer",
+    startTime: start,
+    endTime: new Date(start.getTime() + 60 * 60 * 1000),
+    recurrenceType: "weekly",
+    excludedDates: [],
+  } as Event;
+  const found = planDayEvents([event], "2026-10-08", "America/Chicago", new Date("2026-10-01T12:00:00Z"));
+  assert.equal(found.length, 1);
+  assert.equal(found[0]?.title, "Soccer");
 });
 
 test("a plan event names its clock in the family timezone", () => {
