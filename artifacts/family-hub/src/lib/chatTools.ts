@@ -153,6 +153,14 @@ export function checkOffTitle(text: string): string | null {
   return title ? title : null;
 }
 
+function eventWhen(title: string, at: Date): string {
+  if (Number.isNaN(at.getTime()) || (at.getHours() === 0 && at.getMinutes() === 0)) return title;
+  let hours = at.getHours();
+  const suffix = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  return `${title}, ${hours}:${String(at.getMinutes()).padStart(2, "0")} ${suffix}`;
+}
+
 function dueOnDay(
   chore: {
     taskType?: string | null;
@@ -227,7 +235,7 @@ export function dayReply(
   }
   for (const event of input.events) {
     const at = new Date(event.startTime);
-    if (at >= start && at < end) lines.push(event.title);
+    if (at >= start && at < end) lines.push(eventWhen(event.title, at));
   }
   const kept = lines.slice(0, 5);
   const askedToday = start.toDateString() === new Date(input.day).toDateString();

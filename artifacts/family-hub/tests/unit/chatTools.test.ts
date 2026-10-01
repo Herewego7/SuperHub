@@ -156,7 +156,7 @@ test("what's the plan names the day and dinner", () => {
     dinner: "Tacos",
     day,
   });
-  assert.equal(reply, "Feed the dog\nBuy milk\nSoccer\nDinner. Tacos");
+  assert.equal(reply, "Feed the dog\nBuy milk\nSoccer, 3:00 PM\nDinner. Tacos");
   assert.equal(dayReply("hello", { chores: [], events: [], dinner: null, day }), null);
   const friday = dayReply("what's the plan Friday", {
     chores: [
@@ -174,7 +174,7 @@ test("what's the plan names the day and dinner", () => {
     ],
     day,
   });
-  assert.equal(friday, "Feed the dog\nDishes\nBuy milk\nPiano\nDinner. Pasta");
+  assert.equal(friday, "Feed the dog\nDishes\nBuy milk\nPiano, 4:00 PM\nDinner. Pasta");
   assert.equal(dayReply("what's the plan for the weekend", { chores: [], events: [], dinner: null, day }), "I don't know that day.");
 });
 
