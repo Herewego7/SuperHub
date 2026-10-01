@@ -251,6 +251,8 @@ export interface IStorage {
   // Calendar Settings
   getCalendarSettingsByUser(userId: string): Promise<CalendarSettings | undefined>;
   updateCalendarSettings(settings: InsertCalendarSettings & { userId: string }): Promise<CalendarSettings>;
+  claimPlanKey(userId: string, key: string, today: string): Promise<boolean>;
+  releasePlanKey(userId: string, key: string): Promise<void>;
 
   // Location Settings
   getLocationSettingsByUser(userId: string): Promise<LocationSettings | undefined>;
@@ -1080,6 +1082,43 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return saved;
+  }
+
+  async claimPlanKey(userId: string, key: string, today: string): Promise<boolean> {
+    const kept = sql`(
+      SELECT COALESCE(jsonb_agg(to_jsonb(elem)), '[]'::jsonb)
+      FROM jsonb_array_elements_text(COALESCE(${calendarSettings.planSentKeys}, '[]'::jsonb)) AS elem
+      WHERE split_part(elem, ':', 2) >= ${today}
+    ) || jsonb_build_array(${key})`;
+    const claimed = await db.update(calendarSettings).set({
+      planSentKeys: kept,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(calendarSettings.userId, userId),
+      sql`NOT (${calendarSettings.planSentKeys} @> jsonb_build_array(${key}))`,
+    )).returning({ userId: calendarSettings.userId });
+    if (claimed.length > 0) return true;
+    const inserted = await db.insert(calendarSettings).values({ userId, planSentKeys: [key] }).onConflictDoNothing().returning({ userId: calendarSettings.userId });
+    if (inserted.length > 0) return true;
+    const again = await db.update(calendarSettings).set({
+      planSentKeys: kept,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(calendarSettings.userId, userId),
+      sql`NOT (${calendarSettings.planSentKeys} @> jsonb_build_array(${key}))`,
+    )).returning({ userId: calendarSettings.userId });
+    return again.length > 0;
+  }
+
+  async releasePlanKey(userId: string, key: string): Promise<void> {
+    await db.update(calendarSettings).set({
+      planSentKeys: sql`(
+        SELECT COALESCE(jsonb_agg(to_jsonb(elem)), '[]'::jsonb)
+        FROM jsonb_array_elements_text(COALESCE(${calendarSettings.planSentKeys}, '[]'::jsonb)) AS elem
+        WHERE elem <> ${key}
+      )`,
+      updatedAt: new Date(),
+    }).where(eq(calendarSettings.userId, userId));
   }
 
   async getLocationSettingsByUser(userId: string): Promise<LocationSettings | undefined> {
@@ -3909,6 +3948,47 @@ export class MemStorage implements IStorage {
     };
     this.calendarSettings = calendarSettings;
     return calendarSettings;
+  }
+
+  async claimPlanKey(userId: string, key: string, today: string): Promise<boolean> {
+    const existing = this.calendarSettings?.userId === userId ? this.calendarSettings.planSentKeys ?? [] : null;
+    if (existing?.includes(key)) return false;
+    const kept = (existing ?? []).filter((item) => {
+      const day = item.slice(item.lastIndexOf(":") + 1);
+      return !/^\d{4}-\d{2}-\d{2}$/.test(day) || day >= today;
+    });
+    const planSentKeys = [...kept, key];
+    if (!this.calendarSettings || this.calendarSettings.userId !== userId) {
+      this.calendarSettings = {
+        id: randomUUID(),
+        userId,
+        startHour: 8,
+        endHour: 22,
+        weekStartsOn: 0,
+        twoWaySyncEnabled: false,
+        familyCalendarId: null,
+        scanInbox: true,
+        shareOriginals: false,
+        mealsOnCalendar: false,
+        mutedSenders: [],
+        dismissedSlipKeys: [],
+        planSentKeys,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      return true;
+    }
+    this.calendarSettings = { ...this.calendarSettings, planSentKeys, updatedAt: new Date() };
+    return true;
+  }
+
+  async releasePlanKey(userId: string, key: string): Promise<void> {
+    if (!this.calendarSettings || this.calendarSettings.userId !== userId) return;
+    this.calendarSettings = {
+      ...this.calendarSettings,
+      planSentKeys: (this.calendarSettings.planSentKeys ?? []).filter((item) => item !== key),
+      updatedAt: new Date(),
+    };
   }
 
   async getLocationSettingsByUser(userId: string): Promise<LocationSettings | undefined> {

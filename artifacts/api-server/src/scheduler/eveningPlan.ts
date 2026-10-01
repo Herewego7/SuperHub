@@ -193,7 +193,6 @@ function minutesSince(scheduled: string, currentHHMM: string): number {
 export async function runEveningPlanTick(now: Date = new Date()): Promise<boolean> {
   const candidates = await loadProfiles(isNotNull(profiles.eveningPlanTime));
   if (candidates.length === 0) return false;
-  const held = new Map<string, string[]>();
   for (const profile of candidates) {
     if (!profile.userId || !profile.eveningPlanTime) continue;
     if (pushesForProfile({ planTime: profile.eveningPlanTime, dailyBriefTime: profile.dailyBriefTime }).includes("daily-brief")) continue;
@@ -203,8 +202,9 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const day = localDate(now, tz);
     const elapsed = minutesSince(profile.eveningPlanTime, localHHMM(now, tz));
     if (elapsed < 0 || elapsed > CATCH_UP_MINUTES) continue;
-    const claim = claimPlanSend(planKeysForClaim(settings?.planSentKeys, held.get(profile.userId), day), profile.id, day);
-    if (!claim.send) continue;
+    const claimKey = `${profile.id}:${day}`;
+    if (!(await storage.claimPlanKey(profile.userId, claimKey, day))) continue;
+    try {
     const isChild = profile.role === "child" || profile.isChild === true;
     const chores = await storage.getChoresByUser(profile.userId);
     const completions = await storage.getChoreCompletionsByUser(profile.userId);
@@ -234,7 +234,6 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
         source: event.source,
       }));
     const body = planBody({ isChild, kidName: isChild ? profile.name : null, chores: openChores, events: dayEvents, dinner });
-    try {
       await sendPushToUser(
         { userId: profile.userId, profileId: profile.id },
         {
@@ -245,9 +244,8 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
           data: { kind: "evening-plan", profileId: profile.id, body },
         },
       );
-      await storage.updateCalendarSettings({ planSentKeys: claim.sentKeys, userId: profile.userId });
-      held.set(profile.userId, claim.sentKeys);
     } catch (err) {
+      await storage.releasePlanKey(profile.userId, claimKey);
       logger.warn({ err, profileId: profile.id }, "Evening plan failed");
     }
   }
