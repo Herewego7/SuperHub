@@ -61,20 +61,28 @@ export function choresForPlan<T extends { id: string; profileIds?: string[] | nu
   });
 }
 
+function namesPerson(text: string, name: string | null | undefined): boolean {
+  const who = name?.trim();
+  if (!who) return false;
+  const escaped = who.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escaped}\\b`, "i").test(text);
+}
+
 export function planBody(input: {
   isChild: boolean;
-  chores: { title: string; taskType?: string | null; category?: string | null }[];
-  events: { title: string; movedFrom?: string | null; source?: string | null }[];
+  kidName?: string | null;
+  chores: { title: string; description?: string | null; taskType?: string | null; category?: string | null }[];
+  events: { title: string; description?: string | null; movedFrom?: string | null; source?: string | null }[];
   dinner?: string | null;
 }): string {
   const lines: string[] = [];
   for (const chore of input.chores) {
     if (chore.taskType && chore.taskType !== "todo" && chore.taskType !== "chore") continue;
-    if (input.isChild && chore.category === "school_email") continue;
+    if (input.isChild && chore.category === "school_email" && !namesPerson(`${chore.title}\n${chore.description ?? ""}`, input.kidName)) continue;
     lines.push(chore.title);
   }
   for (const event of input.events) {
-    if (input.isChild && event.source === "school") continue;
+    if (input.isChild && event.source === "school" && !namesPerson(`${event.title}\n${event.description ?? ""}`, input.kidName)) continue;
     lines.push(event.movedFrom ? `${event.title} moved from ${event.movedFrom}` : event.title);
   }
   const dinnerLine = input.dinner ? `Dinner. ${input.dinner}` : null;
@@ -137,8 +145,8 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const openChores = choresForPlan(chores, doneToday, profile.id);
     const dayEvents = events
       .filter((event) => localDate(new Date(event.startTime), tz) === target)
-      .map((event) => ({ title: event.title, movedFrom: event.movedFrom, source: event.source }));
-    const body = planBody({ isChild, chores: openChores, events: dayEvents, dinner });
+      .map((event) => ({ title: event.title, description: event.description, movedFrom: event.movedFrom, source: event.source }));
+    const body = planBody({ isChild, kidName: isChild ? profile.name : null, chores: openChores, events: dayEvents, dinner });
     try {
       await sendPushToUser(
         { userId: profile.userId, profileId: profile.id },

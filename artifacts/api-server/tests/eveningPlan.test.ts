@@ -59,15 +59,22 @@ test("a second run the same day does not send again", () => {
 test("a kid plan leaves out a school email line", () => {
   const body = planBody({
     isChild: true,
+    kidName: "Ava",
     chores: [
-      { title: "Permission slip", taskType: "todo", category: "school_email" },
+      { title: "Permission slip", description: "Bring it back", taskType: "todo", category: "school_email" },
+      { title: "Ava's slip", description: "Ava must return it", taskType: "todo", category: "school_email" },
       { title: "Feed the dog", taskType: "chore", category: "pets" },
     ],
-    events: [{ title: "Picture day", source: "school" }],
+    events: [
+      { title: "Picture day", source: "school" },
+      { title: "Ava concert", description: "Ava sings", source: "school" },
+    ],
     dinner: "Tacos",
   });
   assert.equal(body.includes("Permission slip"), false);
   assert.equal(body.includes("Picture day"), false);
+  assert.equal(body.includes("Ava's slip"), true);
+  assert.equal(body.includes("Ava concert"), true);
   assert.equal(body.includes("Feed the dog"), true);
   assert.equal(body.includes("Tacos"), true);
 });
