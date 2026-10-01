@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { choreProgress, choresForCount, dinnerName, horizonEvents, schoolEmailNames, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, horizonEvents, mailVisibleToKid, schoolEmailNames, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -56,6 +56,14 @@ test("a kid does not see a school email that does not name them", () => {
   assert.equal(schoolEmailNames({ title: "Permission slip", description: "Ava must return it", category: "school_email" }, "Ava"), true);
   assert.equal(schoolEmailNames({ title: "Picture day", description: "Thursday at 9", category: "school_email" }, "Ava"), false);
   assert.equal(schoolEmailNames({ title: "Pack lunch", description: null, category: "todo" }, "Ava"), true);
+});
+
+test("a kid's upcoming list hides school mail that does not name them", () => {
+  const slip = { title: "Picture day", description: "Thursday at 9", category: "school_email", source: "school" };
+  assert.equal(mailVisibleToKid(slip, "Ava"), false);
+  assert.equal(mailVisibleToKid({ ...slip, description: "Ava must return it" }, "Ava"), true);
+  assert.equal(mailVisibleToKid({ title: "Soccer", source: null }, "Ava"), true);
+  assert.equal(mailVisibleToKid(slip, null), true);
 });
 
 test("Chad's filter hides an event that is only for Liam", () => {

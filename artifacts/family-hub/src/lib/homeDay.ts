@@ -89,6 +89,16 @@ export function horizonEvents<T extends HorizonEvent>(events: T[], day: Date): T
   });
 }
 
+/** A kid's list hides school mail that does not name them. Everyone else sees it. */
+export function mailVisibleToKid(
+  row: { title: string; description?: string | null; category?: string | null; source?: string | null },
+  kidName: string | null,
+): boolean {
+  if (!kidName) return true;
+  if (row.category !== "school_email" && row.source !== "school") return true;
+  return schoolEmailNames({ title: row.title, description: row.description, category: "school_email" }, kidName);
+}
+
 export function schoolEmailNames(
   todo: { title: string; description?: string | null; category?: string | null },
   kidName: string,

@@ -1,4 +1,4 @@
-import { todosForHome } from "@/lib/homeDay";
+import { mailVisibleToKid, todosForHome } from "@/lib/homeDay";
 import { assignmentProfileIds, outlookEventProfileIds, withoutUnwatched } from "@/lib/outlookAttribution";
 import { UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, upcomingKindForMail, upcomingRows, type UpcomingKind } from "@/lib/upcoming";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
@@ -1710,7 +1710,9 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
 
   const upcomingItems = useMemo(() => {
     const familyIds = profiles.filter((profile) => !profile.isAllFamilyProfile).map((profile) => profile.id);
-    const todos = todosForHome(chores, selectedProfiles, familyIds).map((todo) => ({
+    const picked = profiles.filter((profile) => !profile.isAllFamilyProfile && selectedProfiles.includes(profile.id));
+    const kidName = picked.length === 1 && (picked[0].role === "child" || picked[0].isChild) ? picked[0].name : null;
+    const todos = todosForHome(chores, selectedProfiles, familyIds).filter((todo) => mailVisibleToKid(todo, kidName)).map((todo) => ({
       id: todo.id,
       title: todo.title,
       startTime: currentDate,
@@ -1718,7 +1720,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
       profileIds: todo.profileIds,
       source: null,
     }));
-    const events = visibleEvents.map((event) => (
+    const events = visibleEvents.filter((event) => mailVisibleToKid(event, kidName)).map((event) => (
       event.source === "school" ? { ...event, kind: "newsletter" as const } : event
     ));
     return [...events, ...todos];
