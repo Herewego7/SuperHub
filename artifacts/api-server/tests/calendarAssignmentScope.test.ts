@@ -5,6 +5,7 @@ import {
   assignmentsToDeactivate,
   assignPeopleToCalendar,
   calendarIsWritable,
+  eventsOnWatchedCalendars,
 } from "../src/lib/calendarAssignmentScope.ts";
 
 // Two families, and a calendar both of them have connected — a school
@@ -105,6 +106,15 @@ test("an unwatched calendar is not a write target", () => {
   const assignments = [{ calendarId: "school", watched: false, isActive: true }];
   assert.equal(calendarIsWritable(assignments, "school"), false);
   assert.equal(calendarIsWritable(assignments, "family"), true);
+});
+
+test("an unwatched calendar stays off the plan", () => {
+  const events = [
+    { title: "Practice", googleCalendarId: "school", outlookCalendarId: null },
+    { title: "Dinner", googleCalendarId: null, outlookCalendarId: null },
+  ];
+  const kept = eventsOnWatchedCalendars(events, [{ calendarId: "school", watched: false, isActive: true }]);
+  assert.deepEqual(kept.map((event) => event.title), ["Dinner"]);
 });
 
 test("assigning two people to one calendar stores one calendar id", () => {

@@ -35,6 +35,22 @@ export function assignmentsVisibleToFamily<T extends ScopedAssignment>(
  * `profileId` is the first person, which is what the existing unique key uses.
  * `audienceProfileIds` is the full list.
  */
+export function eventsOnWatchedCalendars<T extends { googleCalendarId?: string | null; outlookCalendarId?: string | null }>(
+  events: T[],
+  assignments: { calendarId: string; watched?: boolean | null; isActive?: boolean | null }[],
+): T[] {
+  const off = new Set(
+    assignments
+      .filter((assignment) => assignment.isActive !== false && assignment.watched === false)
+      .map((assignment) => assignment.calendarId),
+  );
+  if (off.size === 0) return events;
+  return events.filter((event) => {
+    const id = event.googleCalendarId || event.outlookCalendarId;
+    return !id || !off.has(id);
+  });
+}
+
 export function calendarIsWritable(
   assignments: { calendarId: string; watched?: boolean | null; isActive?: boolean | null }[],
   calendarId: string,

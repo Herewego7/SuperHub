@@ -19,6 +19,8 @@ import { isKidProfile } from "./profileRole";
 import { DEFAULT_TIMEZONE } from "./timezone";
 import { driverIdsOf } from "./eventDrivers";
 import { expandRecurringEvents } from "./eventRecurrence";
+import { eventsOnWatchedCalendars } from "./calendarAssignmentScope";
+import { storage } from "../storage";
 import { loadProfiles } from "./profileRows";
 
 export interface DailyBriefItem {
@@ -112,7 +114,7 @@ export async function buildDailyBrief(
   const scopeToSelfOnly = !!profile && isKidProfile(profile);
 
   // ---- Events ----
-  const allEvents = expandRecurringEvents(
+  const allEvents = eventsOnWatchedCalendars(expandRecurringEvents(
     await db
       .select()
       .from(events)
@@ -126,7 +128,7 @@ export async function buildDailyBrief(
         ),
       ),
     now,
-  );
+  ), await storage.getCalendarAssignmentsByUser(userId));
   const todaysAllEvents = allEvents
     .filter((e) => localDate(e.startTime, tz) === today)
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
