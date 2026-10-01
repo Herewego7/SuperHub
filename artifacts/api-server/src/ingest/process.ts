@@ -32,6 +32,15 @@ export type PlannedEvent = {
   minutes: number;
 };
 
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+export function slipDayOffset(text: string, from: Date): number | null {
+  const match = text.toLowerCase().match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
+  if (!match) return null;
+  const target = WEEKDAYS.indexOf(match[1]);
+  return (target - from.getDay() + 7) % 7;
+}
+
 export function slipClock(text: string): { hours: number; minutes: number } | null {
   const match = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
   if (!match) return null;

@@ -25,7 +25,7 @@ import { geocodeCity } from "../lib/geocode";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, ingestMessages, muteSender } from "../ingest/process";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, ingestMessages, muteSender, slipDayOffset } from "../ingest/process";
 import { dinnerCalendarChange, dinnerEventInsert, dinnersToCopy } from "../meals/dinnerEvent";
 import { slipKey } from "../ingest/parse";
 import { moveClock } from "../scheduler/eveningPlan";
@@ -3300,7 +3300,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const events = [];
       for (const event of planned.events) {
         const start = new Date();
-        start.setDate(start.getDate() + 1);
+        const offset = slipDayOffset(`${event.title} ${event.description}`, start);
+        start.setDate(start.getDate() + (offset ?? 1));
         start.setHours(event.hours, event.minutes, 0, 0);
         const end = new Date(start.getTime() + 60 * 60 * 1000);
         events.push(await storage.createEvent({

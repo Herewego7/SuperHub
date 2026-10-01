@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, ingestMessages, muteSender, slipSender } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, ingestMessages, muteSender, slipDayOffset, slipSender } from "../src/ingest/process.ts";
 
 test("two copies of the same slip from two adults become one to-do", () => {
   const planned = ingestMessages(
@@ -48,6 +48,14 @@ test("a slip clock is the event time", () => {
   );
   assert.equal(planned.events[0]?.hours, 15);
   assert.equal(planned.events[0]?.minutes, 30);
+});
+
+test("a named weekday is the next time that day comes", () => {
+  const thursday = new Date(2026, 9, 1);
+  assert.equal(slipDayOffset("Thursday at 3:30 PM", thursday), 0);
+  assert.equal(slipDayOffset("Friday at 3:30 PM", thursday), 1);
+  assert.equal(slipDayOffset("Wednesday at 3:30 PM", thursday), 6);
+  assert.equal(slipDayOffset("at 3:30 PM", thursday), null);
 });
 
 test("not relevant drops the slip already on Home", () => {
