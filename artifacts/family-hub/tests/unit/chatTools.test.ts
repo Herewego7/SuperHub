@@ -78,7 +78,10 @@ test("mute and not-relevant name the sender and the slip", () => {
 });
 
 test("move names the event and the clock", () => {
+  const thursday = new Date(2026, 9, 1);
   assert.deepEqual(moveEventWhen("move Soccer to 4:30 pm"), { title: "Soccer", hours: 16, minutes: 30 });
+  assert.deepEqual(moveEventWhen("move Soccer to Friday", thursday), { title: "Soccer", on: new Date(2026, 9, 2) });
+  assert.deepEqual(moveEventWhen("move Soccer to October 8 at 4:30 pm", thursday), { title: "Soccer", hours: 16, minutes: 30, on: new Date(2026, 9, 8) });
   assert.equal(moveEventWhen("assign Buy milk to Liam"), null);
 });
 

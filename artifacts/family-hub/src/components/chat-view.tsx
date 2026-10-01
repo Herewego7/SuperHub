@@ -210,7 +210,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         const start = new Date(moved.startTime ?? Date.now());
         const end = moved.endTime ? new Date(moved.endTime) : new Date(start.getTime() + 60 * 60 * 1000);
         const duration = Math.max(end.getTime() - start.getTime(), 60 * 60 * 1000);
-        start.setHours(moving.hours, moving.minutes, 0, 0);
+        if (moving.on) start.setFullYear(moving.on.getFullYear(), moving.on.getMonth(), moving.on.getDate());
+        if (moving.hours != null && moving.minutes != null) start.setHours(moving.hours, moving.minutes, 0, 0);
         const finish = new Date(start.getTime() + duration);
         if (action === "confirm") {
           setPendingDeleteId(null);

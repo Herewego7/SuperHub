@@ -302,17 +302,42 @@ export function notRelevantTitle(text: string): string | null {
   return title || null;
 }
 
-export function moveEventWhen(text: string): { title: string; hours: number; minutes: number } | null {
-  const match = text.trim().match(/^move\s+(.+?)\s+to\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\.?$/i);
+export function moveEventWhen(text: string, from = new Date()): { title: string; hours?: number; minutes?: number; on?: Date } | null {
+  const match = text.trim().match(/^move\s+(.+?)\s+to\s+(.+?)\.?$/i);
   if (!match) return null;
   const title = match[1].trim();
-  let hours = Number(match[2]);
-  const minutes = match[3] ? Number(match[3]) : 0;
-  const suffix = match[4].toLowerCase();
-  if (!title || hours < 1 || hours > 12 || minutes > 59) return null;
-  if (suffix === "pm" && hours !== 12) hours += 12;
-  if (suffix === "am" && hours === 12) hours = 0;
-  return { title, hours, minutes };
+  const when = match[2].trim();
+  if (!title || !when) return null;
+  const clock = when.match(/^(.*?)(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i);
+  let hours: number | undefined;
+  let minutes: number | undefined;
+  let dayPart = when;
+  if (clock) {
+    let parsed = Number(clock[2]);
+    const parsedMinutes = clock[3] ? Number(clock[3]) : 0;
+    const suffix = clock[4].toLowerCase();
+    if (parsed >= 1 && parsed <= 12 && parsedMinutes <= 59) {
+      if (suffix === "pm" && parsed !== 12) parsed += 12;
+      if (suffix === "am" && parsed === 12) parsed = 0;
+      hours = parsed;
+      minutes = parsedMinutes;
+      dayPart = clock[1].replace(/\s+at\s*$/i, "").trim();
+    }
+  }
+  const on = moveDay(dayPart, from);
+  if (!on && hours == null) return null;
+  return { title, ...(hours != null ? { hours, minutes } : {}), ...(on ? { on } : {}) };
+}
+
+function moveDay(dayPart: string, from: Date): Date | undefined {
+  if (!dayPart) return undefined;
+  if (/^today$/i.test(dayPart)) return new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  if (/^tomorrow$/i.test(dayPart)) {
+    const on = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    on.setDate(on.getDate() + 1);
+    return on;
+  }
+  return eventOn(`event ${dayPart}`, from)?.on;
 }
 
 export function deleteEventTitle(text: string): string | null {
