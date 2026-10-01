@@ -221,6 +221,9 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     if (remembered) {
       next.push({ id: `${Date.now()}-s`, role: "assistant", text: remembered });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      return;
     }
     const fact = isChild ? null : schoolFact(text, profiles);
     if (fact && tools.includes("remember_fact")) {
@@ -236,21 +239,33 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     if (school) {
       next.push({ id: `${Date.now()}-h`, role: "assistant", text: school });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      return;
     }
     const family = tools.includes("get_profile") ? familyReply(text, profiles) : null;
     if (family) {
       next.push({ id: `${Date.now()}-f`, role: "assistant", text: family });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      return;
     }
     const place = tools.includes("maps_link") ? placeReply(text, talkEvents) : null;
     if (place) {
       next.push({ id: `${Date.now()}-o`, role: "assistant", text: place });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      return;
     }
     const driving = drivingReply(text, talkEvents, profiles);
     if (driving) {
       next.push({ id: `${Date.now()}-r`, role: "assistant", text: driving });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      return;
     }
     const planChores = talkChores.filter((chore) => {
       const people = chore.profileIds ?? [];
@@ -263,11 +278,17 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     if (plan) {
       next.push({ id: `${Date.now()}-p`, role: "assistant", text: plan });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      return;
     }
     const dinner = dinnerReply(text, meals, new Date());
     if (dinner) {
       next.push({ id: `${Date.now()}-d`, role: "assistant", text: dinner });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      return;
     }
     const removeTitle = deleteEventTitle(text);
     const target = removeTitle ? talkEvents.find((event) => event.title.toLowerCase() === removeTitle.toLowerCase()) : undefined;
@@ -275,10 +296,18 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       const action = deleteEventAction(target.source, target.id);
       if (action === "keep") {
         next.push({ id: `${Date.now()}-c`, role: "assistant", text: target.source === "meal" ? `${target.title} stays on the meal plan.` : `${target.title} stays on Google Calendar.` });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
       } else if (action === "confirm") {
         setPendingMove(null);
         setPendingDeleteId(target.id);
         next.push({ id: `${Date.now()}-c`, role: "assistant", text: `Delete ${target.title}? It came from outside the app. Reply yes to delete it.` });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
       } else {
         setPendingDeleteId(null);
         replyAfter(
@@ -289,7 +318,6 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         );
         return;
       }
-      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const moving = moveEventWhen(text);
     const moved = moving ? talkEvents.find((event) => event.title.toLowerCase() === moving.title.toLowerCase()) : undefined;
@@ -297,8 +325,16 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       const action = moveEventAction(moved.source, moved.id);
       if (action === "keep-meal") {
         next.push({ id: `${Date.now()}-m`, role: "assistant", text: `${moved.title} stays on the meal plan.` });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
       } else if (action === "keep-google") {
         next.push({ id: `${Date.now()}-m`, role: "assistant", text: `${moved.title} stays on Google Calendar.` });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
       } else {
         const start = new Date(moved.startTime ?? Date.now());
         const end = moved.endTime ? new Date(moved.endTime) : new Date(start.getTime() + 60 * 60 * 1000);
@@ -310,6 +346,10 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
           setPendingDeleteId(null);
           setPendingMove({ id: moved.id, start: start.toISOString(), end: finish.toISOString() });
           next.push({ id: `${Date.now()}-m`, role: "assistant", text: `Move ${moved.title}? It came from outside the app. Reply yes to move it.` });
+          localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+          setBubbles(next);
+          setDraft("");
+          return;
         } else {
           setPendingMove(null);
           replyAfter(
@@ -321,7 +361,6 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
           return;
         }
       }
-      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const createdTitle = createEventTitle(text);
     const created = createdTitle ? createEventClock(createdTitle) : null;
@@ -406,21 +445,33 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       }
       next.push({ id: `${Date.now()}-n`, role: "assistant", text: assigned.reply });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      return;
     }
     const sky = tools.includes("get_weather") ? weatherReply(text, weather ?? null) : null;
     if (sky) {
       next.push({ id: `${Date.now()}-w`, role: "assistant", text: sky });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      return;
     }
     const letters = tools.includes("get_newsletters") ? newsletterTitles(text, openTodos(chores, completions)) : null;
     if (letters) {
       next.push({ id: `${Date.now()}-l`, role: "assistant", text: letters.length ? letters.join("\n") : "No newsletters." });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      return;
     }
     const hits = tools.includes("search") ? searchHits(text, [...chores, ...watchedEvents]) : null;
     if (hits) {
       next.push({ id: `${Date.now()}-q`, role: "assistant", text: hits.length ? hits.join("\n") : "Nothing matches." });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      return;
     }
     const muted = tools.includes("mute_sender") ? muteAddress(text) : null;
     if (muted) {
