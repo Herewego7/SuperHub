@@ -205,9 +205,11 @@ export function placeReply(text: string, events: { title: string; location?: str
   const asked = text.trim().match(/^where(?:'s| is)\s+(.+?)\??$/i)?.[1]?.trim();
   if (!asked) return null;
   const event = events.find((item) => item.title.toLowerCase().includes(asked.toLowerCase()));
-  if (!event) return `I don't see ${asked}.`;
+  const link = (place: string) => `https://maps.apple.com/?q=${encodeURIComponent(place)}`;
+  if (!event) return link(asked);
   if (!event.location?.trim()) return `${event.title} doesn't have a place saved.`;
-  return `${event.title} is at ${event.location.trim()}.`;
+  const place = event.location.trim();
+  return `${event.title} is at ${place}. ${link(place)}`;
 }
 
 export function weatherReply(

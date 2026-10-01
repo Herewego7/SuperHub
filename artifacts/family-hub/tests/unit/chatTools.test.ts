@@ -34,7 +34,8 @@ test("who's in the family names each person", () => {
 });
 
 test("where is names the place already on the event", () => {
-  assert.equal(placeReply("where is Soccer?", [{ title: "Soccer", location: "Field 2" }]), "Soccer is at Field 2.");
+  assert.equal(placeReply("where is Soccer?", [{ title: "Soccer", location: "Field 2" }]), "Soccer is at Field 2. https://maps.apple.com/?q=Field%202");
+  assert.equal(placeReply("where is the park?", []), "https://maps.apple.com/?q=the%20park");
   assert.equal(placeReply("where is Soccer?", [{ title: "Soccer", location: "" }]), "Soccer doesn't have a place saved.");
   assert.equal(placeReply("hello", []), null);
 });
