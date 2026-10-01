@@ -191,6 +191,16 @@ export function drivingReply(
   return `${names.slice(0, -1).join(", ")} and ${last} are driving ${event.title}.`;
 }
 
+export function familyReply(
+  text: string,
+  profiles: { name: string; school?: string | null; isAllFamilyProfile?: boolean | null }[],
+): string | null {
+  if (!/^who(?:'s| is) (?:in|on) the family\??$/i.test(text.trim())) return null;
+  const people = profiles.filter((person) => person.name.trim() && !person.isAllFamilyProfile);
+  if (people.length === 0) return "Nobody is in the family yet.";
+  return people.map((person) => (person.school ? `${person.name}, ${person.school}` : person.name)).join("\n");
+}
+
 export function placeReply(text: string, events: { title: string; location?: string | null }[]): string | null {
   const asked = text.trim().match(/^where(?:'s| is)\s+(.+?)\??$/i)?.[1]?.trim();
   if (!asked) return null;
