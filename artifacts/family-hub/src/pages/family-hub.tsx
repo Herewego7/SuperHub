@@ -11,6 +11,7 @@ import { BOTTOM_NAV_IDS } from "@/lib/bottomNav";
 import { ChatView } from "@/components/chat-view";
 import { appendUserMessage, unreadCount } from "@/lib/chatThread";
 import { stageEveningPlan } from "@/components/chat-view";
+import { devicePersonIds, readDevicePerson, writeDevicePerson } from "@/lib/devicePerson";
 import { consumeTabDeepLinkFromUrl, onTabDeepLink, consumeCelebrationDeepLinkFromUrl, onCelebrationDeepLink } from "@/lib/pushDeepLink";
 import { ProfileCircle } from "@/components/profile-circle";
 import { SettingsModal } from "@/components/settings-modal";
@@ -846,14 +847,14 @@ export default function FamilyHub() {
   // Initialize selected profiles when profiles load (only once)
   useEffect(() => {
     if (profiles.length > 0 && !hasInitialized) {
-      const regularProfiles = profiles.filter(p => !p.isAllFamilyProfile);
-      setSelectedProfiles(regularProfiles.map(p => p.id));
+      setSelectedProfiles(devicePersonIds(readDevicePerson(), profiles));
       setHasInitialized(true);
     }
   }, [profiles, hasInitialized]);
 
   const handleProfileToggle = (profileId: string) => {
     // Select only this profile, deselect all others
+    writeDevicePerson(profileId);
     setSelectedProfiles([profileId]);
   };
 
@@ -864,11 +865,13 @@ export default function FamilyHub() {
     // already fully selected simply keeps everyone selected instead of
     // toggling off into that empty state.
     const regularProfiles = profiles.filter(p => !p.isAllFamilyProfile);
+    writeDevicePerson("all");
     setSelectedProfiles(regularProfiles.map(p => p.id));
   };
 
   const handleCustomGroupClick = (group: CustomProfileGroup) => {
     // Select only the profiles in this custom group
+    writeDevicePerson(group.profileIds.join(","));
     setSelectedProfiles(group.profileIds);
   };
 
