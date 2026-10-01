@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, choresForCount, dinnerName, earlierForHome, horizonEvents, openTodos, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, earlierForHome, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { openEmailHref, slipQuote, slipSender, suggestedSchool } from "@/lib/slipMail";
 
@@ -87,9 +87,9 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   end.setDate(end.getDate() + 1);
   const todayEvents = visibleForProfiles(events, selectedIds).filter((event) => {
     const at = new Date(event.startTime);
-    return at >= start && at < end;
+    return at >= start && at < end && mailVisibleToKid(event, kidName);
   });
-  const horizon = visibleForProfiles(horizonEvents(events, day), selectedIds);
+  const horizon = visibleForProfiles(horizonEvents(events, day), selectedIds).filter((event) => mailVisibleToKid(event, kidName));
   const dinner = dinnerName(meals, day);
   const earlier = earlierForHome(completions, selectedIds, familyIds, day);
 
