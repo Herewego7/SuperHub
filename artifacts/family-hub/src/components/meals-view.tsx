@@ -747,8 +747,14 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
             onCheckedChange={(checked) => {
               const on = !!checked;
               queryClient.setQueryData(["/api/calendar-settings"], (old: { mealsOnCalendar?: boolean } | undefined) => ({ ...old, mealsOnCalendar: on }));
-              void apiRequest("PATCH", "/api/calendar-settings/meals-on-calendar", { enabled: on }).then(() => {
+              void apiRequest("PATCH", "/api/calendar-settings/meals-on-calendar", { enabled: on }).then(async () => {
                 void queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+                if (!on) return;
+                await apiRequest("POST", "/api/calendar-settings/meals-on-calendar/copy", {
+                  start: weekStartIso,
+                  end: weekEndIso,
+                });
+                void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
               });
             }}
           />
