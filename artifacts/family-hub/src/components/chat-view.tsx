@@ -123,8 +123,12 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       onSent();
       return;
     }
+    const selectedIds = profileKey.split(",").filter((id) => id && id !== "family");
+    const kid = isChild ? profiles.find((profile) => selectedIds.includes(profile.id)) : undefined;
+    const talkEvents = visibleForProfiles(events, selectedIds).filter((event) => mailVisibleToKid(event, kid?.name ?? null));
+    const talkChores = chores.filter((item) => !kid || schoolEmailNames(item, kid.name));
     const title = checkOffTitle(text);
-    const titled = title ? chores.filter((item) => item.title.toLowerCase() === title.toLowerCase()) : [];
+    const titled = title ? talkChores.filter((item) => item.title.toLowerCase() === title.toLowerCase()) : [];
     const chore = titled.find((item) => item.taskType !== "todo") ?? titled[0];
     if (chore && tools.includes("complete_task") && pointsProfileId(chore.profileIds ?? [], profileKey)) {
       complete.mutate(chore);
@@ -138,19 +142,16 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       next.push({ id: `${Date.now()}-s`, role: "assistant", text: `Saved ${fact.name}'s school as ${fact.school}.` });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
-    const driving = drivingReply(text, events, profiles);
+    const driving = drivingReply(text, talkEvents, profiles);
     if (driving) {
       next.push({ id: `${Date.now()}-r`, role: "assistant", text: driving });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
-    const selectedIds = profileKey.split(",").filter((id) => id && id !== "family");
-    const kid = isChild ? profiles.find((profile) => selectedIds.includes(profile.id)) : undefined;
-    const planChores = chores.filter((chore) => {
+    const planChores = talkChores.filter((chore) => {
       const people = chore.profileIds ?? [];
-      const mine = selectedIds.length === 0 || people.length === 0 || people.some((id) => selectedIds.includes(id));
-      return mine && (!kid || schoolEmailNames(chore, kid.name));
+      return selectedIds.length === 0 || people.length === 0 || people.some((id) => selectedIds.includes(id));
     });
-    const planEvents = visibleForProfiles(events, selectedIds).filter((event) => mailVisibleToKid(event, kid?.name ?? null));
+    const planEvents = talkEvents;
     const plan = tools.includes("get_plan")
       ? dayReply(text, { chores: planChores, events: planEvents, completions, dinner: dinnerName(meals, new Date()), day: new Date() })
       : null;
@@ -164,14 +165,14 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const removeTitle = deleteEventTitle(text);
-    const target = removeTitle ? events.find((event) => event.title.toLowerCase() === removeTitle.toLowerCase()) : undefined;
+    const target = removeTitle ? talkEvents.find((event) => event.title.toLowerCase() === removeTitle.toLowerCase()) : undefined;
     if (target && tools.includes("delete_event") && importedEventNeedsConfirm(target.source)) {
       setPendingDeleteId(target.id);
       next.push({ id: `${Date.now()}-c`, role: "assistant", text: `Delete ${target.title}? It came from outside the app. Reply yes to delete it.` });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const moving = moveEventWhen(text);
-    const moved = moving ? events.find((event) => event.title.toLowerCase() === moving.title.toLowerCase()) : undefined;
+    const moved = moving ? talkEvents.find((event) => event.title.toLowerCase() === moving.title.toLowerCase()) : undefined;
     if (moved && moving && tools.includes("update_event")) {
       if (moved.id.startsWith("google-")) {
         next.push({ id: `${Date.now()}-m`, role: "assistant", text: `${moved.title} stays on Google Calendar.` });
@@ -233,7 +234,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       next.push({ id: `${Date.now()}-t`, role: "assistant", text: `Added ${todoTitle}.` });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
-    const assigned = tools.includes("assign") ? assignChange(text, chores, profiles) : null;
+    const assigned = tools.includes("assign") ? assignChange(text, talkChores, profiles) : null;
     if (assigned) {
       if ("choreId" in assigned) {
         void apiRequest("PATCH", `/api/chores/${assigned.choreId}`, { profileIds: assigned.profileIds });
