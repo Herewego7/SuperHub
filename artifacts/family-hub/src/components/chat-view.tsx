@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { checkOffTitle, createEventTitle, deleteEventTitle, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "@/lib/chatTools";
+import { checkOffTitle, createEventTitle, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "@/lib/chatTools";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, noteChatUnread, readThread, type ChatBubble } from "@/lib/chatThread";
@@ -53,7 +53,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       return res.json();
     },
   });
-  const { data: events = [] } = useQuery<{ id: string; title: string; source?: string | null }[]>({ queryKey: ["/api/events"] });
+  const { data: events = [] } = useQuery<{ id: string; title: string; source?: string | null; drivingProfileIds?: string[] | null }[]>({ queryKey: ["/api/events"] });
+  const { data: profiles = [] } = useQuery<{ id: string; name: string }[]>({ queryKey: ["/api/profiles"] });
   const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
   const { data: meals = [] } = useQuery<Meal[]>({
     queryKey: ["/api/meals", "chat-dinner"],
@@ -108,6 +109,11 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     if (chore && tools.includes("complete_task")) {
       complete.mutate(chore);
       next.push({ id: `${Date.now()}-a`, role: "assistant", text: `Checked off ${chore.title}.` });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    }
+    const driving = drivingReply(text, events, profiles);
+    if (driving) {
+      next.push({ id: `${Date.now()}-r`, role: "assistant", text: driving });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const dinner = dinnerReply(text, meals, new Date());

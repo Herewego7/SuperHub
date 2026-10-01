@@ -51,6 +51,24 @@ export function checkOffTitle(text: string): string | null {
   return title ? title : null;
 }
 
+export function drivingReply(
+  text: string,
+  events: { title: string; drivingProfileIds?: string[] | null }[],
+  profiles: { id: string; name: string }[],
+): string | null {
+  const asked = text.trim().match(/^who(?:'s| is) driving\s+(.+?)\??$/i)?.[1]?.trim();
+  if (!asked) return null;
+  const event = events.find((item) => item.title.toLowerCase().includes(asked.toLowerCase()));
+  if (!event) return `I don't see ${asked}.`;
+  const names = (event.drivingProfileIds ?? [])
+    .map((id) => profiles.find((profile) => profile.id === id)?.name)
+    .filter((name): name is string => !!name);
+  if (names.length === 0) return `Nobody is set to drive ${event.title}.`;
+  if (names.length === 1) return `${names[0]} is driving ${event.title}.`;
+  const last = names[names.length - 1];
+  return `${names.slice(0, -1).join(", ")} and ${last} are driving ${event.title}.`;
+}
+
 export function deleteEventTitle(text: string): string | null {
   const match = /^(?:please\s+)?(?:delete|remove|cancel)\s+(?:the\s+)?(?:event\s+)?["']?(.+?)["']?\.?$/i.exec(text.trim());
   const title = match?.[1]?.trim();

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkOffTitle, createEventTitle, deleteEventTitle, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "../../src/lib/chatTools";
+import { checkOffTitle, createEventTitle, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "../../src/lib/chatTools";
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
@@ -27,6 +27,16 @@ test("a check-off credits the person on screen", () => {
 test("check off names the chore", () => {
   assert.equal(checkOffTitle("check off dishes"), "dishes");
   assert.equal(checkOffTitle("Who is driving soccer?"), null);
+});
+
+test("who is driving names the person on that event", () => {
+  const reply = drivingReply(
+    "Who is driving soccer?",
+    [{ title: "Soccer", drivingProfileIds: ["chad"] }],
+    [{ id: "chad", name: "Chad" }],
+  );
+  assert.equal(reply, "Chad is driving Soccer.");
+  assert.equal(drivingReply("Who is driving piano?", [], []), "I don't see piano.");
 });
 
 test("deleting an imported event asks first", () => {
