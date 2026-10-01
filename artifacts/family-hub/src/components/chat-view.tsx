@@ -78,7 +78,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     queryFn: async () => {
       const start = new Date();
       const end = new Date();
-      end.setDate(start.getDate() + 1);
+      end.setDate(start.getDate() + 30);
       const key = (day: Date) => `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
       const res = await apiRequest("GET", `/api/meals?start=${key(start)}&end=${key(end)}`);
       return res.json();
