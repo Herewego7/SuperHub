@@ -96,8 +96,9 @@ test("a moved event names the old time", () => {
 });
 
 test("the plan link opens chat with the dinner line", () => {
-  const path = planOpenPath("Feed the dog\nDinner. Tacos");
+  const path = planOpenPath("Feed the dog\nDinner. Tacos", "liam");
   const params = new URLSearchParams(path.slice(path.indexOf("?")));
   assert.equal(params.get("openTab"), "chat");
+  assert.equal(params.get("openProfile"), "liam");
   assert.equal(params.get("openPlan")?.includes("Dinner. Tacos"), true);
 });

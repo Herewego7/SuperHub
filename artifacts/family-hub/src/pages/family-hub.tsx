@@ -397,6 +397,10 @@ export default function FamilyHub() {
   const VALID_DEEP_LINK_TABS: TabType[] = ["home", "calendar", "chores", "todos", "meals", "behaviour", "chat"];
   const VALID_DEEP_LINK_SUBTABS: ChoresSubTabType[] = ["chores", "rewards", "trophies", "bonus"];
   const handleTabDeepLink = (link: { tab: string; subTab?: string; action?: string; profileId?: string; plan?: string; reply?: string }) => {
+    if (link.plan && link.profileId) {
+      writeDevicePerson(link.profileId);
+      setSelectedProfiles([link.profileId]);
+    }
     if (link.plan) {
       stageEveningPlan(link.plan, link.reply);
       setChatRevision((n) => n + 1);

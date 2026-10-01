@@ -98,8 +98,9 @@ export function planTitle(isChild: boolean, timing: string | null | undefined): 
   return today ? "Today's plan" : "Tomorrow's plan";
 }
 
-export function planOpenPath(body: string): string {
-  return `/?openTab=chat&openPlan=${encodeURIComponent(body)}`;
+export function planOpenPath(body: string, profileId?: string): string {
+  const person = profileId ? `&openProfile=${encodeURIComponent(profileId)}` : "";
+  return `/?openTab=chat&openPlan=${encodeURIComponent(body)}${person}`;
 }
 
 const CATCH_UP_MINUTES = 30;
@@ -153,7 +154,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
         {
           title: planTitle(isChild, profile.eveningPlanTiming),
           body,
-          url: planOpenPath(body),
+          url: planOpenPath(body, profile.id),
           tag: `evening-plan-${profile.id}`,
           data: { kind: "evening-plan", profileId: profile.id, body },
         },
