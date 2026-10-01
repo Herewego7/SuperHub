@@ -1,0 +1,85 @@
+kind = "web"
+previewPath = "/"
+title = "Family Hub"
+version = "1.0.0"
+id = "artifacts/family-hub"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23890
+
+[services.development]
+run = "pnpm --filter @workspace/family-hub run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/family-hub", "run", "build" ]
+publicDir = "artifacts/family-hub/dist/public"
+serve = "static"
+
+# ⚠️ Every app route is listed EXPLICITLY, and the catch-all is the marketing
+# page — not the other way round.
+#
+# The obvious arrangement (catch-all to the app, one exact rule for "/") was
+# tried twice and did not work: this router applies "/*" to the bare root as
+# well, so "/" kept resolving to the app no matter what the exact rule said.
+# Inverting it removes the dependency on how the two rules are ordered —
+# "/" reaches the marketing page whether it matches the catch-all or falls
+# through to index.html.
+#
+# The cost is that a NEW top-level app route has to be added here too, or it
+# will serve the marketing page instead. The list is App.tsx's RootRouter,
+# and it is short and stable.
+[[services.production.rewrites]]
+from = "/app"
+to = "/app.html"
+
+[[services.production.rewrites]]
+from = "/app/*"
+to = "/app.html"
+
+[[services.production.rewrites]]
+from = "/family-hub"
+to = "/app.html"
+
+[[services.production.rewrites]]
+from = "/privacy"
+to = "/app.html"
+
+[[services.production.rewrites]]
+from = "/terms"
+to = "/app.html"
+
+[[services.production.rewrites]]
+from = "/support"
+to = "/app.html"
+
+[[services.production.rewrites]]
+from = "/help"
+to = "/app.html"
+
+[[services.production.rewrites]]
+from = "/reset-password"
+to = "/app.html"
+
+[[services.production.rewrites]]
+from = "/join"
+to = "/app.html"
+
+[[services.production.rewrites]]
+from = "/share/*"
+to = "/app.html"
+
+# Anything else — including "/" — is the marketing site.
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23890"
+BASE_PATH = "/"

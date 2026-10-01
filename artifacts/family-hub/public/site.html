@@ -1,0 +1,1040 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="One shared place for your family's calendar, chores, meals and the birthdays you can't forget — so it isn't all living in one person's memory.">
+<title>Family Hub+ — Get it out of your head and into one shared place</title>
+<link rel="canonical" href="https://hubforfamilies.com/">
+<meta name="theme-color" content="#f5f0e8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1614" media="(prefers-color-scheme: dark)">
+
+<!-- Social cards. og-image.png should be 1200×630 and show a real device shot. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Family Hub+">
+<meta property="og:url" content="https://hubforfamilies.com/">
+<meta property="og:title" content="Family Hub+ — Get it out of your head and into one shared place">
+<meta property="og:description" content="One shared place for the calendar, the chores, the meals and the birthdays you can't forget.">
+<meta property="og:image" content="https://hubforfamilies.com/opengraph.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Family Hub+ shown on an iPhone: today's events, chores and dinner in one view.">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/favicon-64.png" type="image/png" sizes="64x64">
+<link rel="icon" href="/favicon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Family Hub+",
+  "applicationCategory": "LifestyleApplication",
+  "operatingSystem": "iOS 16.0 or later",
+  "url": "https://hubforfamilies.com/",
+  "description": "One shared place for a family's calendar, chores, meals and celebrations.",
+  "offers": {
+    "@type": "Offer",
+    "description": "Free for 14 days."
+  }
+}
+</script>
+<style>
+  img{max-width:100%}
+
+  /* ─────────────────────────────────────────────────────────────────────
+     Tokens. Taken from the app's own .hearth-theme (index.css) rather than
+     invented, so the site and the product read as one thing. The six
+     --member-* values are the real per-person colours the app assigns to
+     each family member — they're the site's recurring visual system too.
+     ───────────────────────────────────────────────────────────────────── */
+  :root{
+    --paper:#f5f0e8;          /* hsl(40 33% 95%) */
+    --paper-2:#fbf7ef;        /* hsl(40 50% 97%) — card */
+    --paper-3:#efe9dd;
+    --ink:#2a2523;            /* hsl(30 9% 15%) */
+    --ink-2:#6b645e;          /* hsl(30 5% 40%) */
+    --ink-3:#746c66;          /* darkened from #9a918a (2.7:1, failed AA) → 4.5:1 */
+    --rule:#e4dccd;           /* hsl(38 28% 88%) */
+    --rule-2:#d3c8b4;
+
+    --slate:#5e8fad;          /* --member-1 */
+    --terra:#c97b5f;          /* --member-2 */
+    --ochre:#d4a24a;          /* --member-3 */
+    --steel:#8fa4b8;          /* --member-4 */
+    --rose:#b47b8e;           /* --member-5 */
+    --lilac:#9c8aae;          /* --member-6 */
+
+    /* Tinted fills for each member colour. These were hard-coded hex values
+       before, which meant they never flipped for dark mode and produced
+       light-text-on-light-fill. Tokenised so both themes stay legible. */
+    --tint-slate:#e6eef4;
+    --tint-terra:#f4e3dd;
+    --tint-ochre:#f7ecd9;
+    --tint-rose:#f2e2e7;
+    --on-ochre:#a97c2d;       /* ochre is too light for text on paper */
+
+    --shadow:0 1px 2px rgba(42,37,35,.05), 0 8px 24px -12px rgba(42,37,35,.18);
+    --shadow-lift:0 2px 4px rgba(42,37,35,.06), 0 24px 48px -20px rgba(42,37,35,.28);
+    --r:14px;                 /* --radius: 0.875rem */
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#1a1614;        /* hsl(30 15% 9%) */
+      --paper-2:#241f1c;      /* hsl(30 12% 13%) */
+      --paper-3:#2e2825;
+      --ink:#e6ded1;          /* hsl(40 18% 88%) */
+      --ink-2:#a89d90;
+      --ink-3:#8a8076;
+      --rule:#38302b;
+      --rule-2:#4a4038;
+      --slate:#7fa9c4;
+      --terra:#dd9077;
+      --ochre:#e0b464;
+      --steel:#a6b8c9;
+      --rose:#c895a6;
+      --lilac:#b3a3c2;
+      --tint-slate:#26333c;
+      --tint-terra:#3a2a24;
+      --tint-ochre:#3a3020;
+      --tint-rose:#37272d;
+      --on-ochre:#e0b464;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+      --shadow-lift:0 2px 4px rgba(0,0,0,.5), 0 24px 48px -20px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#1a1614; --paper-2:#241f1c; --paper-3:#2e2825;
+    --ink:#e6ded1; --ink-2:#a89d90; --ink-3:#8a8076;
+    --rule:#38302b; --rule-2:#4a4038;
+    --slate:#7fa9c4; --terra:#dd9077; --ochre:#e0b464;
+    --steel:#a6b8c9; --rose:#c895a6; --lilac:#b3a3c2;
+    --tint-slate:#26333c; --tint-terra:#3a2a24; --tint-ochre:#3a3020; --tint-rose:#37272d;
+    --on-ochre:#e0b464;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    --shadow-lift:0 2px 4px rgba(0,0,0,.5), 0 24px 48px -20px rgba(0,0,0,.7);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Plus Jakarta Sans",system-ui,-apple-system,sans-serif;
+    font-size:17px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.display{
+    font-family:Fraunces,Georgia,"Times New Roman",serif;
+    font-weight:600; letter-spacing:-.015em; text-wrap:balance; margin:0;
+  }
+  p{margin:0}
+  a{color:inherit}
+  .wrap{max-width:1120px; margin:0 auto; padding:0 24px}
+  .lede{max-width:60ch}
+
+  /* The family spectrum — the site's signature. Six stripes, one per
+     member colour, in the app's own order. Recurs as a rule, as section
+     eyebrows, and as each feature section's own accent. */
+  .spectrum{display:flex; height:4px; border-radius:99px; overflow:hidden; width:100%}
+  .spectrum i{flex:1}
+  .spectrum i:nth-child(1){background:var(--slate)}
+  .spectrum i:nth-child(2){background:var(--terra)}
+  .spectrum i:nth-child(3){background:var(--ochre)}
+  .spectrum i:nth-child(4){background:var(--steel)}
+  .spectrum i:nth-child(5){background:var(--rose)}
+  .spectrum i:nth-child(6){background:var(--lilac)}
+
+  /* ── Header ─────────────────────────────────────────────────────────── */
+  .skip{
+    position:absolute; left:12px; top:-60px; z-index:60; background:var(--ink); color:var(--paper);
+    padding:11px 18px; border-radius:10px; text-decoration:none; font-weight:600; font-size:15px;
+    transition:top .12s ease;
+  }
+  .skip:focus{top:12px}
+
+  header.site{
+    position:sticky; top:0; z-index:20;
+    background:var(--paper);                 /* fallback where color-mix is unsupported */
+    border-bottom:1px solid var(--rule);
+  }
+  @supports (backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px)){
+    header.site{
+      background:color-mix(in srgb, var(--paper) 88%, transparent);
+      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+    }
+  }
+  .bar{display:flex; align-items:center; gap:20px; padding:14px 0}
+  .mark{display:flex; align-items:center; gap:10px; font-family:Fraunces,Georgia,serif;
+        font-weight:700; font-size:19px; letter-spacing:-.02em; text-decoration:none}
+  .mark .dots{display:grid; grid-template-columns:repeat(2,7px); gap:3px}
+  .mark .dots span{width:7px; height:7px; border-radius:50%}
+  /* One flex child, so the + stays tight against "Hub" instead of being
+     pushed 10px away by the mark's own gap. */
+  .mark .wordmark{white-space:nowrap}
+  /* Previously display:none below 880px, which hid the Privacy anchor from
+     every phone visitor. Now it drops to a quiet scrollable row instead. */
+  nav.links{display:flex; gap:26px; margin-left:14px}
+  nav.links a{text-decoration:none; color:var(--ink-2); font-size:15px; font-weight:500; white-space:nowrap}
+  nav.links a:hover{color:var(--ink)}
+  @media(max-width:879px){
+    nav.links{
+      order:3; width:100%; margin:0 -24px; gap:20px; padding:2px 24px 12px;
+      overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+      font-size:14.5px;
+      /* Fades out at the right edge, so it is obvious the row continues —
+         without a label saying so. */
+      -webkit-mask-image:linear-gradient(to right, #000 82%, transparent 100%);
+      mask-image:linear-gradient(to right, #000 82%, transparent 100%);
+    }
+    nav.links::-webkit-scrollbar{display:none}
+    /* The wordmark and the two buttons share one row; the links get their
+       own. Before this the buttons wrapped onto a line of their own and sat
+       stranded in the middle of it. */
+    .bar{flex-wrap:wrap; row-gap:0; padding:14px 0 0; gap:10px}
+    .wrap.bar{padding-bottom:0}
+  }
+  .bar .right{display:flex; align-items:center; gap:14px}
+  /* Only push the buttons right where there is room for them beside the
+     wordmark; below that they share the row and the auto margin would force
+     a wrap. */
+  @media(min-width:880px){ .bar .right{margin-left:auto} }
+  .signin{
+    text-decoration:none; font-size:15px; font-weight:600; color:var(--ink);
+    padding:9px 14px; border-radius:10px; border:1px solid var(--rule-2);
+    background:var(--paper-2); white-space:nowrap;
+  }
+  .signin:hover{border-color:var(--ink-3)}
+
+  /* App Store badge — hand-built; the CSP blocks Apple's own asset host. */
+  .appstore{
+    display:inline-flex; align-items:center; gap:10px; text-decoration:none;
+    background:var(--ink); color:var(--paper); padding:9px 16px 9px 14px;
+    border-radius:11px; white-space:nowrap;
+  }
+  .appstore svg{width:20px; height:20px; fill:currentColor; flex:none}
+  .appstore .t{display:flex; flex-direction:column; line-height:1.15}
+  .appstore .t small{font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; opacity:.75}
+  .appstore .t strong{font-size:14.5px; font-weight:600; letter-spacing:-.01em}
+  .appstore:hover{opacity:.9}
+  .appstore.lg{padding:13px 22px 13px 18px}
+  .appstore.lg svg{width:25px; height:25px}
+  .appstore.lg .t strong{font-size:17px}
+
+  /* ── Hero ───────────────────────────────────────────────────────────── */
+  .hero{padding:64px 0 24px}
+  .hero-grid{display:grid; gap:48px; align-items:center}
+  @media(min-width:960px){.hero-grid{grid-template-columns:1.05fr .95fr; gap:64px}}
+  .eyebrow{
+    font-size:12.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--terra); display:flex; align-items:center; gap:10px; margin-bottom:20px;
+  }
+  .eyebrow::before{content:""; width:26px; height:3px; border-radius:99px; background:currentColor}
+  .hero h1{font-size:clamp(40px,6.2vw,62px); line-height:1.04; margin-bottom:22px}
+  .hero h1 .hl{color:var(--terra)}
+  .hero p.lede{font-size:19px; color:var(--ink-2); margin-bottom:32px}
+  .cta-row{display:flex; flex-wrap:wrap; align-items:center; gap:16px}
+  .cta-note{font-size:14px; color:var(--ink-3); max-width:34ch}
+  .hero-proof{
+    display:flex; flex-wrap:wrap; gap:8px 22px; margin-top:36px; padding-top:26px;
+    border-top:1px solid var(--rule); font-size:14.5px; color:var(--ink-2);
+  }
+  .hero-proof b{color:var(--ink); font-weight:600}
+
+  /* ── Device frame + in-page app mock ────────────────────────────────── */
+  .phone{
+    background:var(--ink); border-radius:38px; padding:9px; box-shadow:var(--shadow-lift);
+    max-width:330px; width:100%;
+  }
+  .phone .screen{background:var(--paper); border-radius:30px; overflow:hidden}
+  .phone.tilt{transform:rotate(-1.4deg)}
+  .phone-stack{display:flex; justify-content:center}
+  @media(min-width:960px){.phone-stack{justify-content:flex-end}}
+
+  /* Simplified stand-ins for real screenshots, drawn in the app's own
+     colours. Swap each .screen's contents for a real capture — the frame,
+     sizing and shadow stay as-is. */
+  .shot-note{
+    margin-top:12px; font-size:12px; color:var(--ink-3); text-align:center;
+    font-weight:500; letter-spacing:.02em;
+  }
+  .app-top{padding:14px 14px 10px; background:var(--paper-3); border-bottom:1px solid var(--rule)}
+  .avatars{display:flex; gap:7px; margin-bottom:12px}
+  .av{width:30px; height:30px; border-radius:50%; display:grid; place-items:center;
+      color:#fff; font-size:11.5px; font-weight:700; flex:none}
+  .av.on{box-shadow:0 0 0 2px var(--paper), 0 0 0 4px currentColor}
+  .app-date{display:flex; align-items:center; justify-content:center; gap:10px;
+            font-size:12.5px; font-weight:600; color:var(--ink-2)}
+  .app-body{padding:12px}
+  .mini-card{
+    background:var(--paper-2); border:1px solid var(--rule); border-radius:12px;
+    overflow:hidden; margin-bottom:10px;
+  }
+  .mini-head{padding:9px 11px; font-size:12.5px; font-weight:700; display:flex;
+             align-items:center; gap:7px; border-bottom:1px solid var(--rule)}
+  .mini-rows{padding:8px 11px; display:flex; flex-direction:column; gap:8px}
+  .mini-row{display:flex; align-items:center; gap:9px; font-size:12.5px; color:var(--ink-2)}
+  .tick{width:15px; height:15px; border-radius:50%; border:1.5px solid var(--rule-2); flex:none}
+  .tick.done{background:#5c9a6f; border-color:#5c9a6f; position:relative}
+  .tick.done::after{content:""; position:absolute; left:4.5px; top:1.5px; width:4px; height:8px;
+    border:solid #fff; border-width:0 1.6px 1.6px 0; transform:rotate(42deg)}
+  .mini-row .who{width:6px; height:6px; border-radius:50%; flex:none}
+  .strike{text-decoration:line-through; color:var(--ink-3)}
+  .star{margin-left:auto; font-size:11px; font-weight:700; color:var(--ochre); flex:none}
+  .evt{display:flex; gap:8px; align-items:flex-start; font-size:12.5px}
+  .evt .time{color:var(--ink-3); font-size:11.5px; width:52px; flex:none; padding-top:1px;
+             font-variant-numeric:tabular-nums}
+  .evt .bar{width:3px; border-radius:99px; align-self:stretch; flex:none}
+
+
+  /* ── Screenshot carousels ───────────────────────────────────────────────
+     Real captures, one device per slide. A plain scroll-snap strip: no
+     library, no JS, and it degrades to "a row you can scroll" anywhere the
+     snapping isn't supported. Each slide carries its own caption so the
+     label always matches the picture actually on screen — a single caption
+     under a scrolling strip goes stale the moment someone swipes. */
+  /* min-width:0 on the grid child, or a scrolling strip refuses to shrink
+     below its content and pushes the whole PAGE sideways instead. */
+  .split > *{min-width:0}
+  .shots{display:flex; flex-direction:column; align-items:center; gap:14px;
+         width:100%; max-width:100%}
+  .strip{
+    display:flex; gap:26px; align-items:flex-start;
+    overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch;
+    scrollbar-width:none; padding:4px 2px 6px; width:100%; max-width:100%;
+  }
+  .strip::-webkit-scrollbar{display:none}
+  /* A grid whose single column is the frame's own width. As a flex column
+     the caption's max-width set the slide width instead, which made every
+     slide 300px wide on a phone — so the next one began exactly at the edge
+     of the strip and nothing of it showed, and the row looked like a single
+     picture rather than something you could swipe. */
+  .slide{
+    flex:0 0 auto; scroll-snap-align:center; margin:0;
+    display:grid; grid-template-columns:min-content; justify-items:center; gap:12px;
+  }
+  /* Every frame is sized by HEIGHT, so an iPad and an iPhone stand the same
+     height in the row whatever the viewport is doing — sizing by width made
+     the tablet shorter than the phone beside it, which read as an
+     afterthought rather than a second device. */
+  :root{--shot-h:520px}
+  /* Same bezel on both, or the tablet stands 2px taller than the phone for
+     no reason anyone could name. */
+  .slide .phone, .slide .tablet{width:auto; max-width:none; padding:9px}
+  .slide .screen img{height:var(--shot-h); width:auto; max-width:none}
+  /* The caption sits under its own frame and matches its width, so it reads
+     as centred ON the image rather than centred in the section. */
+  /* The caption belongs to the frame above it, so it is centred on that
+     frame and wraps within it rather than spanning the whole column. */
+  .slide figcaption{
+    font-size:13px; line-height:1.45; color:var(--ink-2); text-align:center;
+    width:100%; margin:0 auto; font-weight:500;
+    /* Splits the line evenly instead of leaving two words stranded on the
+       second row, which is what a caption under a picture does wrong most
+       often. Ignored by browsers that don't know it — they just wrap. */
+    text-wrap:balance;
+  }
+  .slide figcaption b{color:var(--ink); font-weight:600; display:block; font-size:13.5px}
+  .slide .phone, .slide .tablet{margin:0 auto}
+  /* Sizing lives on the slide rule below, which comes EARLIER in this sheet
+     — so this one only sets display, or it would win on source order and the
+     frames would go back to being sized by width. */
+  .phone .screen img, .tablet .screen img{display:block}
+  .single-shot .screen img{width:100%; height:auto}
+  .tablet{
+    background:var(--ink); border-radius:26px; padding:10px; box-shadow:var(--shadow-lift);
+    width:min(460px, 78vw);
+  }
+  .tablet .screen{background:var(--paper); border-radius:18px; overflow:hidden}
+  @media(max-width:1100px){ :root{--shot-h:460px} }
+  @media(max-width:720px){
+    :root{--shot-h:400px}
+    /* Closer together on a small screen, so the edge of the next slide is
+       plainly visible and the row reads as scrollable without being told. */
+    .strip{gap:14px; scroll-padding-inline:2px}
+  }
+  @media(max-width:420px){ :root{--shot-h:330px} .strip{gap:12px} }
+
+  /* Anchor links land just above a section's heading instead of under the
+     sticky header, which was hiding the title of the section you'd just
+     asked for. */
+  section[id]{scroll-margin-top:96px}
+  @media(max-width:879px){ section[id]{scroll-margin-top:132px} }
+
+  /* The hero shot and the one remaining single-frame section use the same
+     centring rule as a carousel slide: caption under the frame, at the
+     frame's width. */
+  .single-shot{display:flex; flex-direction:column; align-items:center; gap:12px}
+  .single-shot .shot-note{margin-top:0; max-width:34ch}
+
+  /* ── Section scaffolding ────────────────────────────────────────────── */
+  section{padding:84px 0}
+  .sec-head{max-width:62ch; margin-bottom:44px}
+  .sec-head h2{font-size:clamp(34px,4.6vw,50px); line-height:1.1; margin-bottom:16px}
+  .sec-head p{color:var(--ink-2); font-size:17.5px}
+  .split{display:grid; gap:44px; align-items:center}
+  @media(min-width:940px){
+    .split{grid-template-columns:1fr 1fr; gap:68px}
+    .split.flip .art{order:-1}
+  }
+
+  /* Each feature section owns one member colour — the spectrum, unpacked. */
+  .s-cal{--accent:var(--slate)}
+  .s-chores{--accent:var(--ochre)}
+  .s-meals{--accent:var(--terra)}
+  .s-keep{--accent:var(--rose)}
+  .accent-eyebrow{
+    font-size:12.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--accent); display:flex; align-items:center; gap:10px; margin-bottom:18px;
+  }
+  .accent-eyebrow::before{content:""; width:26px; height:3px; border-radius:99px; background:currentColor}
+
+  /* ── The kitchen wall (2026-09-30) ─────────────────────────────────────
+     The use case the owner most wants seen: an iPad mounted where the whole
+     family walks past it. Drawn to REAL scale (8.33px per cm in the SVG): a
+     13-inch iPad is 21.5 x 28 cm, hung with its centre at 130 cm, a little above the switch,
+     beside a standard 7 x 11 cm light switch. The first version drew it the
+     size of a television. The screenshot is an <image> inside the SVG so it
+     crops with the room on narrow screens. Fixed colours in both themes — it
+     is a picture of a kitchen. */
+  .s-wall{--accent:var(--lilac)}
+  .s-wall .wall-head{max-width:720px; margin-bottom:34px}
+  .kitchen{position:relative; width:100%; aspect-ratio:16/9; border-radius:22px; overflow:hidden;
+    box-shadow:var(--shadow-lift); background:#e9e4dc}
+  .kitchen svg{position:absolute; inset:0; width:100%; height:100%; display:block}
+  @media(max-width:720px){ .kitchen{aspect-ratio:1/1} }
+  .wall-points{list-style:none; padding:0; margin:22px 0 0; display:grid; gap:12px}
+  .wall-points li{display:flex; gap:12px; align-items:flex-start; color:var(--ink-2); line-height:1.5}
+  .wall-points li::before{content:""; flex:none; width:8px; height:8px; margin-top:.55em; border-radius:99px; background:var(--accent)}
+  .wall-points b{color:var(--ink); font-weight:600}
+
+  /* ── Swipe cues for the screenshot strips (2026-09-30) ──────────────────
+     Nothing said a strip scrolled — on a laptop there is no swipe, and the
+     scrollbar is hidden. Round arrow buttons sit over each edge (only when
+     there is more that way) and a row of dots underneath shows how many
+     screenshots there are and which one is in view. Added by the script at
+     the end of the page, so a strip that fits has no controls at all. */
+  .shots{position:relative}
+  .strip-btn{position:absolute; top:calc(var(--shot-h, 520px) / 2 - 22px); z-index:2;
+    width:44px; height:44px; border-radius:50%; border:1px solid var(--rule-2);
+    background:var(--paper-2); color:var(--ink); box-shadow:0 6px 18px -8px rgba(40,28,20,.45);
+    display:grid; place-items:center; cursor:pointer; transition:opacity .2s, transform .2s}
+  .strip-btn:hover{transform:scale(1.06)}
+  .strip-btn:focus-visible{outline:2px solid var(--accent, var(--terra)); outline-offset:2px}
+  .strip-btn[hidden]{display:none}
+  .strip-btn.prev{left:-6px} .strip-btn.next{right:-6px}
+  .strip-btn svg{width:20px; height:20px}
+  .strip-dots{display:flex; gap:8px; justify-content:center}
+  .strip-dots button{width:8px; height:8px; padding:0; border:0; border-radius:99px;
+    background:var(--rule-2); cursor:pointer; transition:width .2s, background .2s}
+  .strip-dots button[aria-current="true"]{width:22px; background:var(--accent, var(--ink-2))}
+  @media(max-width:720px){ .strip-btn{width:38px; height:38px} .strip-btn.prev{left:0} .strip-btn.next{right:0} }
+  .band{background:var(--paper-2); border-top:1px solid var(--rule); border-bottom:1px solid var(--rule)}
+
+  .points{list-style:none; padding:0; margin:26px 0 0; display:flex; flex-direction:column; gap:15px}
+  .points li{display:flex; gap:13px; font-size:16px; color:var(--ink-2); line-height:1.5}
+  .points b{color:var(--ink); font-weight:600}
+  .points .pip{
+    width:9px; height:9px; border-radius:50%; background:var(--accent);
+    flex:none; margin-top:8px;
+  }
+
+  /* ── Everything-else grid ───────────────────────────────────────────── */
+  .grid-3{display:grid; gap:2px; background:var(--rule); border:1px solid var(--rule);
+          border-radius:var(--r); overflow:hidden}
+  @media(min-width:720px){.grid-3{grid-template-columns:repeat(2,1fr)}}
+  @media(min-width:1000px){.grid-3{grid-template-columns:repeat(3,1fr)}}
+  .cell{background:var(--paper); padding:26px 24px}
+  .cell h3{font-size:18px; margin-bottom:8px; display:flex; align-items:center; gap:9px}
+  .cell h3 .dot{width:8px; height:8px; border-radius:50%; flex:none}
+  .cell p{font-size:15px; color:var(--ink-2)}
+
+  /* ── Setup steps. Numbered because this genuinely is a sequence. ────── */
+  .s-setup{--accent:var(--steel)}
+  .steps{list-style:none; margin:0; padding:0; display:grid; gap:26px}
+  @media(min-width:860px){.steps{grid-template-columns:repeat(3,1fr); gap:40px}}
+  .steps li{display:flex; gap:16px; align-items:flex-start}
+  .step-n{
+    flex:none; width:32px; height:32px; border-radius:50%; display:grid; place-items:center;
+    font-family:Fraunces,Georgia,serif; font-weight:700; font-size:15px;
+    background:var(--paper); border:1px solid var(--rule-2); color:var(--ink);
+  }
+  .steps h3{font-size:17.5px; margin-bottom:6px}
+  .steps p{font-size:15.5px; color:var(--ink-2)}
+
+  /* ── Trust / privacy ────────────────────────────────────────────────── */
+  .trust{display:grid; gap:32px}
+  @media(min-width:860px){.trust{grid-template-columns:1fr 1fr}}
+  .trust-card{
+    background:var(--paper-2); border:1px solid var(--rule); border-radius:var(--r);
+    padding:30px 28px;
+  }
+  .trust-card h3{font-size:20px; margin-bottom:10px}
+  .trust-card p{color:var(--ink-2); font-size:16px}
+
+  /* ── Closing CTA ────────────────────────────────────────────────────── */
+  .close{text-align:center; padding:96px 0 84px}
+  .close h2{font-size:clamp(30px,4.4vw,46px); line-height:1.1; margin-bottom:18px}
+  .close p{color:var(--ink-2); font-size:18px; max-width:52ch; margin:0 auto 32px}
+  .close .cta-row{justify-content:center}
+  .close .spectrum{max-width:220px; margin:0 auto 30px}
+  .reassure{
+    list-style:none; padding:0; margin:0 auto 32px; display:flex; flex-wrap:wrap;
+    justify-content:center; gap:10px 26px; font-size:15px; color:var(--ink-2); max-width:52ch;
+  }
+  .reassure li{display:flex; align-items:center; gap:8px}
+  .reassure li::before{
+    content:""; width:6px; height:6px; border-radius:50%; background:var(--terra); flex:none;
+  }
+
+  footer.site{border-top:1px solid var(--rule); padding:36px 0 56px; font-size:14.5px; color:var(--ink-2)}
+  .foot{display:flex; flex-wrap:wrap; gap:18px 30px; align-items:center}
+  .foot a{text-decoration:none}
+  .foot a:hover{text-decoration:underline}
+  .foot-2{margin-top:20px; padding-top:20px; border-top:1px solid var(--rule); font-size:13.5px}
+  .foot .copy{margin-left:auto; color:var(--ink-3); font-size:13.5px}
+
+  /* Editorial pull-quote — the one place the serif goes big. */
+  .quote{padding:84px 0}
+  .quote blockquote{
+    margin:0; font-family:Fraunces,Georgia,serif; font-weight:400; font-style:italic;
+    font-size:clamp(23px,3.2vw,33px); line-height:1.35; color:var(--ink);
+    max-width:24ch; text-wrap:balance;
+  }
+  .quote .who{margin-top:18px; font-size:14.5px; color:var(--ink-3); font-style:normal}
+  .quote-grid{display:grid; gap:36px; align-items:center}
+  @media(min-width:860px){.quote-grid{grid-template-columns:1.1fr .9fr}}
+
+  :focus-visible{outline:2.5px solid var(--terra); outline-offset:3px; border-radius:6px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
+
+  /* ⚠️ These have to come LAST. The base .mark/.signin/.appstore rules are
+     declared after the small-screen media block above, so the same overrides
+     placed there lost on source order and the header kept its full-size
+     buttons — which is why the wordmark and the two buttons would not fit on
+     one row and the buttons wrapped onto a line of their own. */
+  @media(max-width:879px){
+    .mark{font-size:17px; gap:8px}
+    .mark .dots{grid-template-columns:repeat(2,6px)}
+    .mark .dots span{width:6px; height:6px}
+    .bar .right{gap:8px; flex:0 0 auto; margin-left:auto}
+    .signin{padding:8px 11px; font-size:13.5px}
+    .appstore{padding:6px 11px 6px 9px; border-radius:10px; gap:7px}
+    .appstore svg{width:17px; height:17px}
+    .appstore .t small{font-size:8px}
+    .appstore .t strong{font-size:12.5px}
+  }
+
+  /* Tighter rhythm on phones — 84px × 8 sections is a lot of thumb travel. */
+  @media(max-width:720px){
+    section{padding:56px 0}
+    .hero{padding:40px 0 16px}
+    .close{padding:64px 0 56px}
+    .wrap{padding:0 20px}
+  }
+</style>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     BEFORE LAUNCH: replace every apps.apple.com/…/id0000000000 with the
+     real App Store URL, and swap each .screen mock for a real capture.
+     ══════════════════════════════════════════════════════════════════════ -->
+<a class="skip" href="#top">Skip to content</a>
+
+<header class="site">
+  <div class="wrap bar">
+    <a class="mark" href="#top">
+      <span class="dots" aria-hidden="true">
+        <span style="background:var(--slate)"></span><span style="background:var(--terra)"></span>
+        <span style="background:var(--ochre)"></span><span style="background:var(--rose)"></span>
+      </span>
+      <span class="wordmark">Family&nbsp;Hub<span style="color:var(--terra)">+</span></span>
+    </a>
+    <nav class="links">
+      <a href="#calendar">Calendar</a>
+      <a href="#chores">Chores</a>
+      <a href="#meals">Meals</a>
+      <a href="#celebrations">Celebrations</a>
+      <a href="#setup">Setup</a>
+      <a href="#privacy">Privacy</a>
+    </nav>
+    <div class="right">
+      <a class="signin" href="/app">Sign in</a>
+      <a class="appstore" href="https://apps.apple.com/app/family-hub-plus/id6786119279">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.05 12.53c-.02-2.4 1.96-3.55 2.05-3.61-1.12-1.64-2.86-1.86-3.48-1.89-1.48-.15-2.89.87-3.64.87-.75 0-1.91-.85-3.14-.83-1.61.02-3.1.94-3.93 2.38-1.68 2.91-.43 7.21 1.2 9.57.8 1.15 1.75 2.45 3 2.4 1.21-.05 1.67-.78 3.13-.78 1.46 0 1.87.78 3.14.75 1.3-.02 2.12-1.18 2.91-2.34.92-1.34 1.3-2.64 1.32-2.71-.03-.01-2.53-.97-2.56-3.84zM14.64 5.1c.66-.81 1.11-1.93.99-3.05-.95.04-2.11.64-2.8 1.44-.61.71-1.15 1.85-1.01 2.94 1.07.08 2.16-.54 2.82-1.33z"/></svg>
+        <span class="t"><small>Download on the</small><strong>App Store</strong></span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="top" tabindex="-1" style="outline:none">
+
+  <!-- ── Hero ─────────────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="eyebrow">For the one who keeps track of everything</div>
+        <h1>You're holding the whole family in your head. <span class="hl">Put some of it down.</span></h1>
+        <p class="lede">
+          Family Hub+ is one shared place for the calendar, the chores, the meals and
+          the birthdays you can't forget — so it isn't all living in one person's memory.
+        </p>
+        <div class="cta-row">
+          <a class="appstore lg" href="https://apps.apple.com/app/family-hub-plus/id6786119279">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.05 12.53c-.02-2.4 1.96-3.55 2.05-3.61-1.12-1.64-2.86-1.86-3.48-1.89-1.48-.15-2.89.87-3.64.87-.75 0-1.91-.85-3.14-.83-1.61.02-3.1.94-3.93 2.38-1.68 2.91-.43 7.21 1.2 9.57.8 1.15 1.75 2.45 3 2.4 1.21-.05 1.67-.78 3.13-.78 1.46 0 1.87.78 3.14.75 1.3-.02 2.12-1.18 2.91-2.34.92-1.34 1.3-2.64 1.32-2.71-.03-.01-2.53-.97-2.56-3.84zM14.64 5.1c.66-.81 1.11-1.93.99-3.05-.95.04-2.11.64-2.8 1.44-.61.71-1.15 1.85-1.01 2.94 1.07.08 2.16-.54 2.82-1.33z"/></svg>
+            <span class="t"><small>Download on the</small><strong>App Store</strong></span>
+          </a>
+          <p class="cta-note">Free for 14 days, no card up front. Already have an account? <a href="/app" style="color:var(--terra); font-weight:600">Sign in</a>.</p>
+        </div>
+        <div class="hero-proof">
+          <span><b>Everyone sees the same calendar</b>, synced from Google and Outlook</span>
+          <span><b>Works on the kitchen iPad</b> and everyone's iPhone</span>
+          <span><b>No ads, no trackers</b>, nothing sold</span>
+        </div>
+        <!-- PROOF SLOT: once the App Store rating and a few parent quotes exist,
+             they belong here. Left empty on purpose rather than filled with claims. -->
+      </div>
+
+      <div class="phone-stack">
+        <div>
+          <div class="single-shot"><div class="phone tilt"><div class="screen"><img src="shots/home.jpg" alt="The Home screen on iPhone" loading="lazy" decoding="async"></div></div><p class="shot-note">Today at a glance — who's going where, what's left to do, and what's for dinner</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ── On the kitchen wall ──────────────────────────────────────────── -->
+  <section class="s-wall" id="kitchen-ipad">
+    <div class="wrap">
+      <div class="wall-head">
+        <div class="accent-eyebrow">The kitchen iPad</div>
+        <h2 style="font-size:clamp(34px,4.6vw,50px); line-height:1.1; margin-bottom:16px">
+          Hang it where everyone walks past
+        </h2>
+        <p class="lede" style="margin-bottom:0">
+          Put an iPad on the kitchen wall and it becomes the family's board: today's
+          plans, whose turn it is, what's for dinner — seen on the way out the door,
+          not buried in one person's phone.
+        </p>
+        <ul class="wall-points">
+          <li><span><b>Everyone sees the same day</b> — kids check their own chores without asking.</span></li>
+          <li><span><b>Stays up to date on its own</b>, and a screensaver with the time takes over when nobody's using it.</span></li>
+          <li><span><b>Hide it in one tap</b> behind a picture when guests come over.</span></li>
+        </ul>
+      </div>
+      <div class="kitchen" role="img" aria-label="A kitchen with deep green cabinets and a marble backsplash; an iPad showing Family Hub+ hangs on the wall beside the light switch">
+        <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <defs>
+            <linearGradient id="kw-wall" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#e4ddd2"/><stop offset=".55" stop-color="#ece6dc"/><stop offset="1" stop-color="#e2dbcf"/>
+            </linearGradient>
+            <linearGradient id="kw-marble" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#f4f2ee"/><stop offset="1" stop-color="#e6e2dc"/>
+            </linearGradient>
+            <linearGradient id="kw-green" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#2f4a3f"/><stop offset="1" stop-color="#253c33"/>
+            </linearGradient>
+            <linearGradient id="kw-brass" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#e6c98a"/><stop offset="1" stop-color="#a9823f"/>
+            </linearGradient>
+            <linearGradient id="kw-glow" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#fff4d6" stop-opacity=".55"/><stop offset="1" stop-color="#fff4d6" stop-opacity="0"/>
+            </linearGradient>
+            <linearGradient id="kw-walnut" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#7a5236"/><stop offset="1" stop-color="#5f3e28"/>
+            </linearGradient>
+            <filter id="kw-soft" x="-20%" y="-20%" width="140%" height="160%">
+              <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#3a2a1c" flood-opacity=".28"/>
+            </filter>
+            <clipPath id="kw-screen"><rect x="719" y="258" width="163" height="217" rx="7"/></clipPath>
+          </defs>
+
+          <!-- painted wall -->
+          <rect width="1600" height="900" fill="url(#kw-wall)"/>
+
+          <!-- tall pantry, deep green shaker, left -->
+          <rect x="0" y="0" width="420" height="900" fill="url(#kw-green)"/>
+          <rect x="24" y="30" width="174" height="820" rx="3" fill="none" stroke="#1f332b" stroke-width="5"/>
+          <rect x="44" y="50" width="134" height="780" rx="2" fill="none" stroke="#3b5a4d" stroke-width="3"/>
+          <rect x="222" y="30" width="174" height="820" rx="3" fill="none" stroke="#1f332b" stroke-width="5"/>
+          <rect x="242" y="50" width="134" height="780" rx="2" fill="none" stroke="#3b5a4d" stroke-width="3"/>
+          <rect x="182" y="360" width="9" height="120" rx="4.5" fill="url(#kw-brass)"/>
+          <rect x="229" y="360" width="9" height="120" rx="4.5" fill="url(#kw-brass)"/>
+          <rect x="414" y="0" width="10" height="900" fill="#1c2e27" opacity=".5"/>
+
+          <!-- marble slab backsplash + walnut shelf, right -->
+          <rect x="1150" y="0" width="450" height="692" fill="url(#kw-marble)"/>
+          <path d="M1150 120C1260 150 1300 260 1420 250S1560 330 1600 300M1180 520C1270 470 1330 560 1450 500S1570 560 1600 540M1250 0C1270 90 1350 110 1380 200M1480 380C1500 450 1560 470 1600 470" fill="none" stroke="#c9c3ba" stroke-width="2.2" opacity=".85"/>
+          <path d="M1150 330C1230 350 1290 330 1360 380M1400 640C1460 600 1530 620 1600 600" fill="none" stroke="#d8d2c9" stroke-width="1.5"/>
+          <rect x="1150" y="0" width="4" height="692" fill="#cfc8bd"/>
+          <rect x="1180" y="330" width="420" height="30" fill="url(#kw-walnut)" filter="url(#kw-soft)"/>
+          <!-- on the shelf: stacked bowls, a jar, a small vase -->
+          <path d="M1215 330h120q-6 -34 -60 -34t-60 34z" fill="#f3efe8" stroke="#d8d0c3" stroke-width="2"/>
+          <path d="M1228 296h94q-6 -24 -47 -24t-47 24z" fill="#ebe5da" stroke="#d8d0c3" stroke-width="2"/>
+          <rect x="1380" y="262" width="58" height="68" rx="10" fill="#f6f3ee" stroke="#d3cbbf" stroke-width="2" opacity=".9"/>
+          <rect x="1384" y="254" width="50" height="14" rx="5" fill="#8a6a4a"/>
+          <path d="M1480 330c-10-40 6-62 18-72 12 10 28 32 18 72z" fill="#2f4a3f"/>
+          <path d="M1498 262c-8-50 -30-80-46-92M1498 262c6-44 30-72 50-80" fill="none" stroke="#6b7a5a" stroke-width="3"/>
+          <!-- brass picture light over the shelf -->
+          <rect x="1300" y="60" width="200" height="16" rx="8" fill="url(#kw-brass)"/>
+          <path d="M1310 76L1490 76L1560 330L1240 330Z" fill="url(#kw-glow)"/>
+
+          <!-- pendant over the counter -->
+          <path d="M600 0V70" stroke="#3a322c" stroke-width="2.5"/>
+          <path d="M556 118q44 -60 88 0z" fill="url(#kw-brass)"/>
+          <ellipse cx="600" cy="119" rx="40" ry="6" fill="#fff1c9"/>
+
+          <!-- low marble upstand behind the counter, middle -->
+          <rect x="420" y="610" width="730" height="82" fill="url(#kw-marble)"/>
+          <path d="M440 640C560 630 620 670 760 650S980 660 1150 640" fill="none" stroke="#cdc7be" stroke-width="1.8"/>
+
+          <!-- the light switch, for scale: 7 x 11 cm, centre 120 cm -->
+          <rect x="1011" y="404" width="58" height="92" rx="4" fill="#f7f4ef" stroke="#d9d2c6" stroke-width="2"/>
+          <rect x="1030" y="428" width="20" height="44" rx="3" fill="#efebe4" stroke="#d2cabd" stroke-width="1.5"/>
+
+          <!-- the iPad: 13-inch, 21.5 x 28 cm, centre at 130 cm -->
+          <g filter="url(#kw-soft)">
+            <rect x="711" y="250" width="179" height="233" rx="14" fill="#1b1a19"/>
+          </g>
+          <rect x="712.5" y="251.5" width="176" height="230" rx="13" fill="none" stroke="#4a4845" stroke-width="1.5"/>
+          <image href="shots/ipad-home.jpg" x="719" y="258" width="163" height="217" preserveAspectRatio="xMidYMin slice" clip-path="url(#kw-screen)"/>
+
+          <!-- counter: thick marble top, green lowers with brass knobs -->
+          <rect x="420" y="692" width="1180" height="28" fill="#f5f3ef"/>
+          <rect x="420" y="718" width="1180" height="4" fill="#cfc8bd"/>
+          <rect x="420" y="722" width="1180" height="178" fill="url(#kw-green)"/>
+          <path d="M700 722V900M980 722V900M1260 722V900" stroke="#1f332b" stroke-width="4"/>
+          <rect x="440" y="740" width="240" height="160" fill="none" stroke="#3b5a4d" stroke-width="3"/>
+          <rect x="720" y="740" width="240" height="160" fill="none" stroke="#3b5a4d" stroke-width="3"/>
+          <rect x="1000" y="740" width="240" height="160" fill="none" stroke="#3b5a4d" stroke-width="3"/>
+          <rect x="1280" y="740" width="300" height="160" fill="none" stroke="#3b5a4d" stroke-width="3"/>
+          <circle cx="660" cy="770" r="8" fill="url(#kw-brass)"/><circle cx="740" cy="770" r="8" fill="url(#kw-brass)"/>
+          <circle cx="1220" cy="770" r="8" fill="url(#kw-brass)"/><circle cx="1300" cy="770" r="8" fill="url(#kw-brass)"/>
+
+          <!-- on the counter: a vase of branches, lemons, a leaning board -->
+          <path d="M500 692c-8-60 8-92 24-104h20c16 12 32 44 24 104z" fill="#f2eee7" stroke="#d6cec1" stroke-width="2"/>
+          <path d="M534 590C520 520 470 470 450 440M534 590C548 500 590 460 620 430M534 590C530 520 540 470 560 420" fill="none" stroke="#6a5a45" stroke-width="3"/>
+          <g fill="#8fa37a"><ellipse cx="455" cy="448" rx="14" ry="7" transform="rotate(-35 455 448)"/><ellipse cx="490" cy="480" rx="14" ry="7" transform="rotate(-20 490 480)"/><ellipse cx="612" cy="440" rx="14" ry="7" transform="rotate(30 612 440)"/><ellipse cx="580" cy="470" rx="14" ry="7" transform="rotate(10 580 470)"/><ellipse cx="556" cy="430" rx="12" ry="6" transform="rotate(-60 556 430)"/></g>
+          <path d="M1250 692c-4 -10 0-66 10-100q40 -8 80 0c10 34 14 90 10 100z" fill="url(#kw-walnut)"/>
+          <circle cx="1300" cy="604" r="7" fill="#e9e4dc"/>
+          <path d="M1400 692q55 32 110 0z" fill="#f4f1eb" stroke="#d6cec1" stroke-width="2"/>
+          <circle cx="1432" cy="680" r="14" fill="#e8c94a"/><circle cx="1458" cy="676" r="15" fill="#efd35a"/><circle cx="1484" cy="682" r="13" fill="#e2c043"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Calendar ─────────────────────────────────────────────────────── -->
+  <section class="band s-cal" id="calendar">
+    <div class="wrap split">
+      <div>
+        <div class="accent-eyebrow">The calendar</div>
+        <h2 style="font-size:clamp(34px,4.6vw,50px); line-height:1.1; margin-bottom:16px">
+          One calendar, colour-coded by person
+        </h2>
+        <p style="color:var(--ink-2); font-size:17.5px">
+          Connect the calendars you already use. Everyone's events land in one view,
+          each in their own colour, on every device in the house.
+        </p>
+        <ul class="points">
+          <li><span class="pip"></span><span><b>Google and Outlook, both ways.</b> Add an event here and it shows up there.</span></li>
+          <li><span class="pip"></span><span><b>Who's driving.</b> The question that actually causes the argument, answered on the event itself.</span></li>
+          <li><span class="pip"></span><span><b>Choose what syncs.</b> Your work calendar doesn't have to be everyone's business.</span></li>
+        </ul>
+      </div>
+      <div class="art">
+        <div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><img src="shots/cal-month.jpg" alt="Month, on a phone" loading="lazy" decoding="async"></div></div><figcaption><b>Month, on a phone</b>A dot per person, sized by how much of the day is theirs</figcaption></figure><figure class="slide"><div class="phone"><div class="screen"><img src="shots/cal-day.jpg" alt="Today, hour by hour" loading="lazy" decoding="async"></div></div><figcaption><b>Today, hour by hour</b>Who's driving, who's going, and what overlaps</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><img src="shots/ipad-cal-month.jpg" alt="Month, on the iPad" loading="lazy" decoding="async"></div></div><figcaption><b>Month, on the iPad</b>The whole month with every event named</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><img src="shots/ipad-cal-week.jpg" alt="The working week" loading="lazy" decoding="async"></div></div><figcaption><b>The working week</b>Five columns wide enough to read at a glance</figcaption></figure></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Chores ───────────────────────────────────────────────────────── -->
+  <section class="s-chores" id="chores">
+    <div class="wrap split flip">
+      <div>
+        <div class="accent-eyebrow">Chores &amp; stars</div>
+        <h2 style="font-size:clamp(34px,4.6vw,50px); line-height:1.1; margin-bottom:16px">
+          Stop being the one who has to ask
+        </h2>
+        <p style="color:var(--ink-2); font-size:17.5px">
+          Everyone can see their own list. Finishing it earns stars, and stars turn into
+          the things they actually want — screen time, a payout, whatever you decide.
+        </p>
+        <ul class="points">
+          <li><span class="pip"></span><span><b>Set it once.</b> Chores repeat on the days you choose, for the people you choose.</span></li>
+          <li><span class="pip"></span><span><b>Rewards you set the price of.</b> Or cash out stars for real money at your rate.</span></li>
+          <li><span class="pip"></span><span><b>A parent PIN</b> on anything you'd rather a nine-year-old couldn't change.</span></li>
+        </ul>
+      </div>
+      <div class="art">
+        <div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><img src="shots/chores.jpg" alt="Everyone's progress" loading="lazy" decoding="async"></div></div><figcaption><b>Everyone's progress</b>Each person's chores, stars and streak in one list</figcaption></figure><figure class="slide"><div class="phone"><div class="screen"><img src="shots/rewards.jpg" alt="What the stars buy" loading="lazy" decoding="async"></div></div><figcaption><b>What the stars buy</b>A shelf you set the prices on, from small to worth saving for</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><img src="shots/ipad-chores.jpg" alt="The whole picture on iPad" loading="lazy" decoding="async"></div></div><figcaption><b>The whole picture on iPad</b>Chores, rewards, bonus jobs and star insights together</figcaption></figure></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Meals ────────────────────────────────────────────────────────── -->
+  <section class="band s-meals" id="meals">
+    <div class="wrap split">
+      <div>
+        <div class="accent-eyebrow">Meals &amp; groceries</div>
+        <h2 style="font-size:clamp(34px,4.6vw,50px); line-height:1.1; margin-bottom:16px">
+          Answer "what's for dinner" once a week
+        </h2>
+        <p style="color:var(--ink-2); font-size:17.5px">
+          Plan the week, and the grocery list builds itself from what you planned —
+          sorted by aisle, so you're not doubling back for the milk.
+        </p>
+        <ul class="points">
+          <li><span class="pip"></span><span><b>Snap a recipe.</b> Photograph a cookbook page or a card in your grandmother's handwriting, and it's saved.</span></li>
+          <li><span class="pip"></span><span><b>Paste a link.</b> Most recipe sites come straight in, ingredients and all.</span></li>
+          <li><span class="pip"></span><span><b>200+ ideas built in</b> for the nights when nobody can think of anything to cook.</span></li>
+        </ul>
+      </div>
+      <div class="art">
+        <div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><img src="shots/meals.jpg" alt="A week of meals" loading="lazy" decoding="async"></div></div><figcaption><b>A week of meals</b>Breakfast, lunch and dinner planned in one grid</figcaption></figure><figure class="slide"><div class="phone"><div class="screen"><img src="shots/meals-week.jpg" alt="Built from your own ideas" loading="lazy" decoding="async"></div></div><figcaption><b>Built from your own ideas</b>Saved recipes drop straight onto a day</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><img src="shots/ipad-meals.jpg" alt="Planning on the iPad" loading="lazy" decoding="async"></div></div><figcaption><b>Planning on the iPad</b>The full week without scrolling sideways</figcaption></figure></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Celebrations ─────────────────────────────────────────────────── -->
+  <section class="band s-keep" id="celebrations">
+    <div class="wrap split">
+      <div>
+        <div class="accent-eyebrow">Celebrations</div>
+        <h2 style="font-size:clamp(34px,4.6vw,50px); line-height:1.1; margin-bottom:16px">
+          Remembered early enough to do something about it
+        </h2>
+        <p style="color:var(--ink-2); font-size:17.5px">
+          Most reminders tell you about a birthday the morning of, which is the one
+          moment you can't act on it. Family Hub+ works backwards from the date instead.
+        </p>
+        <ul class="points">
+          <li><span class="pip"></span><span><b>Thirty days out,</b> while there's still time to order something or book the table.</span></li>
+          <li><span class="pip"></span><span><b>A week before, the day before, the day itself.</b> Check it off early and it still comes back when it matters.</span></li>
+          <li><span class="pip"></span><span><b>Everyone gets the reminder,</b> so remembering isn't one person's job any more.</span></li>
+        </ul>
+      </div>
+      <div class="art">
+        <div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><img src="shots/celebrations.jpg" alt="Counted down, not announced" loading="lazy" decoding="async"></div></div><figcaption><b>Counted down, not announced</b>Every birthday and anniversary with the days left beside it</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><img src="shots/ipad-celebrations.jpg" alt="Gift ideas kept with the date" loading="lazy" decoding="async"></div></div><figcaption><b>Gift ideas kept with the date</b>So the planning happens while there is still time</figcaption></figure></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Everything else ──────────────────────────────────────────────── -->
+  <section class="s-keep">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>And the rest of what a household carries</h2>
+      </div>
+      <div class="grid-3">
+        <div class="cell">
+          <h3><span class="dot" style="background:var(--terra)"></span>Health reminders</h3>
+          <p>Reminders for medications and appointments. Snooze one and it comes back, and you can see what was taken and when.</p>
+        </div>
+        <div class="cell">
+          <h3><span class="dot" style="background:var(--slate)"></span>To-dos</h3>
+          <p>The jobs that don't repeat. Break a big one into steps and tick them off as you go.</p>
+        </div>
+        <div class="cell">
+          <h3><span class="dot" style="background:var(--ochre)"></span>Notes and praise</h3>
+          <p>A note for one person or the whole house. Catch someone doing something right and everyone sees it.</p>
+        </div>
+        <div class="cell">
+          <h3><span class="dot" style="background:var(--steel)"></span>Family activity</h3>
+          <p>A record of who did what, and when — easy to check when someone's sure it wasn't their turn.</p>
+        </div>
+      </div>
+      <div style="margin-top:44px"><div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><img src="shots/todos.jpg" alt="To-dos, with sub-tasks" loading="lazy" decoding="async"></div></div><figcaption><b>To-dos, with sub-tasks</b>The one-off jobs, broken down when they need it</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><img src="shots/ipad-achievements.jpg" alt="Achievements" loading="lazy" decoding="async"></div></div><figcaption><b>Achievements</b>Milestones worth noticing, kept where the family can see them</figcaption></figure></div></div></div>
+    </div>
+  </section>
+
+  <!-- ── Setup ────────────────────────────────────────────────────────── -->
+  <section class="band s-setup" id="setup">
+    <div class="wrap">
+      <div class="sec-head" style="margin-bottom:36px">
+        <h2>Set up in about ten minutes</h2>
+        <p>
+          The part people dread is getting everyone else on board. The walkthrough does
+          most of it with you, and the rest of the family joins with a code.
+        </p>
+      </div>
+      <ol class="steps">
+        <li>
+          <span class="step-n">1</span>
+          <div>
+            <h3>Add the people</h3>
+            <p>Names, colours, and who's a parent. Kids don't need their own email address.</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-n">2</span>
+          <div>
+            <h3>Connect the calendar you already use</h3>
+            <p>Google or Outlook, both directions. Choose which of your calendars the family can see.</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-n">3</span>
+          <div>
+            <h3>Share the family code</h3>
+            <p>Everyone installs the app and enters one code. No accounts to create for them, nothing to pay per person.</p>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ── Trust ────────────────────────────────────────────────────────── -->
+  <section id="privacy">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Your family's day is not a data set</h2>
+      </div>
+      <div class="trust">
+        <div class="trust-card">
+          <h3>No ads. No trackers. Nothing sold.</h3>
+          <p>
+            There is no advertising business here to feed. Family Hub+ is paid for by the
+            families who use it, which is the whole reason it can be built for them.
+          </p>
+        </div>
+        <div class="trust-card">
+          <h3>Children's data, handled properly</h3>
+          <p>
+            Child profiles have a real parental-consent step, and every profile and account
+            can be deleted from inside the app — not by emailing someone and hoping.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Pull quote. Moved down from under the hero, where it only repeated
+         the headline. Here it's the last beat before the ask. ──────────── -->
+  <section class="quote band">
+    <div class="wrap quote-grid">
+      <blockquote>
+        The hard part isn't doing it all. It's keeping track of it all.
+      </blockquote>
+      <p style="color:var(--ink-2); font-size:16.5px">
+        Family Hub+ was built around that. Everything the household is carrying —
+        who's where, what's for dinner, whose turn it is, whose birthday is coming —
+        lives in one place everyone can see, instead of in one person's head.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Close ────────────────────────────────────────────────────────── -->
+  <section class="close" id="get">
+    <div class="wrap">
+      <div class="spectrum" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <h2>Get it out of your head<br>and somewhere everyone can see it</h2>
+      <p>
+        Free for 14 days, no card up front. Set up your family in about ten minutes,
+        and see whether it holds before you decide anything.
+      </p>
+      <ul class="reassure">
+        <li>One account covers everyone in the house</li>
+        <li>Cancel from inside the app, in two taps</li>
+        <li>iPhone and iPad, plus the web for parents</li>
+      </ul>
+      <div class="cta-row">
+        <a class="appstore lg" href="https://apps.apple.com/app/family-hub-plus/id6786119279">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.05 12.53c-.02-2.4 1.96-3.55 2.05-3.61-1.12-1.64-2.86-1.86-3.48-1.89-1.48-.15-2.89.87-3.64.87-.75 0-1.91-.85-3.14-.83-1.61.02-3.1.94-3.93 2.38-1.68 2.91-.43 7.21 1.2 9.57.8 1.15 1.75 2.45 3 2.4 1.21-.05 1.67-.78 3.13-.78 1.46 0 1.87.78 3.14.75 1.3-.02 2.12-1.18 2.91-2.34.92-1.34 1.3-2.64 1.32-2.71-.03-.01-2.53-.97-2.56-3.84zM14.64 5.1c.66-.81 1.11-1.93.99-3.05-.95.04-2.11.64-2.8 1.44-.61.71-1.15 1.85-1.01 2.94 1.07.08 2.16-.54 2.82-1.33z"/></svg>
+          <span class="t"><small>Download on the</small><strong>App Store</strong></span>
+        </a>
+      </div>
+      <p style="margin-top:24px; font-size:15px; color:var(--ink-3)">
+        Already set up? <a href="/app" style="color:var(--terra); font-weight:600">Sign in on the web</a>.
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="spectrum" aria-hidden="true" style="max-width:120px; margin-bottom:26px"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <nav class="foot" aria-label="Footer">
+      <a href="https://apps.apple.com/app/family-hub-plus/id6786119279">Download</a>
+      <a href="/app">Sign in</a>
+      <a href="/help">Help center</a>
+      <a href="/support">Support</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+    </nav>
+    <div class="foot foot-2">
+      <a href="mailto:hello@hubforfamilies.com">hello@hubforfamilies.com</a>
+      <span class="copy">© 2026 Family Hub+ · Made in Minnesota</span>
+    </div>
+  </div>
+</footer>
+
+
+<script>
+/* Swipe cues for the screenshot strips — see the CSS note above. */
+(function () {
+  var chev = function (d) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' +
+      (d < 0 ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7') + '"/></svg>';
+  };
+  document.querySelectorAll('.shots').forEach(function (wrap) {
+    var strip = wrap.querySelector('.strip');
+    if (!strip) return;
+    var slides = Array.prototype.slice.call(strip.querySelectorAll('.slide'));
+    if (slides.length < 2) return;
+    var prev = document.createElement('button'), next = document.createElement('button');
+    prev.className = 'strip-btn prev'; next.className = 'strip-btn next';
+    prev.type = next.type = 'button';
+    prev.setAttribute('aria-label', 'Previous screenshot'); next.setAttribute('aria-label', 'Next screenshot');
+    prev.innerHTML = chev(-1); next.innerHTML = chev(1);
+    var dots = document.createElement('div');
+    dots.className = 'strip-dots';
+    slides.forEach(function (sl, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', 'Screenshot ' + (i + 1) + ' of ' + slides.length);
+      b.addEventListener('click', function () { go(i); });
+      dots.appendChild(b);
+    });
+    wrap.appendChild(prev); wrap.appendChild(next); wrap.appendChild(dots);
+
+    function current() {
+      var mid = strip.scrollLeft + strip.clientWidth / 2, best = 0, bestD = Infinity;
+      slides.forEach(function (sl, i) {
+        var c = sl.offsetLeft - strip.offsetLeft + sl.offsetWidth / 2, d = Math.abs(c - mid);
+        if (d < bestD) { bestD = d; best = i; }
+      });
+      if (strip.scrollLeft < 4) best = 0;
+      if (strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 4) best = slides.length - 1;
+      return best;
+    }
+    function go(i) {
+      i = Math.max(0, Math.min(slides.length - 1, i));
+      var sl = slides[i];
+      strip.scrollTo({ left: sl.offsetLeft - strip.offsetLeft - (strip.clientWidth - sl.offsetWidth) / 2, behavior: 'smooth' });
+    }
+    function update() {
+      var fits = strip.scrollWidth <= strip.clientWidth + 4;
+      prev.hidden = fits || strip.scrollLeft < 4;
+      next.hidden = fits || strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 4;
+      dots.hidden = fits;
+      var c = current();
+      Array.prototype.forEach.call(dots.children, function (b, i) { b.setAttribute('aria-current', i === c ? 'true' : 'false'); });
+    }
+    prev.addEventListener('click', function () { go(current() - 1); });
+    next.addEventListener('click', function () { go(current() + 1); });
+    strip.addEventListener('scroll', function () { window.requestAnimationFrame(update); }, { passive: true });
+    window.addEventListener('resize', update);
+    window.addEventListener('load', update);
+    // Lazy screenshots change the strip's width as they arrive.
+    strip.querySelectorAll('img').forEach(function (im) { im.addEventListener('load', update); });
+    update();
+  });
+})();
+</script>
+</body>
+</html>

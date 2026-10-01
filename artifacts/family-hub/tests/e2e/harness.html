@@ -1,0 +1,14 @@
+<!doctype html>
+<html>
+  <!-- The viewport meta MUST match the real index.html. Without it a
+         mobile-emulating context (isMobile: true) falls back to the ~980px
+         layout viewport, so window.innerHeight/innerWidth bear no relation
+         to the context viewport — silently turning any height-dependent
+         assertion (dialog scroll, overflow, fixed insets) into a false
+         pass. This has bitten twice; do not remove it. -->
+    <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" /><title>e2e harness</title></head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/tests/e2e/harness.tsx"></script>
+  </body>
+</html>

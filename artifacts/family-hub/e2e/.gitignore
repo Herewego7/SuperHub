@@ -1,0 +1,5 @@
+# Throwaway, local-only self-signed TLS material — see README.md to regenerate.
+certs/*.pem
+
+# Run output — not source.
+screenshots/*.png
