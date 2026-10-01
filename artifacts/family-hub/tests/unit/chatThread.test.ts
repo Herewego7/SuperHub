@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { threadWithPlan, unreadCount } from "../../src/lib/chatThread";
+import { bumpUnread, clearedUnread, threadWithPlan, unreadCount, unreadFor } from "../../src/lib/chatThread";
 
 test("a notification reply sits under the plan", () => {
   const thread = threadWithPlan(
@@ -13,6 +13,14 @@ test("a notification reply sits under the plan", () => {
     "Tomorrow's plan\nDinner. Tacos",
     "Who is driving soccer?",
   ]);
+});
+
+test("unread stays on the person it was sent to", () => {
+  const raw = bumpUnread(null, "liam");
+  assert.equal(unreadFor(raw, "liam"), 1);
+  assert.equal(unreadFor(raw, "chad"), 0);
+  assert.equal(unreadFor(clearedUnread(raw, "liam"), "liam"), 0);
+  assert.equal(unreadFor("2", "chad"), 2);
 });
 
 test("a seeded unread reply is a badge count", () => {

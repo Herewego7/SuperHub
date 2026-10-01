@@ -11,12 +11,12 @@ import { appendUserMessage, noteChatUnread, readThread, threadWithPlan, type Cha
 const PLAN_KEY = "superhub_evening_plan";
 const PLAN_REPLY_KEY = "superhub_evening_plan_reply";
 
-export function stageEveningPlan(text: string, reply?: string | null) {
+export function stageEveningPlan(text: string, reply?: string | null, profileKey?: string | null) {
   sessionStorage.setItem(PLAN_KEY, text);
   const said = reply?.trim();
   if (said) sessionStorage.setItem(PLAN_REPLY_KEY, said);
   else sessionStorage.removeItem(PLAN_REPLY_KEY);
-  noteChatUnread();
+  noteChatUnread(profileKey || "*");
 }
 
 type Props = {

@@ -9,7 +9,7 @@ import { EventModal, type EventFormData } from "@/components/event-modal";
 import { TabType, ChoresSubTabType } from "@/lib/types";
 import { BOTTOM_NAV_IDS } from "@/lib/bottomNav";
 import { ChatView } from "@/components/chat-view";
-import { appendUserMessage, unreadCount } from "@/lib/chatThread";
+import { appendUserMessage, clearChatUnread, unreadFor } from "@/lib/chatThread";
 import { stageEveningPlan } from "@/components/chat-view";
 import { devicePersonIds, readDevicePerson, writeDevicePerson } from "@/lib/devicePerson";
 import { consumeTabDeepLinkFromUrl, onTabDeepLink, consumeCelebrationDeepLinkFromUrl, onCelebrationDeepLink } from "@/lib/pushDeepLink";
@@ -201,7 +201,7 @@ export default function FamilyHub() {
     if (!saved || saved === "todos" || saved === "people") return "home";
     return saved;
   });
-  const [chatUnread, setChatUnread] = useState(() => unreadCount(typeof localStorage === "undefined" ? null : localStorage.getItem("superhub_chat_unread")));
+  const [chatUnread, setChatUnread] = useState(() => unreadFor(typeof localStorage === "undefined" ? null : localStorage.getItem("superhub_chat_unread"), "*"));
   const [chatDraft, setChatDraft] = useState("");
   const [chatRevision, setChatRevision] = useState(0);
   const [plusOpen, setPlusOpen] = useState(false);
@@ -402,7 +402,7 @@ export default function FamilyHub() {
       setSelectedProfiles([link.profileId]);
     }
     if (link.plan) {
-      stageEveningPlan(link.plan, link.reply);
+      stageEveningPlan(link.plan, link.reply, link.profileId);
       setChatRevision((n) => n + 1);
     }
     if (!(VALID_DEEP_LINK_TABS as string[]).includes(link.tab)) return;
@@ -904,16 +904,16 @@ export default function FamilyHub() {
   useEffect(() => {
     const sync = () => {
       if (activeTab === "chat") {
-        localStorage.setItem("superhub_chat_unread", "0");
+        clearChatUnread(chatProfileKey);
         setChatUnread(0);
         return;
       }
-      setChatUnread(unreadCount(localStorage.getItem("superhub_chat_unread")));
+      setChatUnread(unreadFor(localStorage.getItem("superhub_chat_unread"), chatProfileKey));
     };
     sync();
     window.addEventListener("superhub-chat-unread", sync);
     return () => window.removeEventListener("superhub-chat-unread", sync);
-  }, [activeTab]);
+  }, [activeTab, chatProfileKey]);
 
   // Redirect legacy "celebrations" tab (now surfaced inside the Calendar tab).
   // To-Dos left the bar; those items are on Home.
