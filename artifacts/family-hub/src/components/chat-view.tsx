@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole } from "@/lib/chatTools";
+import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
 import { dinnerName, mailVisibleToKid, openTodos, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
@@ -63,6 +63,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   });
   const { data: events = [] } = useQuery<{ id: string; title: string; description?: string | null; source?: string | null; drivingProfileIds?: string[] | null; profileIds?: string[] | null; startTime?: string | null; endTime?: string | null }[]>({ queryKey: ["/api/events"] });
   const { data: profiles = [] } = useQuery<{ id: string; name: string; school?: string | null }[]>({ queryKey: ["/api/profiles"] });
+  const { data: weather } = useQuery<{ location?: string; temperature?: number; condition?: string }>({ queryKey: ["/api/weather"], retry: false });
   const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
   const { data: meals = [] } = useQuery<Meal[]>({
     queryKey: ["/api/meals", "chat-dinner"],
@@ -246,6 +247,11 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
       }
       next.push({ id: `${Date.now()}-n`, role: "assistant", text: assigned.reply });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    }
+    const sky = tools.includes("get_weather") ? weatherReply(text, weather ?? null) : null;
+    if (sky) {
+      next.push({ id: `${Date.now()}-w`, role: "assistant", text: sky });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const letters = tools.includes("get_newsletters") ? newsletterTitles(text, openTodos(chores, completions)) : null;

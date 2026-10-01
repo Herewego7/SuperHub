@@ -191,6 +191,17 @@ export function drivingReply(
   return `${names.slice(0, -1).join(", ")} and ${last} are driving ${event.title}.`;
 }
 
+export function weatherReply(
+  text: string,
+  weather: { location?: string | null; temperature?: number | null; condition?: string | null } | null,
+): string | null {
+  if (!/^what(?:'s| is) the weather\??$/i.test(text.trim())) return null;
+  if (!weather || weather.temperature == null) return "I don't have the weather.";
+  const place = weather.location ? ` in ${weather.location}` : "";
+  const condition = weather.condition ? `, ${weather.condition}` : "";
+  return `${Math.round(weather.temperature)}°${place}${condition}.`;
+}
+
 export function newsletterTitles(text: string, rows: { title: string; category?: string | null }[]): string[] | null {
   if (!/^newsletters?\.?$/i.test(text.trim())) return null;
   return rows.filter((row) => row.category === "school_email").map((row) => row.title).slice(0, 5);
