@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
+import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
 import { mailVisibleToKid, openTodos, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
@@ -62,7 +62,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     },
   });
   const { data: events = [] } = useQuery<{ id: string; title: string; description?: string | null; location?: string | null; source?: string | null; drivingProfileIds?: string[] | null; profileIds?: string[] | null; startTime?: string | null; endTime?: string | null }[]>({ queryKey: ["/api/events"] });
-  const { data: profiles = [] } = useQuery<{ id: string; name: string; school?: string | null; isAllFamilyProfile?: boolean | null }[]>({ queryKey: ["/api/profiles"] });
+  const { data: profiles = [] } = useQuery<{ id: string; name: string; school?: string | null; facts?: string[] | null; isAllFamilyProfile?: boolean | null }[]>({ queryKey: ["/api/profiles"] });
   const { data: weather } = useQuery<{ location?: string; temperature?: number; condition?: string }>({ queryKey: ["/api/weather"], retry: false });
   const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
   const { data: meals = [] } = useQuery<Meal[]>({
@@ -134,6 +134,19 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     if (chore && tools.includes("complete_task") && pointsProfileId(chore.profileIds ?? [], profileKey)) {
       complete.mutate(chore);
       next.push({ id: `${Date.now()}-a`, role: "assistant", text: `Checked off ${chore.title}.` });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    }
+    const memory = isChild ? null : memoryFact(text, profiles);
+    if (memory && tools.includes("remember_fact")) {
+      const existing = profiles.find((person) => person.id === memory.profileId)?.facts ?? [];
+      void apiRequest("PATCH", `/api/profiles/${memory.profileId}`, { facts: rememberedFacts(existing, memory.fact) });
+      void queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
+      next.push({ id: `${Date.now()}-s`, role: "assistant", text: `I'll remember ${memory.name} ${memory.fact}.` });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    }
+    const remembered = memoryReply(text, profiles);
+    if (remembered) {
+      next.push({ id: `${Date.now()}-s`, role: "assistant", text: remembered });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const fact = isChild ? null : schoolFact(text, profiles);

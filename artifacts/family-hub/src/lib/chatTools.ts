@@ -214,6 +214,38 @@ export function dayReply(
   return kept.join("\n") || "Nothing on the plan.";
 }
 
+export function memoryFact(
+  text: string,
+  profiles: { id: string; name: string; isAllFamilyProfile?: boolean | null }[],
+): { profileId: string; name: string; fact: string } | null {
+  const match = text.trim().match(/^remember (?:that )?(.+?) ((?:is|likes|has) .+?)\.?$/i);
+  const who = match?.[1]?.trim();
+  const fact = match?.[2]?.trim();
+  if (!who || !fact) return null;
+  const profile = profiles.find((person) => person.name.trim().toLowerCase() === who.toLowerCase());
+  if (!profile || profile.isAllFamilyProfile) return null;
+  return { profileId: profile.id, name: profile.name, fact };
+}
+
+export function rememberedFacts(existing: string[], fact: string): string[] {
+  if (existing.some((item) => item.toLowerCase() === fact.toLowerCase())) return existing;
+  return [...existing, fact];
+}
+
+export function memoryReply(
+  text: string,
+  profiles: { name: string; facts?: string[] | null }[],
+): string | null {
+  const match = text.trim().match(/^what do you remember about (.+?)\??$/i);
+  const who = match?.[1]?.trim();
+  if (!who) return null;
+  const profile = profiles.find((person) => person.name.trim().toLowerCase() === who.toLowerCase());
+  if (!profile) return `I don't see ${who}.`;
+  const facts = profile.facts ?? [];
+  if (facts.length === 0) return `I don't remember anything about ${profile.name}.`;
+  return facts.map((fact) => `${profile.name} ${fact}`).join("\n");
+}
+
 export function schoolFact(
   text: string,
   profiles: { id: string; name: string }[],

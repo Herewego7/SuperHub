@@ -87,6 +87,7 @@ export const profiles = pgTable("profiles", {
   photoUrl: text("photo_url"),
   email: text("email"),
   school: text("school"),
+  facts: text("facts").array().notNull().default(sql`'{}'::text[]`),
   initials: text("initials").notNull(),
   isActive: boolean("is_active").default(true),
   isAllFamilyProfile: boolean("is_all_family_profile").default(false),

@@ -294,6 +294,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         initials: z.string().optional(),
         email: z.string().nullable().optional(),
         school: z.string().nullable().optional(),
+        facts: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
         photoUrl: z.string().nullable().optional(),
         isActive: z.boolean().optional(),
         isAllFamilyProfile: z.boolean().optional(),
