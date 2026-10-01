@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { checkOffTitle, createEventTitle, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, schoolFact, toolsForRole } from "@/lib/chatTools";
+import { checkOffTitle, createEventTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, schoolFact, toolsForRole } from "@/lib/chatTools";
+import { dinnerName, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, noteChatUnread, readThread, threadWithPlan, type ChatBubble } from "@/lib/chatThread";
@@ -58,7 +59,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       return res.json();
     },
   });
-  const { data: events = [] } = useQuery<{ id: string; title: string; source?: string | null; drivingProfileIds?: string[] | null }[]>({ queryKey: ["/api/events"] });
+  const { data: events = [] } = useQuery<{ id: string; title: string; source?: string | null; drivingProfileIds?: string[] | null; profileIds?: string[] | null; startTime?: string | null }[]>({ queryKey: ["/api/events"] });
   const { data: profiles = [] } = useQuery<{ id: string; name: string }[]>({ queryKey: ["/api/profiles"] });
   const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
   const { data: meals = [] } = useQuery<Meal[]>({
@@ -126,6 +127,21 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     const driving = drivingReply(text, events, profiles);
     if (driving) {
       next.push({ id: `${Date.now()}-r`, role: "assistant", text: driving });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    }
+    const selectedIds = profileKey.split(",").filter((id) => id && id !== "family");
+    const kid = isChild ? profiles.find((profile) => selectedIds.includes(profile.id)) : undefined;
+    const planChores = chores.filter((chore) => {
+      const people = chore.profileIds ?? [];
+      const mine = selectedIds.length === 0 || people.length === 0 || people.some((id) => selectedIds.includes(id));
+      return mine && (!kid || schoolEmailNames(chore, kid.name));
+    });
+    const planEvents = visibleForProfiles(events, selectedIds);
+    const plan = tools.includes("get_plan")
+      ? dayReply(text, { chores: planChores, events: planEvents, dinner: dinnerName(meals, new Date()), day: new Date() })
+      : null;
+    if (plan) {
+      next.push({ id: `${Date.now()}-p`, role: "assistant", text: plan });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const dinner = dinnerReply(text, meals, new Date());

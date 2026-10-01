@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkOffTitle, createEventTitle, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, schoolFact, toolsForRole } from "../../src/lib/chatTools";
+import { checkOffTitle, createEventTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, schoolFact, toolsForRole } from "../../src/lib/chatTools";
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
@@ -27,6 +27,18 @@ test("a check-off credits the person on screen", () => {
 test("check off names the chore", () => {
   assert.equal(checkOffTitle("check off dishes"), "dishes");
   assert.equal(checkOffTitle("Who is driving soccer?"), null);
+});
+
+test("what's the plan names the day and dinner", () => {
+  const day = new Date(2026, 9, 1, 15, 0);
+  const reply = dayReply("what's the plan?", {
+    chores: [{ title: "Feed the dog", taskType: "chore" }],
+    events: [{ title: "Soccer", startTime: day }],
+    dinner: "Tacos",
+    day,
+  });
+  assert.equal(reply, "Feed the dog\nSoccer\nDinner. Tacos");
+  assert.equal(dayReply("hello", { chores: [], events: [], dinner: null, day }), null);
 });
 
 test("an adult can name a person's school", () => {

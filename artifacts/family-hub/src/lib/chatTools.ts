@@ -51,6 +51,34 @@ export function checkOffTitle(text: string): string | null {
   return title ? title : null;
 }
 
+export function dayReply(
+  text: string,
+  input: {
+    chores: { title: string; taskType?: string | null }[];
+    events: { title: string; startTime: Date | string }[];
+    dinner?: string | null;
+    day: Date;
+  },
+): string | null {
+  if (!/\bwhat(?:'s| is) (?:the plan|my day)\b/i.test(text.trim())) return null;
+  const start = new Date(input.day);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  const lines: string[] = [];
+  for (const chore of input.chores) {
+    if (chore.taskType && chore.taskType !== "todo" && chore.taskType !== "chore") continue;
+    lines.push(chore.title);
+  }
+  for (const event of input.events) {
+    const at = new Date(event.startTime);
+    if (at >= start && at < end) lines.push(event.title);
+  }
+  const kept = lines.slice(0, 5);
+  if (input.dinner) kept.push(`Dinner. ${input.dinner}`);
+  return kept.join("\n") || "Nothing on the plan.";
+}
+
 export function schoolFact(
   text: string,
   profiles: { id: string; name: string }[],
