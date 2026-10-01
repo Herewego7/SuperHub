@@ -36,7 +36,7 @@ import { TodayPageSettings, getCardSettings, CardConfig } from "@/components/tod
 import type { SkippableStep } from "@/components/onboarding-wizard";
 import { HealthReminderInbox } from "@/components/health-reminder-inbox";
 import { useCelebrationSuggestion } from "@/hooks/use-celebration-suggestion";
-import { AnnouncementsBanner } from "@/components/announcements-banner";
+import { HomeDay } from "@/components/home-day";
 import { PersonCard } from "@/components/people-view";
 import { CustomizePageCard } from "@/components/customize-page-card";
 import { DELETE_SERIES_BODY } from "@/lib/copy";
@@ -2349,129 +2349,15 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           });
         }}
       />
-      <AnnouncementsBanner
-        selectedProfiles={selectedProfiles}
-        profiles={profiles}
-        onNavigateToEvent={onNavigateToEvent}
-        onNavigateToParentControls={onNavigateToParentControls}
-        onNavigateToRewardSuggestions={onNavigateToRewardSuggestions}
-        onReplayOnboarding={onReplayOnboarding}
-        initialOpenCelebrationId={celebrationDeepLinkId}
+      <HomeDay
+        chores={chores}
+        completions={choreCompletions}
+        events={allEvents}
+        selectedIds={selectedProfiles}
+        familyIds={profiles.filter(p => !p.isAllFamilyProfile).map(p => p.id)}
+        day={selectedDate}
+        onOpenChores={() => setActiveTab("chores")}
       />
-      {/* Dynamic Card Rendering — respects user's card order */}
-      {visibleCards.length === 0 ? (
-        <div className="text-center py-12 bg-card rounded-2xl border border-border" data-testid="no-cards-message">
-          <p className="text-muted-foreground">No cards visible — open settings to add some.</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-6 w-full min-w-0">
-          {(() => {
-            const FULL_WIDTH_IDS = new Set([...(wideEventsCard ? ['events'] : [])]);
-            type Seg =
-              | { type: 'full'; card: (typeof visibleCards)[0] }
-              | { type: 'columns'; cards: typeof visibleCards };
-            const segments: Seg[] = [];
-            let colBuffer: typeof visibleCards = [];
-            for (const card of visibleCards) {
-              if (FULL_WIDTH_IDS.has(card.id)) {
-                if (colBuffer.length > 0) { segments.push({ type: 'columns', cards: colBuffer }); colBuffer = []; }
-                segments.push({ type: 'full', card });
-              } else {
-                colBuffer.push(card);
-              }
-            }
-            if (colBuffer.length > 0) segments.push({ type: 'columns', cards: colBuffer });
-
-            return segments.map((seg, si) => {
-              if (seg.type === 'full') {
-                return (
-                  <motion.div
-                    key={seg.card.id}
-                    initial={{ opacity: 0, y: 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -16, transition: { duration: 0.2, ease: "easeIn" } }}
-                    transition={{ duration: 0.32, ease: "easeOut" }}
-                    data-testid={`card-container-${seg.card.id}`}
-                  >
-                    {renderCard(seg.card.id)}
-                  </motion.div>
-                );
-              }
-              // Below `md:` there's no second column to actually show — the
-              // left/right split still stacked both columns full-height, one
-              // after the other, in true DOM order that's why a mobile
-              // screen showed cards 1,3,5 (left column) then 2,4,6 (right
-              // column) instead of the real 1,2,3,4,5,6 order someone set in
-              // Customize. Rendering one flat list in real order on mobile
-              // fixes that; the two-column split (and its own reasoning for
-              // being flex columns rather than a CSS grid — see the Tasks
-              // tab's own card-layout fix elsewhere in this codebase, which
-              // hit the identical row-height-coupling problem a plain grid
-              // would reintroduce here) still applies at `md:`+.
-              if (isMobile) {
-                return (
-                  <div key={`seg-${si}`} className="flex flex-col gap-6 w-full min-w-0">
-                    <AnimatePresence initial={false}>
-                      {seg.cards.map(card => (
-                        <motion.div
-                          key={card.id}
-                          initial={{ opacity: 0, y: 24 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -16, transition: { duration: 0.2, ease: "easeIn" } }}
-                          transition={{ duration: 0.2, ease: "easeOut" }}
-                          data-testid={`card-container-${card.id}`}
-                        >
-                          {renderCard(card.id)}
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                  </div>
-                );
-              }
-              const left = seg.cards.filter((_, i) => i % 2 === 0);
-              const right = seg.cards.filter((_, i) => i % 2 === 1);
-              return (
-                <div key={`seg-${si}`} className="flex flex-col md:flex-row gap-6 items-start w-full min-w-0">
-                  <div className="flex flex-col gap-6 flex-1 min-w-0 w-full md:w-auto">
-                    <AnimatePresence initial={false}>
-                      {left.map(card => (
-                        <motion.div
-                          key={card.id}
-                          initial={{ opacity: 0, y: 24 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -16, transition: { duration: 0.2, ease: "easeIn" } }}
-                          transition={{ duration: 0.2, ease: "easeOut" }}
-                          data-testid={`card-container-${card.id}`}
-                        >
-                          {renderCard(card.id)}
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                  </div>
-                  {right.length > 0 && (
-                    <div className="flex flex-col gap-6 flex-1 min-w-0 w-full md:w-auto">
-                      <AnimatePresence initial={false}>
-                        {right.map(card => (
-                          <motion.div
-                            key={card.id}
-                            initial={{ opacity: 0, y: 24 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -16, transition: { duration: 0.2, ease: "easeIn" } }}
-                            transition={{ duration: 0.32, ease: "easeOut" }}
-                            data-testid={`card-container-${card.id}`}
-                          >
-                            {renderCard(card.id)}
-                          </motion.div>
-                        ))}
-                      </AnimatePresence>
-                    </div>
-                  )}
-                </div>
-              );
-            });
-          })()}
-        </div>
-      )}
 
       <CustomizePageCard
         label="Customize Home Page"
