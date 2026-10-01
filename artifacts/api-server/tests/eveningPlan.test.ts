@@ -18,6 +18,19 @@ test("two people claimed together both stay sent", () => {
   assert.deepEqual(second.sentKeys, ["dad:2026-10-02", "kid:2026-10-02"]);
 });
 
+test("a finished to-do stays out of tomorrow's plan", () => {
+  const rows = choresForPlan(
+    [
+      { id: "milk", title: "Buy milk", taskType: "todo", profileIds: ["liam"] },
+      { id: "dog", title: "Feed the dog", taskType: "chore", profileIds: ["liam"] },
+    ],
+    [],
+    "liam",
+    ["milk"],
+  );
+  assert.deepEqual(rows.map((row) => row.id), ["dog"]);
+});
+
 test("the plan keeps this person's open chores", () => {
   const rows = choresForPlan(
     [

@@ -48,14 +48,17 @@ export function moveClock(previous: Date | null | undefined, next: Date | null |
   return `${hours}:${mm} ${suffix}`;
 }
 
-export function choresForPlan<T extends { id: string; profileIds?: string[] | null }>(
+export function choresForPlan<T extends { id: string; profileIds?: string[] | null; taskType?: string | null }>(
   chores: T[],
   completedIds: string[],
   profileId: string,
+  finishedTodoIds: string[] = [],
 ): T[] {
   const done = new Set(completedIds);
+  const finished = new Set(finishedTodoIds);
   return chores.filter((chore) => {
     if (done.has(chore.id)) return false;
+    if (chore.taskType === "todo" && finished.has(chore.id)) return false;
     const ids = chore.profileIds ?? [];
     return ids.length === 0 || ids.includes(profileId);
   });
@@ -143,7 +146,10 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const doneToday = completions
       .filter((completion) => completion.completedAt && localDate(new Date(completion.completedAt), tz) === target)
       .map((completion) => completion.choreId);
-    const openChores = choresForPlan(chores, doneToday, profile.id);
+    const finishedTodos = completions
+      .filter((completion) => chores.some((chore) => chore.id === completion.choreId && chore.taskType === "todo"))
+      .map((completion) => completion.choreId);
+    const openChores = choresForPlan(chores, doneToday, profile.id, finishedTodos);
     const dayEvents = events
       .filter((event) => localDate(new Date(event.startTime), tz) === target)
       .map((event) => ({ title: event.title, description: event.description, movedFrom: event.movedFrom, source: event.source }));
