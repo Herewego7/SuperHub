@@ -271,3 +271,9 @@ export function deleteEventTitle(text: string): string | null {
 export function importedEventNeedsConfirm(source: string | null | undefined): boolean {
   return !!source && source !== "app" && source !== "meal";
 }
+
+export function deleteEventAction(source: string | null | undefined, id: string): "keep" | "confirm" | "delete" {
+  if (id.startsWith("google-") || source === "meal") return "keep";
+  if (importedEventNeedsConfirm(source)) return "confirm";
+  return "delete";
+}

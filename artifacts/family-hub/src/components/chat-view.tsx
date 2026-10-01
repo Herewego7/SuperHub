@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, importedEventNeedsConfirm, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
+import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, importedEventNeedsConfirm, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
 import { dinnerName, mailVisibleToKid, openTodos, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
@@ -182,9 +182,20 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     }
     const removeTitle = deleteEventTitle(text);
     const target = removeTitle ? talkEvents.find((event) => event.title.toLowerCase() === removeTitle.toLowerCase()) : undefined;
-    if (target && tools.includes("delete_event") && importedEventNeedsConfirm(target.source)) {
-      setPendingDeleteId(target.id);
-      next.push({ id: `${Date.now()}-c`, role: "assistant", text: `Delete ${target.title}? It came from outside the app. Reply yes to delete it.` });
+    if (target && tools.includes("delete_event")) {
+      const action = deleteEventAction(target.source, target.id);
+      if (action === "keep") {
+        next.push({ id: `${Date.now()}-c`, role: "assistant", text: target.source === "meal" ? `${target.title} stays on the meal plan.` : `${target.title} stays on Google Calendar.` });
+      } else if (action === "confirm") {
+        setPendingMove(null);
+        setPendingDeleteId(target.id);
+        next.push({ id: `${Date.now()}-c`, role: "assistant", text: `Delete ${target.title}? It came from outside the app. Reply yes to delete it.` });
+      } else {
+        setPendingDeleteId(null);
+        void apiRequest("DELETE", `/api/events/${target.id}`);
+        void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        next.push({ id: `${Date.now()}-c`, role: "assistant", text: `Deleted ${target.title}.` });
+      }
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const moving = moveEventWhen(text);
