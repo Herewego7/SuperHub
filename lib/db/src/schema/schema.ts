@@ -98,6 +98,9 @@ export const profiles = pgTable("profiles", {
   bedtimeCutoff: varchar("bedtime_cutoff", { length: 5 }),
   // Optional daily morning-brief send time, "HH:MM" local. NULL = off.
   dailyBriefTime: varchar("daily_brief_time", { length: 5 }),
+  // Evening plan replaces the daily brief for this person. NULL = keep the brief.
+  eveningPlanTime: varchar("evening_plan_time", { length: 5 }),
+  eveningPlanTiming: text("evening_plan_timing").notNull().default("eveningBefore"),
   // Days of the week (0=Sun … 6=Sat) that don't count as chore days for this
   // profile's streak. Missing a skip day never breaks the streak.
   streakSkipDays: integer("streak_skip_days").array().notNull().default(sql`'{}'::integer[]`),
@@ -348,6 +351,7 @@ export const calendarSettings = pgTable("calendar_settings", {
   shareOriginals: boolean("share_originals").notNull().default(false),
   mutedSenders: jsonb("muted_senders").$type<string[]>().notNull().default([]),
   dismissedSlipKeys: jsonb("dismissed_slip_keys").$type<string[]>().notNull().default([]),
+  planSentKeys: jsonb("plan_sent_keys").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [

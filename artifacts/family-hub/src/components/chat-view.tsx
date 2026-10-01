@@ -5,6 +5,12 @@ import type { Chore } from "@workspace/shared-types";
 import { checkOffTitle, toolsForRole } from "@/lib/chatTools";
 import { appendUserMessage, readThread, type ChatBubble } from "@/lib/chatThread";
 
+const PLAN_KEY = "superhub_evening_plan";
+
+export function stageEveningPlan(text: string) {
+  sessionStorage.setItem(PLAN_KEY, text);
+}
+
 type Props = {
   profileKey: string;
   isChild: boolean;
@@ -14,7 +20,16 @@ type Props = {
 
 export function ChatView({ profileKey, isChild, revision, onSent }: Props) {
   const [draft, setDraft] = useState("");
-  const [bubbles, setBubbles] = useState<ChatBubble[]>(() => readThread(profileKey));
+  const [bubbles, setBubbles] = useState<ChatBubble[]>(() => {
+  const thread = readThread(profileKey);
+  const plan = typeof sessionStorage === "undefined" ? null : sessionStorage.getItem(PLAN_KEY);
+    if (!plan) return thread;
+    sessionStorage.removeItem(PLAN_KEY);
+    if (thread.some((bubble) => bubble.text === plan)) return thread;
+    const next = [{ id: "evening-plan", role: "assistant" as const, text: plan }, ...thread];
+    localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    return next;
+  });
   const tools = toolsForRole(isChild);
   const { data: chores = [] } = useQuery<Chore[]>({ queryKey: ["/api/chores"] });
 

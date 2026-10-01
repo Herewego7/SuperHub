@@ -54,6 +54,7 @@ export async function runDailyBriefTick(now: Date = new Date()): Promise<boolean
 
   for (const p of candidates) {
     if (!p.userId || !p.dailyBriefTime) continue;
+    if (p.eveningPlanTime) continue;
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.dailyBriefTime)) continue;
     const tz = tzCache.get(p.userId) ?? DEFAULT_TIMEZONE;
     const today = localDate(now, tz);
