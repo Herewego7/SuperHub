@@ -30,6 +30,14 @@ export function claimPlanSend(sentKeys: string[], profileId: string, day: string
   return { send: true, sentKeys: [...sentKeys, key] };
 }
 
+export function planKeysForClaim(saved: string[] | null | undefined, held: string[] | null | undefined): string[] {
+  const keys: string[] = [];
+  for (const key of [...(saved ?? []), ...(held ?? [])]) {
+    if (key && !keys.includes(key)) keys.push(key);
+  }
+  return keys;
+}
+
 export function planBody(input: {
   isChild: boolean;
   chores: { title: string; taskType?: string | null; category?: string | null }[];
@@ -45,9 +53,11 @@ export function planBody(input: {
   for (const event of input.events) {
     lines.push(event.movedFrom ? `${event.title} moved from ${event.movedFrom}` : event.title);
   }
-  if (input.dinner) lines.push(`Dinner. ${input.dinner}`);
-  const body = lines.slice(0, 6).join("\n");
-  return body || "Nothing on the plan.";
+  const dinnerLine = input.dinner ? `Dinner. ${input.dinner}` : null;
+  const room = dinnerLine ? 5 : 6;
+  const kept = lines.slice(0, room);
+  if (dinnerLine) kept.push(dinnerLine);
+  return kept.join("\n") || "Nothing on the plan.";
 }
 
 export function planOpenPath(body: string): string {
@@ -72,6 +82,7 @@ function minutesSince(scheduled: string, currentHHMM: string): number {
 export async function runEveningPlanTick(now: Date = new Date()): Promise<boolean> {
   const candidates = await db.select().from(profiles).where(isNotNull(profiles.eveningPlanTime));
   if (candidates.length === 0) return false;
+  const held = new Map<string, string[]>();
   for (const profile of candidates) {
     if (!profile.userId || !profile.eveningPlanTime) continue;
     if (pushesForProfile({ planTime: profile.eveningPlanTime, dailyBriefTime: profile.dailyBriefTime }).includes("daily-brief")) continue;
@@ -81,7 +92,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const day = localDate(now, tz);
     const elapsed = minutesSince(profile.eveningPlanTime, localHHMM(now, tz));
     if (elapsed < 0 || elapsed > CATCH_UP_MINUTES) continue;
-    const claim = claimPlanSend(settings?.planSentKeys ?? [], profile.id, day);
+    const claim = claimPlanSend(planKeysForClaim(settings?.planSentKeys, held.get(profile.userId)), profile.id, day);
     if (!claim.send) continue;
     const isChild = profile.role === "child" || profile.isChild === true;
     const chores = await storage.getChoresByUser(profile.userId);
@@ -89,7 +100,10 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const meals = await storage.getMealsByUser(profile.userId);
     const target = profile.eveningPlanTiming === "morningOf" ? day : nextDayKey(day);
     const dinner = meals.find((meal) => meal.date === target && meal.slot === "dinner")?.name ?? null;
-    const body = planBody({ isChild, chores, events, dinner });
+    const dayEvents = events
+      .filter((event) => localDate(new Date(event.startTime), tz) === target)
+      .map((event) => ({ title: event.title }));
+    const body = planBody({ isChild, chores, events: dayEvents, dinner });
     try {
       await sendPushToUser(
         { userId: profile.userId, profileId: profile.id },
@@ -102,6 +116,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
         },
       );
       await storage.updateCalendarSettings({ planSentKeys: claim.sentKeys, userId: profile.userId });
+      held.set(profile.userId, claim.sentKeys);
     } catch (err) {
       logger.warn({ err, profileId: profile.id }, "Evening plan failed");
     }

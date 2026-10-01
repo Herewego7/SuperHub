@@ -1,10 +1,34 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { claimPlanSend, planBody, planOpenPath, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
+import { claimPlanSend, planBody, planKeysForClaim, planOpenPath, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
 
 test("a profile with a plan time does not also receive a daily brief", () => {
   const kinds = pushesForProfile({ planTime: "19:00", dailyBriefTime: "07:30" });
   assert.deepEqual(kinds, ["evening-plan"]);
+});
+
+test("two people claimed together both stay sent", () => {
+  const saved = planKeysForClaim(["dad:2026-10-02"], ["dad:2026-10-02"]);
+  const second = claimPlanSend(planKeysForClaim([], saved), "kid", "2026-10-02");
+  assert.deepEqual(second.sentKeys, ["dad:2026-10-02", "kid:2026-10-02"]);
+});
+
+test("dinner stays in the plan when the list is long", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [
+      { title: "One", taskType: "chore" },
+      { title: "Two", taskType: "chore" },
+      { title: "Three", taskType: "chore" },
+      { title: "Four", taskType: "chore" },
+      { title: "Five", taskType: "chore" },
+      { title: "Six", taskType: "chore" },
+    ],
+    events: [],
+    dinner: "Tacos",
+  });
+  assert.equal(body.includes("Dinner. Tacos"), true);
+  assert.equal(body.includes("Six"), false);
 });
 
 test("a second run the same day does not send again", () => {
