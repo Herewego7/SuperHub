@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, dinnerName, horizonEvents, todosForHome } from "@/lib/homeDay";
+import { choreProgress, dinnerName, horizonEvents, schoolEmailNames, todosForHome } from "@/lib/homeDay";
 
 type Props = {
   chores: Chore[];
@@ -11,10 +11,11 @@ type Props = {
   selectedIds: string[];
   familyIds: string[];
   day: Date;
+  kidName?: string | null;
   onOpenChores: () => void;
 };
 
-export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, onOpenChores }: Props) {
+export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, kidName, onOpenChores }: Props) {
   const [earlierOpen, setEarlierOpen] = useState(false);
   const dayKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
   const { data: meals = [] } = useQuery<Meal[]>({
@@ -54,7 +55,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
     },
   });
 
-  const todos = todosForHome(chores, selectedIds, familyIds);
+  const todos = todosForHome(chores, selectedIds, familyIds).filter((todo) => !kidName || schoolEmailNames(todo, kidName));
   const progress = choreProgress(chores, completions, day);
   const start = new Date(day);
   start.setHours(0, 0, 0, 0);

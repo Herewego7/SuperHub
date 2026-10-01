@@ -73,6 +73,17 @@ export function horizonEvents<T extends HorizonEvent>(events: T[], day: Date): T
   });
 }
 
+export function schoolEmailNames(
+  todo: { title: string; description?: string | null; category?: string | null },
+  kidName: string,
+): boolean {
+  if (todo.category !== "school_email") return true;
+  const name = kidName.trim();
+  if (!name) return false;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escaped}\\b`, "i").test(`${todo.title}\n${todo.description ?? ""}`);
+}
+
 export function dinnerName(meals: Array<{ date: string; slot: string; name: string }>, day: Date): string | null {
   const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
   return meals.find((meal) => meal.date === key && meal.slot === "dinner")?.name ?? null;

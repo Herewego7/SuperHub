@@ -2356,6 +2356,12 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
         selectedIds={selectedProfiles}
         familyIds={profiles.filter(p => !p.isAllFamilyProfile).map(p => p.id)}
         day={selectedDate}
+        kidName={(() => {
+          const picked = profiles.filter((p) => !p.isAllFamilyProfile && selectedProfiles.includes(p.id));
+          if (picked.length !== 1) return null;
+          const person = picked[0];
+          return person.role === "child" || person.isChild ? person.name : null;
+        })()}
         onOpenChores={() => setActiveTab("chores")}
       />
 
