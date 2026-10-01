@@ -1,9 +1,12 @@
+import { localDate, zonedWallClock } from "../lib/timezone";
+
 /** A dinner written while the household switch is on. Breakfast and lunch stay off the calendar. */
 
 export function dinnerEventInsert(
   meal: { date: string; slot: string; name: string },
   familyCalendarId: string | null | undefined,
   enabled: boolean,
+  timeZone?: string,
 ): {
   title: string;
   startTime: Date;
@@ -14,10 +17,10 @@ export function dinnerEventInsert(
   source: "meal";
 } | null {
   if (!enabled || meal.slot !== "dinner" || !meal.name.trim()) return null;
-  const start = new Date(`${meal.date}T18:00:00`);
+  const start = timeZone ? zonedWallClock(meal.date, 18, 0, timeZone) : new Date(`${meal.date}T18:00:00`);
   if (Number.isNaN(start.getTime())) return null;
-  const end = new Date(start);
-  end.setHours(19, 0, 0, 0);
+  const end = timeZone ? zonedWallClock(meal.date, 19, 0, timeZone) : new Date(start);
+  if (!timeZone) end.setHours(19, 0, 0, 0);
   const calendarId = familyCalendarId?.trim();
   return {
     title: meal.name.trim(),
@@ -30,20 +33,21 @@ export function dinnerEventInsert(
   };
 }
 
-export function dinnerEventDay(start: Date | string): string {
+export function dinnerEventDay(start: Date | string, timeZone?: string): string {
   const at = new Date(start);
+  if (timeZone) return localDate(at, timeZone);
   return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
 }
 
 type MealSpot = { date: string; slot: string; name: string };
 type MealEvent = { id: string; title: string; source?: string | null; startTime: Date | string };
 
-export function dinnersToCopy<T extends MealSpot>(meals: T[], events: MealEvent[]): T[] {
-  return meals.filter((meal) => meal.slot === "dinner" && matchingDinnerEvents(meal, events).length === 0);
+export function dinnersToCopy<T extends MealSpot>(meals: T[], events: MealEvent[], timeZone?: string): T[] {
+  return meals.filter((meal) => meal.slot === "dinner" && matchingDinnerEvents(meal, events, timeZone).length === 0);
 }
 
-export function matchingDinnerEvents(meal: MealSpot, events: MealEvent[]): MealEvent[] {
-  return events.filter((event) => event.source === "meal" && event.title === meal.name && dinnerEventDay(event.startTime) === meal.date);
+export function matchingDinnerEvents(meal: MealSpot, events: MealEvent[], timeZone?: string): MealEvent[] {
+  return events.filter((event) => event.source === "meal" && event.title === meal.name && dinnerEventDay(event.startTime, timeZone) === meal.date);
 }
 
 /** While the switch is on, the calendar copy follows a rename, a move, or a delete. Off leaves existing copies alone. */
@@ -53,12 +57,13 @@ export function dinnerCalendarChange(
   events: MealEvent[],
   familyCalendarId: string | null | undefined,
   enabled: boolean,
+  timeZone?: string,
 ): { updateId: string | null; deleteIds: string[]; create: ReturnType<typeof dinnerEventInsert> } {
   const none = { updateId: null, deleteIds: [] as string[], create: null };
   if (!enabled) return none;
-  const matches = previous && previous.slot === "dinner" ? matchingDinnerEvents(previous, events) : [];
+  const matches = previous && previous.slot === "dinner" ? matchingDinnerEvents(previous, events, timeZone) : [];
   if (!next || next.slot !== "dinner") return { updateId: null, deleteIds: matches.map((event) => event.id), create: null };
-  const event = dinnerEventInsert(next, familyCalendarId, true);
+  const event = dinnerEventInsert(next, familyCalendarId, true, timeZone);
   if (matches.length === 0) return { updateId: null, deleteIds: [], create: event };
   return { updateId: matches[0].id, deleteIds: matches.slice(1).map((row) => row.id), create: event };
 }

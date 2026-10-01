@@ -47,6 +47,20 @@ test("turning the switch on copies only dinners that are not already on the cale
   assert.deepEqual(copied.map((meal) => meal.name), ["Soup"]);
 });
 
+test("a dinner is 6pm in the family timezone", () => {
+  const summer = dinnerEventInsert({ date: "2026-10-02", slot: "dinner", name: "Tacos" }, "family", true, "America/Chicago");
+  assert.equal(summer?.startTime.toISOString(), "2026-10-02T23:00:00.000Z");
+  assert.equal(summer?.endTime.toISOString(), "2026-10-03T00:00:00.000Z");
+  const winter = dinnerEventInsert({ date: "2026-01-15", slot: "dinner", name: "Soup" }, "family", true, "America/Chicago");
+  assert.equal(winter?.startTime.toISOString(), "2026-01-16T00:00:00.000Z");
+  const copied = dinnersToCopy(
+    [{ date: "2026-10-02", slot: "dinner", name: "Tacos" }],
+    [{ id: "e1", title: "Tacos", source: "meal", startTime: summer!.startTime }],
+    "America/Chicago",
+  );
+  assert.deepEqual(copied, []);
+});
+
 test("the switch off leaves a new dinner off the calendar", () => {
   assert.equal(dinnerEventInsert({ date: "2026-10-01", slot: "dinner", name: "Tacos" }, "family", false), null);
   assert.equal(dinnerEventInsert({ date: "2026-10-01", slot: "breakfast", name: "Oatmeal" }, "family", true), null);

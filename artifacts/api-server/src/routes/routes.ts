@@ -3248,9 +3248,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const meals = await storage.getMealsByUserAndDateRange(userId, req.body.start, req.body.end);
       const events = await storage.getEventsByUser(userId);
+      const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
       let copied = 0;
-      for (const meal of dinnersToCopy(meals, events)) {
-        const event = dinnerEventInsert(meal, settings.familyCalendarId, true);
+      for (const meal of dinnersToCopy(meals, events, timeZone)) {
+        const event = dinnerEventInsert(meal, settings.familyCalendarId, true, timeZone);
         if (!event) continue;
         await storage.createEvent({ ...event, userId });
         copied += 1;
@@ -5405,7 +5406,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const settings = await storage.getCalendarSettingsByUser(userId);
       const events = await storage.getEventsByUser(userId);
-      const change = dinnerCalendarChange(previous, next, events, settings?.familyCalendarId, settings?.mealsOnCalendar === true);
+      const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
+      const change = dinnerCalendarChange(previous, next, events, settings?.familyCalendarId, settings?.mealsOnCalendar === true, timeZone);
       if (change.updateId && change.create) await storage.updateEvent(change.updateId, change.create, userId);
       for (const id of change.deleteIds) await storage.deleteEvent(id, userId);
       if (!change.updateId && change.create) await storage.createEvent({ ...change.create, userId });
@@ -5423,7 +5425,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const created = await storage.createMeal(mealData);
       const savedIngredients = await storage.replaceMealIngredients(created.id, ingredients);
       const settings = await storage.getCalendarSettingsByUser(userId);
-      const dinnerEvent = dinnerEventInsert(created, settings?.familyCalendarId, settings?.mealsOnCalendar === true);
+      const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
+      const dinnerEvent = dinnerEventInsert(created, settings?.familyCalendarId, settings?.mealsOnCalendar === true, timeZone);
       if (dinnerEvent) {
         try {
           await storage.createEvent({ ...dinnerEvent, userId });
