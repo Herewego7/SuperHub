@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, schoolFact, toolsForRole } from "@/lib/chatTools";
+import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, moveEventWhen, pointsProfileId, schoolFact, toolsForRole } from "@/lib/chatTools";
 import { dinnerName, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
@@ -30,6 +30,7 @@ type Props = {
 export function ChatView({ profileKey, isChild, revision, profileReady, onSent }: Props) {
   const [draft, setDraft] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [pendingMove, setPendingMove] = useState<{ id: string; start: string; end: string } | null>(null);
   const [bubbles, setBubbles] = useState<ChatBubble[]>(() => readThread(profileKey));
   useEffect(() => {
     if (!profileReady || typeof sessionStorage === "undefined") return;
@@ -60,7 +61,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       return res.json();
     },
   });
-  const { data: events = [] } = useQuery<{ id: string; title: string; source?: string | null; drivingProfileIds?: string[] | null; profileIds?: string[] | null; startTime?: string | null }[]>({ queryKey: ["/api/events"] });
+  const { data: events = [] } = useQuery<{ id: string; title: string; source?: string | null; drivingProfileIds?: string[] | null; profileIds?: string[] | null; startTime?: string | null; endTime?: string | null }[]>({ queryKey: ["/api/events"] });
   const { data: profiles = [] } = useQuery<{ id: string; name: string }[]>({ queryKey: ["/api/profiles"] });
   const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
   const { data: meals = [] } = useQuery<Meal[]>({
@@ -111,6 +112,17 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       onSent();
       return;
     }
+    if (pendingMove && /^yes\.?$/i.test(text.trim())) {
+      void apiRequest("PATCH", `/api/events/${pendingMove.id}`, { startTime: pendingMove.start, endTime: pendingMove.end });
+      void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      setPendingMove(null);
+      next.push({ id: `${Date.now()}-m`, role: "assistant", text: "Moved." });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      onSent();
+      return;
+    }
     const title = checkOffTitle(text);
     const chore = title ? chores.find((item) => item.title.toLowerCase() === title.toLowerCase() && item.taskType !== "todo") : undefined;
     if (chore && tools.includes("complete_task")) {
@@ -155,6 +167,30 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     if (target && tools.includes("delete_event") && importedEventNeedsConfirm(target.source)) {
       setPendingDeleteId(target.id);
       next.push({ id: `${Date.now()}-c`, role: "assistant", text: `Delete ${target.title}? It came from outside the app. Reply yes to delete it.` });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    }
+    const moving = moveEventWhen(text);
+    const moved = moving ? events.find((event) => event.title.toLowerCase() === moving.title.toLowerCase()) : undefined;
+    if (moved && moving && tools.includes("update_event")) {
+      if (moved.id.startsWith("google-")) {
+        next.push({ id: `${Date.now()}-m`, role: "assistant", text: `${moved.title} stays on Google Calendar.` });
+      } else {
+        const start = new Date(moved.startTime ?? Date.now());
+        const end = moved.endTime ? new Date(moved.endTime) : new Date(start.getTime() + 60 * 60 * 1000);
+        const duration = Math.max(end.getTime() - start.getTime(), 60 * 60 * 1000);
+        start.setHours(moving.hours, moving.minutes, 0, 0);
+        const finish = new Date(start.getTime() + duration);
+        if (importedEventNeedsConfirm(moved.source)) {
+          setPendingDeleteId(null);
+          setPendingMove({ id: moved.id, start: start.toISOString(), end: finish.toISOString() });
+          next.push({ id: `${Date.now()}-m`, role: "assistant", text: `Move ${moved.title}? It came from outside the app. Reply yes to move it.` });
+        } else {
+          setPendingMove(null);
+          void apiRequest("PATCH", `/api/events/${moved.id}`, { startTime: start.toISOString(), endTime: finish.toISOString() });
+          void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+          next.push({ id: `${Date.now()}-m`, role: "assistant", text: `Moved ${moved.title}.` });
+        }
+      }
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const createdTitle = createEventTitle(text);

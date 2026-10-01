@@ -175,6 +175,19 @@ export function drivingReply(
   return `${names.slice(0, -1).join(", ")} and ${last} are driving ${event.title}.`;
 }
 
+export function moveEventWhen(text: string): { title: string; hours: number; minutes: number } | null {
+  const match = text.trim().match(/^move\s+(.+?)\s+to\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\.?$/i);
+  if (!match) return null;
+  const title = match[1].trim();
+  let hours = Number(match[2]);
+  const minutes = match[3] ? Number(match[3]) : 0;
+  const suffix = match[4].toLowerCase();
+  if (!title || hours < 1 || hours > 12 || minutes > 59) return null;
+  if (suffix === "pm" && hours !== 12) hours += 12;
+  if (suffix === "am" && hours === 12) hours = 0;
+  return { title, hours, minutes };
+}
+
 export function deleteEventTitle(text: string): string | null {
   const match = /^(?:please\s+)?(?:delete|remove|cancel)\s+(?:the\s+)?(?:event\s+)?["']?(.+?)["']?\.?$/i.exec(text.trim());
   const title = match?.[1]?.trim();
