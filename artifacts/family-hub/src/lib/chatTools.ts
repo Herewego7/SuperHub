@@ -181,6 +181,11 @@ export function dayReply(
   }
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
+  const finishedTodos = new Set(
+    (input.completions ?? [])
+      .filter((completion) => input.chores.some((chore) => chore.id === completion.choreId && chore.taskType === "todo"))
+      .map((completion) => completion.choreId),
+  );
   const done = new Set(
     (input.completions ?? [])
       .filter((completion) => {
@@ -192,7 +197,7 @@ export function dayReply(
   );
   const lines: string[] = [];
   for (const chore of input.chores) {
-    if (chore.id && done.has(chore.id)) continue;
+    if (chore.id && (done.has(chore.id) || finishedTodos.has(chore.id))) continue;
     if (!dueOnDay(chore, start)) continue;
     lines.push(chore.title);
   }
