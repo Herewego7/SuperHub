@@ -102,26 +102,45 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   function send(text: string) {
     const next = appendUserMessage(profileKey, text);
     if (!next) return;
-    if (pendingDeleteId && /^yes\.?$/i.test(text.trim())) {
-      void apiRequest("DELETE", `/api/events/${pendingDeleteId}`);
-      void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      setPendingDeleteId(null);
-      next.push({ id: `${Date.now()}-y`, role: "assistant", text: "Deleted." });
-      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    const replyAfter = (request: Promise<unknown>, ok: string, remount = false) => {
       setBubbles(next);
       setDraft("");
-      onSent();
+      void request
+        .then(() => {
+          const saved = [...next, { id: `${Date.now()}-ok`, role: "assistant" as const, text: ok }];
+          localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(saved));
+          if (remount) onSent();
+          else setBubbles(saved);
+        })
+        .catch(() => {
+          const failed = [...next, { id: `${Date.now()}-ok`, role: "assistant" as const, text: "I couldn't save that yet." }];
+          localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(failed));
+          if (remount) onSent();
+          else setBubbles(failed);
+        });
+    };
+    if (pendingDeleteId && /^yes\.?$/i.test(text.trim())) {
+      const id = pendingDeleteId;
+      setPendingDeleteId(null);
+      replyAfter(
+        apiRequest("DELETE", `/api/events/${id}`).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        }),
+        "Deleted.",
+        true,
+      );
       return;
     }
     if (pendingMove && /^yes\.?$/i.test(text.trim())) {
-      void apiRequest("PATCH", `/api/events/${pendingMove.id}`, { startTime: pendingMove.start, endTime: pendingMove.end });
-      void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      const move = pendingMove;
       setPendingMove(null);
-      next.push({ id: `${Date.now()}-m`, role: "assistant", text: "Moved." });
-      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
-      setBubbles(next);
-      setDraft("");
-      onSent();
+      replyAfter(
+        apiRequest("PATCH", `/api/events/${move.id}`, { startTime: move.start, endTime: move.end }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        }),
+        "Moved.",
+        true,
+      );
       return;
     }
     const selectedIds = profileKey.split(",").filter((id) => id && id !== "family");
@@ -132,9 +151,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     const titled = title ? talkChores.filter((item) => item.title.toLowerCase() === title.toLowerCase()) : [];
     const chore = titled.find((item) => item.taskType !== "todo") ?? titled[0];
     if (chore && tools.includes("complete_task") && pointsProfileId(chore.profileIds ?? [], profileKey)) {
-      complete.mutate(chore);
-      next.push({ id: `${Date.now()}-a`, role: "assistant", text: `Checked off ${chore.title}.` });
-      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      replyAfter(complete.mutateAsync(chore), `Checked off ${chore.title}.`);
+      return;
     }
     const memory = isChild ? null : memoryFact(text, profiles);
     if (memory && tools.includes("remember_fact")) {
@@ -146,20 +164,12 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         setDraft("");
         return;
       }
-      setBubbles(next);
-      setDraft("");
-      void apiRequest("PATCH", `/api/profiles/${memory.profileId}`, { facts: rememberedFacts(existing, memory.fact) })
-        .then(() => {
+      replyAfter(
+        apiRequest("PATCH", `/api/profiles/${memory.profileId}`, { facts: rememberedFacts(existing, memory.fact) }).then(() => {
           void queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
-          const saved = [...next, { id: `${Date.now()}-s`, role: "assistant" as const, text: `I'll remember ${memory.name} ${memory.fact}.` }];
-          localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(saved));
-          setBubbles(saved);
-        })
-        .catch(() => {
-          const failed = [...next, { id: `${Date.now()}-s`, role: "assistant" as const, text: "I couldn't save that yet." }];
-          localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(failed));
-          setBubbles(failed);
-        });
+        }),
+        `I'll remember ${memory.name} ${memory.fact}.`,
+      );
       return;
     }
     const remembered = memoryReply(text, profiles);
@@ -169,10 +179,13 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     }
     const fact = isChild ? null : schoolFact(text, profiles);
     if (fact && tools.includes("remember_fact")) {
-      void apiRequest("PATCH", `/api/profiles/${fact.profileId}`, { school: fact.school });
-      void queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
-      next.push({ id: `${Date.now()}-s`, role: "assistant", text: `Saved ${fact.name}'s school as ${fact.school}.` });
-      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      replyAfter(
+        apiRequest("PATCH", `/api/profiles/${fact.profileId}`, { school: fact.school }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
+        }),
+        `Saved ${fact.name}'s school as ${fact.school}.`,
+      );
+      return;
     }
     const school = schoolReply(text, profiles, kid?.name ?? profiles.find((profile) => selectedIds.length === 1 && profile.id === selectedIds[0])?.name);
     if (school) {
@@ -223,9 +236,13 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         next.push({ id: `${Date.now()}-c`, role: "assistant", text: `Delete ${target.title}? It came from outside the app. Reply yes to delete it.` });
       } else {
         setPendingDeleteId(null);
-        void apiRequest("DELETE", `/api/events/${target.id}`);
-        void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-        next.push({ id: `${Date.now()}-c`, role: "assistant", text: `Deleted ${target.title}.` });
+        replyAfter(
+          apiRequest("DELETE", `/api/events/${target.id}`).then(() => {
+            void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+          }),
+          `Deleted ${target.title}.`,
+        );
+        return;
       }
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
@@ -250,9 +267,13 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
           next.push({ id: `${Date.now()}-m`, role: "assistant", text: `Move ${moved.title}? It came from outside the app. Reply yes to move it.` });
         } else {
           setPendingMove(null);
-          void apiRequest("PATCH", `/api/events/${moved.id}`, { startTime: start.toISOString(), endTime: finish.toISOString() });
-          void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-          next.push({ id: `${Date.now()}-m`, role: "assistant", text: `Moved ${moved.title}.` });
+          replyAfter(
+            apiRequest("PATCH", `/api/events/${moved.id}`, { startTime: start.toISOString(), endTime: finish.toISOString() }).then(() => {
+              void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+            }),
+            `Moved ${moved.title}.`,
+          );
+          return;
         }
       }
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
@@ -266,44 +287,51 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       else if (created.day !== "today") start.setDate(start.getDate() + 1);
       start.setHours(created.hours ?? 9, created.minutes ?? 0, 0, 0);
       const end = new Date(start.getTime() + 60 * 60 * 1000);
-      void apiRequest("POST", "/api/events", {
-        title: created.title,
-        startTime: start.toISOString(),
-        endTime: end.toISOString(),
-        profileIds: [],
-        drivingProfileIds: [],
-        calendarId,
-        source: "app",
-      });
-      void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      next.push({
-        id: `${Date.now()}-e`,
-        role: "assistant",
-        text: calendarId ? `Added ${created.title} on the family calendar.` : `Added ${created.title}.`,
-      });
-      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      replyAfter(
+        apiRequest("POST", "/api/events", {
+          title: created.title,
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+          profileIds: [],
+          drivingProfileIds: [],
+          calendarId,
+          source: "app",
+        }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        }),
+        calendarId ? `Added ${created.title} on the family calendar.` : `Added ${created.title}.`,
+      );
+      return;
     }
     const todoTitle = createTodoTitle(text);
     if (todoTitle && tools.includes("create_task")) {
       const profileIds = profileKey.split(",").filter((id) => id && id !== "family");
-      void apiRequest("POST", "/api/chores", {
-        title: todoTitle,
-        taskType: "todo",
-        points: 0,
-        profileIds,
-        daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-        recurrenceType: "daily",
-        isActive: true,
-      });
-      void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
-      next.push({ id: `${Date.now()}-t`, role: "assistant", text: `Added ${todoTitle}.` });
-      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      replyAfter(
+        apiRequest("POST", "/api/chores", {
+          title: todoTitle,
+          taskType: "todo",
+          points: 0,
+          profileIds,
+          daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+          recurrenceType: "daily",
+          isActive: true,
+        }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+        }),
+        `Added ${todoTitle}.`,
+      );
+      return;
     }
     const assigned = tools.includes("assign") ? assignChange(text, talkChores, profiles) : null;
     if (assigned) {
       if ("choreId" in assigned) {
-        void apiRequest("PATCH", `/api/chores/${assigned.choreId}`, { profileIds: assigned.profileIds });
-        void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+        replyAfter(
+          apiRequest("PATCH", `/api/chores/${assigned.choreId}`, { profileIds: assigned.profileIds }).then(() => {
+            void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+          }),
+          assigned.reply,
+        );
+        return;
       }
       next.push({ id: `${Date.now()}-n`, role: "assistant", text: assigned.reply });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
@@ -325,29 +353,41 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     }
     const muted = tools.includes("mute_sender") ? muteAddress(text) : null;
     if (muted) {
-      void apiRequest("POST", "/api/ingest/mute", { address: muted });
-      void queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
-      next.push({ id: `${Date.now()}-u`, role: "assistant", text: `Muted ${muted}.` });
-      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      replyAfter(
+        apiRequest("POST", "/api/ingest/mute", { address: muted }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+        }),
+        `Muted ${muted}.`,
+      );
+      return;
     }
     const dismissed = tools.includes("mark_not_relevant") ? notRelevantTitle(text) : null;
     if (dismissed) {
-      void apiRequest("POST", "/api/ingest/not-relevant", { title: dismissed });
-      void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
-      next.push({ id: `${Date.now()}-i`, role: "assistant", text: `Removed ${dismissed}.` });
-      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      replyAfter(
+        apiRequest("POST", "/api/ingest/not-relevant", { title: dismissed }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+        }),
+        `Removed ${dismissed}.`,
+      );
+      return;
     }
     const have = groceryAlreadyHave(text);
     const grocery = have ? groceryHaveAction(have, groceries, mealGroceries) : null;
     if (grocery) {
-      if (grocery.kind === "delete") void apiRequest("DELETE", `/api/grocery-items/${grocery.id}`);
-      if (grocery.kind === "check") void apiRequest("PATCH", `/api/grocery-items/${grocery.id}`, { alreadyHave: true });
-      if (grocery.kind === "have") void apiRequest("POST", "/api/grocery-items", { name: grocery.name, alreadyHave: true });
-      void queryClient.invalidateQueries({ queryKey: ["/api/grocery-items"] });
-      void queryClient.invalidateQueries({ queryKey: ["/api/grocery-list/aggregate"] });
+      const request = grocery.kind === "delete"
+        ? apiRequest("DELETE", `/api/grocery-items/${grocery.id}`)
+        : grocery.kind === "check"
+          ? apiRequest("PATCH", `/api/grocery-items/${grocery.id}`, { alreadyHave: true })
+          : apiRequest("POST", "/api/grocery-items", { name: grocery.name, alreadyHave: true });
       const label = grocery.kind === "have" ? grocery.name : have;
-      next.push({ id: `${Date.now()}-g`, role: "assistant", text: `Removed ${label}.` });
-      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      replyAfter(
+        request.then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/grocery-items"] });
+          void queryClient.invalidateQueries({ queryKey: ["/api/grocery-list/aggregate"] });
+        }),
+        `Removed ${label}.`,
+      );
+      return;
     }
     setBubbles(next);
     setDraft("");
