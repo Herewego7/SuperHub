@@ -27,6 +27,12 @@ export function toolsForRole(isChild: boolean): string[] {
   return CHAT_TOOLS.filter((tool) => !INBOX_TOOLS.has(tool));
 }
 
+export function pointsProfileId(profileIds: string[], profileKey: string): string | null {
+  const selected = profileKey.split(",").filter((id) => id && id !== "family");
+  if (selected.length === 1 && profileIds.includes(selected[0])) return selected[0];
+  return profileIds[0] ?? null;
+}
+
 export function checkOffTitle(text: string): string | null {
   const match = text.trim().match(/^check off (.+)$/i);
   const title = match?.[1]?.trim();

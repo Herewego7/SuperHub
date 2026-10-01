@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { checkOffTitle, deleteEventTitle, importedEventNeedsConfirm, toolsForRole } from "@/lib/chatTools";
+import { checkOffTitle, deleteEventTitle, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "@/lib/chatTools";
 import { dinnerReply, groceryAlreadyHave } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, readThread, type ChatBubble } from "@/lib/chatThread";
@@ -55,7 +55,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
 
   const complete = useMutation({
     mutationFn: async (chore: Chore) => {
-      const profileId = chore.profileIds[0];
+      const profileId = pointsProfileId(chore.profileIds, profileKey);
       if (!profileId) return;
       const at = new Date();
       const localDayStart = new Date(at);
@@ -68,8 +68,10 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         localDayStart: localDayStart.toISOString(),
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, chore) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/chore-completions"] });
+      const profileId = pointsProfileId(chore.profileIds, profileKey);
+      if (profileId) await queryClient.invalidateQueries({ queryKey: ["/api/points", profileId] });
     },
   });
 

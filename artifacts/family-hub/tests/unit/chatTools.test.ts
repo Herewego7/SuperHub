@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkOffTitle, deleteEventTitle, importedEventNeedsConfirm, toolsForRole } from "../../src/lib/chatTools";
+import { checkOffTitle, deleteEventTitle, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "../../src/lib/chatTools";
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
@@ -11,6 +11,11 @@ test("a kid tool list excludes inbox search", () => {
 
 test("a parent tool list includes inbox search", () => {
   assert.equal(toolsForRole(false).includes("search"), true);
+});
+
+test("a check-off credits the person on screen", () => {
+  assert.equal(pointsProfileId(["liam", "ava"], "liam"), "liam");
+  assert.equal(pointsProfileId(["liam"], "family"), "liam");
 });
 
 test("check off names the chore", () => {
