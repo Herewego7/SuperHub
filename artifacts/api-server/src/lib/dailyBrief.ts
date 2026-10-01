@@ -139,8 +139,9 @@ export async function buildDailyBrief(
   const todaysEvents = !sections.events
     ? []
     : todaysAllEvents
-        .filter((e) => {
-          if (!scopeToSelfOnly) return true;
+      .filter((e) => {
+        if (!briefListsEvent(e, sections.meals)) return false;
+        if (!scopeToSelfOnly) return true;
           const ids = (e.profileIds as string[] | null) ?? [];
           return ids.length === 0 || ids.includes(profile!.id);
         })
@@ -261,6 +262,10 @@ export async function buildDailyBrief(
       celebrations: todayCelebs.length,
     }),
   };
+}
+
+export function briefListsEvent(event: { source?: string | null }, mealsSection: boolean): boolean {
+  return !(event.source === "meal" && mealsSection);
 }
 
 function slotOrder(slot: string): number {
