@@ -5,12 +5,16 @@ import type { Chore } from "@workspace/shared-types";
 import { checkOffTitle, createEventTitle, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "@/lib/chatTools";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
-import { appendUserMessage, noteChatUnread, readThread, type ChatBubble } from "@/lib/chatThread";
+import { appendUserMessage, noteChatUnread, readThread, threadWithPlan, type ChatBubble } from "@/lib/chatThread";
 
 const PLAN_KEY = "superhub_evening_plan";
+const PLAN_REPLY_KEY = "superhub_evening_plan_reply";
 
-export function stageEveningPlan(text: string) {
+export function stageEveningPlan(text: string, reply?: string | null) {
   sessionStorage.setItem(PLAN_KEY, text);
+  const said = reply?.trim();
+  if (said) sessionStorage.setItem(PLAN_REPLY_KEY, said);
+  else sessionStorage.removeItem(PLAN_REPLY_KEY);
   noteChatUnread();
 }
 
@@ -30,10 +34,11 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     if (!profileReady || typeof sessionStorage === "undefined") return;
     const plan = sessionStorage.getItem(PLAN_KEY);
     if (!plan) return;
+    const reply = sessionStorage.getItem(PLAN_REPLY_KEY);
     sessionStorage.removeItem(PLAN_KEY);
+    sessionStorage.removeItem(PLAN_REPLY_KEY);
     setBubbles((current) => {
-      if (current.some((bubble) => bubble.text === plan)) return current;
-      const next = [{ id: "evening-plan", role: "assistant" as const, text: plan }, ...current];
+      const next = threadWithPlan(current, plan, reply);
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
       return next;
     });

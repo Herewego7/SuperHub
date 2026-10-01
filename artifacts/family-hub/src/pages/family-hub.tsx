@@ -395,9 +395,9 @@ export default function FamilyHub() {
   // celebration deep link already uses.
   const VALID_DEEP_LINK_TABS: TabType[] = ["home", "calendar", "chores", "todos", "meals", "behaviour", "chat"];
   const VALID_DEEP_LINK_SUBTABS: ChoresSubTabType[] = ["chores", "rewards", "trophies", "bonus"];
-  const handleTabDeepLink = (link: { tab: string; subTab?: string; action?: string; profileId?: string; plan?: string }) => {
+  const handleTabDeepLink = (link: { tab: string; subTab?: string; action?: string; profileId?: string; plan?: string; reply?: string }) => {
     if (link.plan) {
-      stageEveningPlan(link.plan);
+      stageEveningPlan(link.plan, link.reply);
       setChatRevision((n) => n + 1);
     }
     if (!(VALID_DEEP_LINK_TABS as string[]).includes(link.tab)) return;

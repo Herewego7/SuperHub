@@ -154,7 +154,8 @@ export async function initNativeNotifications(): Promise<void> {
     } else if (data?.kind === "note") {
       setPendingTabDeepLink({ tab: "home", action: "notesSection" });
     } else if (data?.kind === "evening-plan") {
-      if (data.body) stageEveningPlan(data.body);
+      const reply = (action as { inputValue?: string }).inputValue;
+      if (data.body) stageEveningPlan(data.body, reply);
       setPendingTabDeepLink({ tab: "chat" });
     }
   });

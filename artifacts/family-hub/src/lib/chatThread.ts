@@ -26,6 +26,17 @@ export function noteChatUnread(): number {
   return next;
 }
 
+/** The plan is the latest message, so a notification reply sits directly under it. */
+export function threadWithPlan(current: ChatBubble[], plan: string, reply?: string | null): ChatBubble[] {
+  const next = [...current];
+  if (!next.some((bubble) => bubble.text === plan)) {
+    next.push({ id: `evening-plan-${next.length}`, role: "assistant", text: plan });
+  }
+  const said = reply?.trim();
+  if (said) next.push({ id: `evening-reply-${next.length}`, role: "user", text: said });
+  return next;
+}
+
 export function appendUserMessage(profileKey: string, text: string): ChatBubble[] | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
