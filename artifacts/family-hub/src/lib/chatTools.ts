@@ -33,6 +33,12 @@ export function pointsProfileId(profileIds: string[], profileKey: string): strin
   return profileIds[0] ?? null;
 }
 
+export function createTodoTitle(text: string): string | null {
+  const match = text.trim().match(/^(?:add|create)\s+(?:a\s+)?to-?do\s+(?:called\s+)?(.+?)\.?$/i);
+  const title = match?.[1]?.trim();
+  return title ? title : null;
+}
+
 export function createEventTitle(text: string): string | null {
   const match = text.trim().match(/^(?:add|create)\s+(?:an?\s+)?event\s+(?:called\s+)?(.+?)\.?$/i);
   const title = match?.[1]?.trim();

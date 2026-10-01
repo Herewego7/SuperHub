@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { checkOffTitle, createEventTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, schoolFact, toolsForRole } from "@/lib/chatTools";
+import { checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, schoolFact, toolsForRole } from "@/lib/chatTools";
 import { dinnerName, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
@@ -178,6 +178,22 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         role: "assistant",
         text: calendarId ? `Added ${createdTitle} on the family calendar.` : `Added ${createdTitle}.`,
       });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+    }
+    const todoTitle = createTodoTitle(text);
+    if (todoTitle && tools.includes("create_task")) {
+      const profileIds = profileKey.split(",").filter((id) => id && id !== "family");
+      void apiRequest("POST", "/api/chores", {
+        title: todoTitle,
+        taskType: "todo",
+        points: 0,
+        profileIds,
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+        recurrenceType: "daily",
+        isActive: true,
+      });
+      void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+      next.push({ id: `${Date.now()}-t`, role: "assistant", text: `Added ${todoTitle}.` });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
     const have = groceryAlreadyHave(text);
