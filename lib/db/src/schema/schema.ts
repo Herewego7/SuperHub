@@ -346,6 +346,8 @@ export const calendarSettings = pgTable("calendar_settings", {
   familyCalendarId: text("family_calendar_id"),
   scanInbox: boolean("scan_inbox").notNull().default(true),
   shareOriginals: boolean("share_originals").notNull().default(false),
+  mutedSenders: jsonb("muted_senders").$type<string[]>().notNull().default([]),
+  dismissedSlipKeys: jsonb("dismissed_slip_keys").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [

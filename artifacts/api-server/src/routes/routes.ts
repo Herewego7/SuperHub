@@ -25,6 +25,8 @@ import { geocodeCity } from "../lib/geocode";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
+import { dismissSlip, ingestMessages, muteSender } from "../ingest/process";
+import { slipKey } from "../ingest/parse";
 import { expandRecurringEvents, resolveSeriesEventId } from "../lib/eventRecurrence";
 import { planRecurringEdit, planRecurringDelete, type EditScope } from "../lib/recurringEdit";
 import { alignStartToWeeklyDays } from "../lib/recurrenceRule";
@@ -3131,6 +3133,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         familyCalendarId: null,
         scanInbox: true,
         shareOriginals: false,
+        mutedSenders: [],
+        dismissedSlipKeys: [],
       };
       res.json(defaultSettings);
     } catch (error) {
@@ -3218,6 +3222,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating inbox settings:", error);
       res.status(500).json({ error: "Failed to update inbox settings" });
+    }
+  });
+
+  app.post("/api/ingest/mail", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const settings = await storage.getCalendarSettingsByUser(userId);
+      if (settings?.scanInbox === false) return res.json({ todos: [], events: [] });
+      const profileIds = Array.isArray(req.body.profileIds) ? req.body.profileIds.filter((id: unknown) => typeof id === "string") : [];
+      for (const profileId of profileIds) {
+        const isOwner = await validateProfileOwnership(profileId, userId);
+        if (!isOwner) return res.status(403).json({ error: "Forbidden" });
+      }
+      const messages = Array.isArray(req.body.messages) ? req.body.messages : [];
+      const chores = await storage.getChoresByUser(userId);
+      const existingKeys = chores.filter((chore) => chore.category === "school_email").map((chore) => slipKey(chore.title));
+      const planned = ingestMessages(
+        messages,
+        { mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] },
+        existingKeys,
+        profileIds,
+      );
+      const todos = [];
+      for (const todo of planned.todos) {
+        const { slipKey: _slipKey, ...row } = todo;
+        todos.push(await storage.createChore({ ...row, userId }));
+      }
+      const events = [];
+      for (const event of planned.events) {
+        const start = new Date();
+        start.setDate(start.getDate() + 1);
+        start.setHours(9, 0, 0, 0);
+        const end = new Date(start);
+        end.setHours(10, 0, 0, 0);
+        events.push(await storage.createEvent({
+          userId,
+          title: event.title,
+          description: event.description,
+          startTime: start,
+          endTime: end,
+          profileIds: event.profileIds,
+          source: event.source,
+          externalId: event.externalId,
+        }));
+      }
+      res.status(201).json({ todos, events });
+    } catch (error) {
+      console.error("Error ingesting mail:", error);
+      res.status(500).json({ error: "Failed to ingest mail" });
+    }
+  });
+
+  app.post("/api/ingest/not-relevant", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const key = typeof req.body.slipKey === "string" ? req.body.slipKey : "";
+      if (!key) return res.status(400).json({ error: "slipKey is required" });
+      const settings = await storage.getCalendarSettingsByUser(userId);
+      const next = dismissSlip(
+        { mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] },
+        key,
+      );
+      const saved = await storage.updateCalendarSettings({ dismissedSlipKeys: next.dismissedSlipKeys, userId });
+      res.json(saved);
+    } catch (error) {
+      console.error("Error dismissing a slip:", error);
+      res.status(500).json({ error: "Failed to dismiss slip" });
+    }
+  });
+
+  app.post("/api/ingest/mute", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const address = typeof req.body.address === "string" ? req.body.address : "";
+      if (!address) return res.status(400).json({ error: "address is required" });
+      const settings = await storage.getCalendarSettingsByUser(userId);
+      const next = muteSender(
+        { mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] },
+        address,
+      );
+      const saved = await storage.updateCalendarSettings({ mutedSenders: next.mutedSenders, userId });
+      res.json(saved);
+    } catch (error) {
+      console.error("Error muting a sender:", error);
+      res.status(500).json({ error: "Failed to mute sender" });
     }
   });
 

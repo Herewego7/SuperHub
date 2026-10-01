@@ -82,7 +82,13 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
                 <div className="min-w-0">
                   <div className="text-[15px] font-medium">{todo.title}</div>
                   {todo.description && <div className="text-sm text-muted-foreground">{todo.description}</div>}
-                  <div className="mt-1 text-xs text-muted-foreground">To-do</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {todo.category === "school_email" ? (
+                      <span data-testid="home-todo-source" className="inline-block rounded-full bg-muted px-2 py-0.5">School email</span>
+                    ) : (
+                      "To-do"
+                    )}
+                  </div>
                 </div>
               </li>
             ))}

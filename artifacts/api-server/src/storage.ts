@@ -3909,6 +3909,8 @@ export class MemStorage implements IStorage {
       familyCalendarId: settings.familyCalendarId ?? null,
       scanInbox: settings.scanInbox ?? true,
       shareOriginals: settings.shareOriginals ?? false,
+      mutedSenders: settings.mutedSenders ?? [],
+      dismissedSlipKeys: settings.dismissedSlipKeys ?? [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };
