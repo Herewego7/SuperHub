@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, moveEventWhen, muteAddress, notRelevantTitle, pointsProfileId, schoolFact, searchHits, toolsForRole } from "../../src/lib/chatTools";
+import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, moveEventWhen, muteAddress, notRelevantTitle, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole } from "../../src/lib/chatTools";
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
@@ -11,6 +11,13 @@ test("a kid tool list excludes inbox search", () => {
 
 test("a parent tool list includes inbox search", () => {
   assert.equal(toolsForRole(false).includes("search"), true);
+});
+
+test("chat can say a saved school back", () => {
+  const profiles = [{ name: "Liam", school: "Lincoln" }];
+  assert.equal(schoolReply("what's Liam's school?", profiles), "Liam's school is Lincoln.");
+  assert.equal(schoolReply("what's my school", profiles, "Liam"), "Liam's school is Lincoln.");
+  assert.equal(schoolReply("hello", profiles), null);
 });
 
 test("search finds a slip by its words", () => {

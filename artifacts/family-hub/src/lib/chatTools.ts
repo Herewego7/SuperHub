@@ -158,6 +158,21 @@ export function schoolFact(
   return { profileId: profile.id, name: profile.name, school };
 }
 
+export function schoolReply(
+  text: string,
+  profiles: { name: string; school?: string | null }[],
+  selfName?: string | null,
+): string | null {
+  const mine = /^what(?:'s| is) my school\??$/i.test(text.trim());
+  const named = text.trim().match(/^what(?:'s| is)\s+(.+?)['’]s school\??$/i);
+  const who = (mine ? selfName : named?.[1])?.trim();
+  if (!who) return null;
+  const profile = profiles.find((person) => person.name.trim().toLowerCase() === who.toLowerCase());
+  if (!profile) return `I don't see ${who}.`;
+  if (!profile.school) return `${profile.name} doesn't have a school saved.`;
+  return `${profile.name}'s school is ${profile.school}.`;
+}
+
 export function drivingReply(
   text: string,
   events: { title: string; drivingProfileIds?: string[] | null }[],
