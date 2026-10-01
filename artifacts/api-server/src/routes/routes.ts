@@ -3348,7 +3348,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const events = await storage.getEventsByUser(userId);
       for (const id of eventsDismissedBySlip(events, key)) {
+        let syncLinks: Awaited<ReturnType<typeof storage.getEventCalendarSyncs>> = [];
+        try {
+          syncLinks = await storage.getEventCalendarSyncs(id);
+        } catch (e) {
+          console.warn("Could not load event sync links (continuing with delete):", e instanceof Error ? e.message : e);
+        }
         await storage.deleteEvent(id, userId);
+        void syncEventDelete(syncLinks).catch((err) =>
+          console.warn("syncEventDelete (not relevant) failed:", err instanceof Error ? err.message : err),
+        );
       }
       const saved = await storage.updateCalendarSettings({ dismissedSlipKeys: next.dismissedSlipKeys, userId });
       res.json(saved);
