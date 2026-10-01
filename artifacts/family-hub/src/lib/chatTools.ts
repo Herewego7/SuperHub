@@ -54,6 +54,12 @@ export function assignChange(
   return { choreId: chore.id, profileIds: [profile.id], reply: `${chore.title} is assigned to ${profile.name}.` };
 }
 
+export function feedbackNote(text: string): string | null {
+  const match = text.trim().match(/^(?:send\s+)?feedback:?\s+(.+?)\.?$/i);
+  const note = match?.[1]?.trim();
+  return note ? note : null;
+}
+
 export function reminderRequest(
   text: string,
   profiles: { id: string; name: string }[],
