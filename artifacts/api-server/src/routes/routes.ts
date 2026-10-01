@@ -26,6 +26,7 @@ import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
 import { acceptSchool, choresDismissedBySlip, dismissSlip, ingestMessages, muteSender } from "../ingest/process";
+import { dinnerEventInsert } from "../meals/dinnerEvent";
 import { slipKey } from "../ingest/parse";
 import { moveClock } from "../scheduler/eveningPlan";
 import { expandRecurringEvents, resolveSeriesEventId } from "../lib/eventRecurrence";
@@ -5353,6 +5354,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ingredients = mealIngredientPayloadSchema.parse(ingredientsRaw) || [];
       const created = await storage.createMeal(mealData);
       const savedIngredients = await storage.replaceMealIngredients(created.id, ingredients);
+      const settings = await storage.getCalendarSettingsByUser(userId);
+      const dinnerEvent = dinnerEventInsert(created, settings?.familyCalendarId, settings?.mealsOnCalendar === true);
+      if (dinnerEvent) {
+        try {
+          await storage.createEvent({ ...dinnerEvent, userId });
+        } catch (err) {
+          console.error("Dinner calendar write failed:", err);
+        }
+      }
       res.status(201).json({ ...created, ingredients: savedIngredients });
     } catch (error) {
       console.error("Meal creation error:", error);
