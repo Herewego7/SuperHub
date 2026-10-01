@@ -3911,6 +3911,7 @@ export class MemStorage implements IStorage {
       shareOriginals: settings.shareOriginals ?? false,
       mutedSenders: settings.mutedSenders ?? [],
       dismissedSlipKeys: settings.dismissedSlipKeys ?? [],
+      planSentKeys: settings.planSentKeys ?? [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };

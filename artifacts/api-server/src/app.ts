@@ -9,6 +9,7 @@ import healthRouter from "./routes/health";
 import { initPush } from "./lib/push";
 import { startBedtimeReminderScheduler } from "./scheduler/bedtimeReminders";
 import { startDailyBriefScheduler } from "./scheduler/dailyBrief";
+import { startEveningPlanScheduler } from "./scheduler/eveningPlan";
 import { startHealthReminderScheduler } from "./scheduler/healthReminders";
 import { startWeeklyRecapScheduler } from "./scheduler/weeklyRecap";
 import { startBehaviourTimerScheduler } from "./scheduler/behaviourTimers";
@@ -100,6 +101,7 @@ async function buildApp(): Promise<Express> {
       try {
         startBedtimeReminderScheduler();
         startDailyBriefScheduler();
+        startEveningPlanScheduler();
         startHealthReminderScheduler();
         startWeeklyRecapScheduler();
         startBehaviourTimerScheduler();
