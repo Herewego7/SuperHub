@@ -7,7 +7,8 @@ import { Profile, CustomProfileGroup, ChoreCompletion, ActivityLogEntryType, Cho
 import { ChoreManagementDrawer } from "@/components/chore-management-drawer";
 import { EventModal, type EventFormData } from "@/components/event-modal";
 import { TabType, ChoresSubTabType } from "@/lib/types";
-import { BOTTOM_NAV_IDS } from "@/lib/bottomNav";
+import { ChatView } from "@/components/chat-view";
+import { appendUserMessage } from "@/lib/chatThread";
 import { consumeTabDeepLinkFromUrl, onTabDeepLink, consumeCelebrationDeepLinkFromUrl, onCelebrationDeepLink } from "@/lib/pushDeepLink";
 import { ProfileCircle } from "@/components/profile-circle";
 import { SettingsModal } from "@/components/settings-modal";
@@ -198,6 +199,9 @@ export default function FamilyHub() {
     return saved;
   });
   const [chatUnread, setChatUnread] = useState(0);
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatRevision, setChatRevision] = useState(0);
+  const [plusOpen, setPlusOpen] = useState(false);
   const [choresSubTab, setChoresSubTab] = useState<ChoresSubTabType>("chores");
   const [pendingOpenEventId, setPendingOpenEventId] = useState<string | null>(null);
   const { spotlight, spotlightOverlay } = useSpotlight();
@@ -323,6 +327,18 @@ export default function FamilyHub() {
     });
     setActiveTab(tab);
     setChoresSubTab(subTab);
+  };
+
+  const chatProfileKey = [...selectedProfiles].sort().join(",") || "family";
+  const chatIsChild = profiles.filter((p) => selectedProfiles.includes(p.id) && !p.isAllFamilyProfile).every((p) => p.role === "child" || p.isChild) &&
+    profiles.some((p) => selectedProfiles.includes(p.id) && !p.isAllFamilyProfile);
+  const sendChatFromMenu = () => {
+    const next = appendUserMessage(chatProfileKey, chatDraft);
+    if (!next) return;
+    setChatDraft("");
+    setPlusOpen(false);
+    setChatRevision((n) => n + 1);
+    navigateTo("chat");
   };
 
   const goBack = () => {
@@ -874,6 +890,11 @@ export default function FamilyHub() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (activeTab === "chat") {
+      localStorage.setItem("superhub_chat_unread", "0");
+      setChatUnread(0);
+      return;
+    }
     const raw = Number(localStorage.getItem("superhub_chat_unread") || "0");
     setChatUnread(Number.isFinite(raw) && raw > 0 ? raw : 0);
   }, [activeTab]);
@@ -1764,9 +1785,13 @@ export default function FamilyHub() {
         )}
 
         {activeTab === "chat" && (
-          <div data-testid="chat-panel" className="py-8 text-center text-sm text-muted-foreground">
-            Ask or change the day
-          </div>
+          <ChatView
+            key={`${chatProfileKey}-${chatRevision}`}
+            profileKey={chatProfileKey}
+            isChild={chatIsChild}
+            revision={chatRevision}
+            onSent={() => setChatRevision((n) => n + 1)}
+          />
         )}
 
         {activeTab === "people" && (
@@ -1942,7 +1967,7 @@ export default function FamilyHub() {
           resolve to hearth-theme's bare "H S% L%" var and render invisible in
           dark mode. See index.css's "hearth-theme opaque-vars fix" comment. */}
       <div className="hearth-theme opaque-vars fixed right-5 z-[41]" style={{ bottom: "calc(4.25rem + env(safe-area-inset-bottom, 0px))" }}>
-        <DropdownMenu>
+        <DropdownMenu open={plusOpen} onOpenChange={setPlusOpen}>
           <DropdownMenuTrigger asChild>
             <Button
               className="bg-primary text-primary-foreground rounded-full w-14 h-14 shadow-lg hover:bg-primary/90 p-0 dark:ring-2 dark:ring-primary/60 dark:shadow-[0_0_16px_rgba(139,92,246,0.5)]"
@@ -2015,10 +2040,26 @@ export default function FamilyHub() {
               <span className="mr-2">👏</span>
               Give praise
             </DropdownMenuItem>
-            <div className="px-2 pt-1 pb-2" onKeyDown={(e) => e.stopPropagation()}>
+            <form
+              className="px-2 pt-1 pb-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                sendChatFromMenu();
+              }}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
               <label className="relative block">
                 <input
                   data-testid="menu-chat-field"
+                  value={chatDraft}
+                  onChange={(event) => setChatDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      sendChatFromMenu();
+                    }
+                  }}
                   placeholder="Ask or change the day"
                   className="w-full rounded-full border border-border bg-background py-2 pl-3 pr-8 text-sm"
                 />
@@ -2031,7 +2072,7 @@ export default function FamilyHub() {
                   </span>
                 )}
               </label>
-            </div>
+            </form>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
