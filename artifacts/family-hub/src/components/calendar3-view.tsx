@@ -1,4 +1,4 @@
-import { mailVisibleToKid, todosForHome } from "@/lib/homeDay";
+import { mailVisibleToKid, openTodos, todosForHome } from "@/lib/homeDay";
 import { assignmentProfileIds, outlookEventProfileIds, withoutUnwatched } from "@/lib/outlookAttribution";
 import { UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, upcomingKindForMail, upcomingRows, type UpcomingKind } from "@/lib/upcoming";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
@@ -1409,6 +1409,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
   // ── Data fetching ───────────────────────────────────────────────────────────
   const { data: localEvents = [] } = useQuery<Event[]>({ queryKey: ["/api/events"] });
   const { data: chores = [] } = useQuery<Chore[]>({ queryKey: ["/api/chores"] });
+  const { data: completions = [] } = useQuery<{ choreId: string }[]>({ queryKey: ["/api/chore-completions"] });
   const { data: calendarAssignments = [] } = useQuery<CalendarAssignment[]>({
     queryKey: ["/api/calendar-assignments"],
     retry: false,
@@ -1712,7 +1713,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
     const familyIds = profiles.filter((profile) => !profile.isAllFamilyProfile).map((profile) => profile.id);
     const picked = profiles.filter((profile) => !profile.isAllFamilyProfile && selectedProfiles.includes(profile.id));
     const kidName = picked.length === 1 && (picked[0].role === "child" || picked[0].isChild) ? picked[0].name : null;
-    const todos = todosForHome(chores, selectedProfiles, familyIds).filter((todo) => mailVisibleToKid(todo, kidName)).map((todo) => ({
+    const todos = openTodos(todosForHome(chores, selectedProfiles, familyIds), completions).filter((todo) => mailVisibleToKid(todo, kidName)).map((todo) => ({
       id: todo.id,
       title: todo.title,
       startTime: currentDate,
@@ -1724,7 +1725,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
       event.source === "school" ? { ...event, kind: "newsletter" as const } : event
     ));
     return [...events, ...todos];
-  }, [chores, currentDate, profiles, selectedProfiles, visibleEvents]);
+  }, [chores, completions, currentDate, profiles, selectedProfiles, visibleEvents]);
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const createEventMutation = useMutation({
