@@ -117,6 +117,15 @@ export function planBody(input: {
   return kept.join("\n") || "Nothing on the plan.";
 }
 
+export function eventClockTitle(title: string, startTime: Date, tz: string): string {
+  const hhmm = localHHMM(startTime, tz);
+  if (!/^\d{2}:\d{2}$/.test(hhmm) || hhmm === "00:00") return title;
+  const [rawHours, minutes] = hhmm.split(":").map(Number);
+  const suffix = rawHours >= 12 ? "PM" : "AM";
+  const hours = rawHours % 12 || 12;
+  return `${title}, ${hours}:${String(minutes).padStart(2, "0")} ${suffix}`;
+}
+
 export function planTitle(isChild: boolean, timing: string | null | undefined): string {
   const today = timing === "morningOf";
   if (isChild) return today ? "Today" : "Tomorrow";
@@ -174,7 +183,12 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const openChores = dueForPlan(choresForPlan(chores, doneToday, profile.id, finishedTodos), new Date(`${target}T12:00:00`));
     const dayEvents = events
       .filter((event) => localDate(new Date(event.startTime), tz) === target)
-      .map((event) => ({ title: event.title, description: event.description, movedFrom: event.movedFrom, source: event.source }));
+      .map((event) => ({
+        title: event.movedFrom ? event.title : eventClockTitle(event.title, new Date(event.startTime), tz),
+        description: event.description,
+        movedFrom: event.movedFrom,
+        source: event.source,
+      }));
     const body = planBody({ isChild, kidName: isChild ? profile.name : null, chores: openChores, events: dayEvents, dinner });
     try {
       await sendPushToUser(

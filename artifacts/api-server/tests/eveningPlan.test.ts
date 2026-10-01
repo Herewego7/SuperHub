@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { choresForPlan, claimPlanSend, dueForPlan, moveClock, planBody, planKeysForClaim, planOpenPath, planTitle, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
+import { choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, moveClock, planBody, planKeysForClaim, planOpenPath, planTitle, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
 
 test("a morning plan is titled for today", () => {
   assert.equal(planTitle(false, "morningOf"), "Today's plan");
@@ -110,6 +110,11 @@ test("a changed start keeps the old clock time", () => {
   const next = new Date(2026, 9, 2, 17, 30);
   assert.equal(moveClock(previous, next), "4:00 PM");
   assert.equal(moveClock(previous, previous), null);
+});
+
+test("a plan event names its clock in the family timezone", () => {
+  assert.equal(eventClockTitle("Soccer", new Date("2026-10-02T21:00:00Z"), "America/Chicago"), "Soccer, 4:00 PM");
+  assert.equal(eventClockTitle("Picture day", new Date("2026-10-02T05:00:00Z"), "America/Chicago"), "Picture day");
 });
 
 test("a moved event names the old time", () => {
