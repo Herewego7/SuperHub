@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
+import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
 import { mailVisibleToKid, openTodos, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
@@ -317,6 +317,32 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
           void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
         }),
         calendarId ? `Added ${created.title} on the family calendar.` : `Added ${created.title}.`,
+      );
+      return;
+    }
+    const reminder = tools.includes("create_reminder") ? reminderRequest(text, profiles) : null;
+    if (reminder) {
+      if ("reply" in reminder) {
+        next.push({ id: `${Date.now()}-t`, role: "assistant", text: reminder.reply });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
+      }
+      const profileIds = reminder.profileIds.length > 0 ? reminder.profileIds : profileKey.split(",").filter((id) => id && id !== "family");
+      replyAfter(
+        apiRequest("POST", "/api/chores", {
+          title: reminder.title,
+          taskType: "todo",
+          points: 0,
+          profileIds,
+          daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+          recurrenceType: "daily",
+          isActive: true,
+        }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+        }),
+        `Added ${reminder.title}.`,
       );
       return;
     }

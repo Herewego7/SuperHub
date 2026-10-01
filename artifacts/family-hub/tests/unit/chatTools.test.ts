@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "../../src/lib/chatTools";
+import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "../../src/lib/chatTools";
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
@@ -187,6 +187,12 @@ test("remember keeps a fact on that person", () => {
   const gone = forgetFact("forget Liam is allergic to peanuts", [{ id: "liam", name: "Liam", facts: ["is allergic to peanuts", "likes soccer"] }]);
   assert.deepEqual(gone, { profileId: "liam", name: "Liam", fact: "is allergic to peanuts", facts: ["likes soccer"] });
   assert.deepEqual(forgetFact("forget Liam has a bike", [{ id: "liam", name: "Liam", facts: ["likes soccer"] }]), { reply: "I don't remember that about Liam." });
+});
+
+test("remind me becomes a to-do title, not a notification", () => {
+  assert.deepEqual(reminderRequest("remind me to call the dentist", []), { title: "call the dentist", profileIds: [] });
+  assert.deepEqual(reminderRequest("remind Liam to pack his bag", [{ id: "liam", name: "Liam" }]), { title: "pack his bag", profileIds: ["liam"] });
+  assert.deepEqual(reminderRequest("remind Noah to pack", [{ id: "liam", name: "Liam" }]), { reply: "I don't see Noah." });
 });
 
 test("an adult can name a person's school", () => {

@@ -54,6 +54,22 @@ export function assignChange(
   return { choreId: chore.id, profileIds: [profile.id], reply: `${chore.title} is assigned to ${profile.name}.` };
 }
 
+export function reminderRequest(
+  text: string,
+  profiles: { id: string; name: string }[],
+): { title: string; profileIds: string[] } | { reply: string } | null {
+  const named = text.trim().match(/^remind\s+([A-Za-z]+)\s+to\s+(.+?)\.?$/i);
+  if (named && !/^(me|us)$/i.test(named[1])) {
+    const profile = profiles.find((person) => person.name.toLowerCase() === named[1].toLowerCase());
+    if (!profile) return { reply: `I don't see ${named[1]}.` };
+    const title = named[2].trim();
+    return title ? { title, profileIds: [profile.id] } : null;
+  }
+  const self = text.trim().match(/^remind\s+(?:me|us)\s+(?:to\s+)?(.+?)\.?$/i);
+  const title = self?.[1]?.trim();
+  return title ? { title, profileIds: [] } : null;
+}
+
 export function createTodoTitle(text: string): string | null {
   const match = text.trim().match(/^(?:add|create)\s+(?:a\s+)?to-?do\s+(?:called\s+)?(.+?)\.?$/i);
   const title = match?.[1]?.trim();
