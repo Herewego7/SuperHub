@@ -1612,7 +1612,7 @@ export default function FamilyHub() {
                     selectedProfiles={selectedProfiles}
                     profiles={profiles}
                     selectedDate={selectedDate}
-                    onSelectProfile={(id) => setSelectedProfiles([id])}
+                    onSelectProfile={handleProfileToggle}
                     funMode={tasksFunMode}
                     onToggleFunMode={toggleTasksFunMode}
                     taskTypeFilter="non-todos"
@@ -1645,7 +1645,7 @@ export default function FamilyHub() {
                   <p className="text-muted-foreground text-xs">Achievements earned by each family member</p>
                 </CardHeader>
                 <CardContent className="p-4">
-                  <TrophyCaseView embedded selectedProfiles={selectedProfiles} profiles={profiles} onSelectProfile={(id) => setSelectedProfiles([id])} />
+                  <TrophyCaseView embedded selectedProfiles={selectedProfiles} profiles={profiles} onSelectProfile={handleProfileToggle} />
                 </CardContent>
               </Card>
             </motion.section>
