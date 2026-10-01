@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
+import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
 import { mailVisibleToKid, openTodos, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
@@ -152,6 +152,23 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     const chore = titled.find((item) => item.taskType !== "todo") ?? titled[0];
     if (chore && tools.includes("complete_task") && pointsProfileId(chore.profileIds ?? [], profileKey)) {
       replyAfter(complete.mutateAsync(chore), `Checked off ${chore.title}.`);
+      return;
+    }
+    const forgotten = isChild ? null : forgetFact(text, profiles);
+    if (forgotten && tools.includes("remember_fact")) {
+      if ("reply" in forgotten) {
+        next.push({ id: `${Date.now()}-s`, role: "assistant", text: forgotten.reply });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
+      }
+      replyAfter(
+        apiRequest("PATCH", `/api/profiles/${forgotten.profileId}`, { facts: forgotten.facts }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
+        }),
+        `Forgot ${forgotten.name} ${forgotten.fact}.`,
+      );
       return;
     }
     const memory = isChild ? null : memoryFact(text, profiles);

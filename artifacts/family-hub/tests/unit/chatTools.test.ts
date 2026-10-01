@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "../../src/lib/chatTools";
+import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "../../src/lib/chatTools";
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
@@ -180,6 +180,9 @@ test("remember keeps a fact on that person", () => {
   assert.deepEqual(rememberedFacts(["is allergic to peanuts"], "is allergic to peanuts"), ["is allergic to peanuts"]);
   assert.equal(memoryReply("what do you remember about Liam?", [{ name: "Liam", facts: ["is allergic to peanuts"] }]), "Liam is allergic to peanuts");
   assert.equal(memoryReply("what do you remember about Liam?", [{ name: "Liam", facts: [] }]), "I don't remember anything about Liam.");
+  const gone = forgetFact("forget Liam is allergic to peanuts", [{ id: "liam", name: "Liam", facts: ["is allergic to peanuts", "likes soccer"] }]);
+  assert.deepEqual(gone, { profileId: "liam", name: "Liam", fact: "is allergic to peanuts", facts: ["likes soccer"] });
+  assert.deepEqual(forgetFact("forget Liam has a bike", [{ id: "liam", name: "Liam", facts: ["likes soccer"] }]), { reply: "I don't remember that about Liam." });
 });
 
 test("an adult can name a person's school", () => {

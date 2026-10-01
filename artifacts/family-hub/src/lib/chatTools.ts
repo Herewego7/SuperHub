@@ -227,6 +227,22 @@ export function memoryFact(
   return { profileId: profile.id, name: profile.name, fact };
 }
 
+export function forgetFact(
+  text: string,
+  profiles: { id: string; name: string; facts?: string[] | null; isAllFamilyProfile?: boolean | null }[],
+): { profileId: string; name: string; fact: string; facts: string[] } | { reply: string } | null {
+  const match = text.trim().match(/^forget (?:that )?(.+?) ((?:is|likes|has) .+?)\.?$/i);
+  const who = match?.[1]?.trim();
+  const fact = match?.[2]?.trim();
+  if (!who || !fact) return null;
+  const profile = profiles.find((person) => person.name.trim().toLowerCase() === who.toLowerCase());
+  if (!profile || profile.isAllFamilyProfile) return { reply: `I don't see ${who}.` };
+  const existing = profile.facts ?? [];
+  const facts = existing.filter((item) => item.toLowerCase() !== fact.toLowerCase());
+  if (facts.length === existing.length) return { reply: `I don't remember that about ${profile.name}.` };
+  return { profileId: profile.id, name: profile.name, fact, facts };
+}
+
 export function rememberedFacts(existing: string[], fact: string): string[] {
   if (existing.some((item) => item.toLowerCase() === fact.toLowerCase())) return existing;
   return [...existing, fact];
