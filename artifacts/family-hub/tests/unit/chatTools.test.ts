@@ -152,7 +152,7 @@ test("what's the plan names the day and dinner", () => {
       { id: "milk", title: "Buy milk", taskType: "todo" },
     ],
     completions: [{ choreId: "done", completedAt: day }],
-    events: [{ title: "Soccer", startTime: day }],
+    events: [{ title: "Soccer", startTime: day }, { title: "Tacos", startTime: new Date(2026, 9, 1, 18, 0), source: "meal" }],
     dinner: "Tacos",
     day,
   });

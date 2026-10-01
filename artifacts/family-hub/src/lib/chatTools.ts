@@ -198,7 +198,7 @@ export function dayReply(
       targetCount?: number | null;
       endDate?: Date | string | null;
     }[];
-    events: { title: string; startTime: Date | string; isAllDay?: boolean | null }[];
+    events: { title: string; startTime: Date | string; isAllDay?: boolean | null; source?: string | null }[];
     completions?: { choreId: string; completedAt?: Date | string | null }[];
     dinner?: string | null;
     meals?: { date: string; slot: string; name: string }[];
@@ -231,6 +231,8 @@ export function dayReply(
       })
       .map((completion) => completion.choreId),
   );
+  const askedToday = start.toDateString() === new Date(input.day).toDateString();
+  const dinner = input.meals ? dinnerName(input.meals, start) : askedToday ? input.dinner : null;
   const lines: string[] = [];
   for (const chore of input.chores) {
     if (chore.id && (done.has(chore.id) || finishedTodos.has(chore.id))) continue;
@@ -238,12 +240,11 @@ export function dayReply(
     lines.push(chore.title);
   }
   for (const event of input.events) {
+    if (event.source === "meal" && dinner) continue;
     const at = new Date(event.startTime);
     if (at >= start && at < end) lines.push(eventClockLine(event.title, at, false, event.isAllDay === true));
   }
   const kept = lines.slice(0, 5);
-  const askedToday = start.toDateString() === new Date(input.day).toDateString();
-  const dinner = input.meals ? dinnerName(input.meals, start) : askedToday ? input.dinner : null;
   if (dinner) kept.push(`Dinner. ${dinner}`);
   return kept.join("\n") || "Nothing on the plan.";
 }
