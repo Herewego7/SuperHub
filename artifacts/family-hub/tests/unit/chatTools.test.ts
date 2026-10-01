@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "../../src/lib/chatTools";
+import { assignChange, checkOffTitle, createEventTitle, createTodoTitle, dayReply, deleteEventTitle, drivingReply, familyCalendarOffer, importedEventNeedsConfirm, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "../../src/lib/chatTools";
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
@@ -11,6 +11,12 @@ test("a kid tool list excludes inbox search", () => {
 
 test("a parent tool list includes inbox search", () => {
   assert.equal(toolsForRole(false).includes("search"), true);
+});
+
+test("where is names the place already on the event", () => {
+  assert.equal(placeReply("where is Soccer?", [{ title: "Soccer", location: "Field 2" }]), "Soccer is at Field 2.");
+  assert.equal(placeReply("where is Soccer?", [{ title: "Soccer", location: "" }]), "Soccer doesn't have a place saved.");
+  assert.equal(placeReply("hello", []), null);
 });
 
 test("what's the weather uses the household reading", () => {

@@ -191,6 +191,15 @@ export function drivingReply(
   return `${names.slice(0, -1).join(", ")} and ${last} are driving ${event.title}.`;
 }
 
+export function placeReply(text: string, events: { title: string; location?: string | null }[]): string | null {
+  const asked = text.trim().match(/^where(?:'s| is)\s+(.+?)\??$/i)?.[1]?.trim();
+  if (!asked) return null;
+  const event = events.find((item) => item.title.toLowerCase().includes(asked.toLowerCase()));
+  if (!event) return `I don't see ${asked}.`;
+  if (!event.location?.trim()) return `${event.title} doesn't have a place saved.`;
+  return `${event.title} is at ${event.location.trim()}.`;
+}
+
 export function weatherReply(
   text: string,
   weather: { location?: string | null; temperature?: number | null; condition?: string | null } | null,
