@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, choresForCount, dinnerName, horizonEvents, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, earlierForHome, horizonEvents, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { openEmailHref, slipQuote, slipSender, suggestedSchool } from "@/lib/slipMail";
 
@@ -90,11 +90,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   });
   const horizon = visibleForProfiles(horizonEvents(events, day), selectedIds);
   const dinner = dinnerName(meals, day);
-  const earlier = completions.filter((completion) => {
-    if (!completion.completedAt) return false;
-    const at = new Date(completion.completedAt);
-    return at >= start && at < end;
-  });
+  const earlier = earlierForHome(completions, selectedIds, familyIds, day);
 
   return (
     <div className="flex flex-col gap-4" data-testid="home-day">

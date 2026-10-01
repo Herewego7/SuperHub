@@ -32,6 +32,27 @@ export function todosForHome<T extends HomeTodo>(chores: T[], selectedIds: strin
 
 const NOT_A_CHORE = new Set(["todo", "memory_verse", "affirmation", "bible_verse", "mission", "custom"]);
 
+/** All Family shows the household. One person sees only what they finished. */
+export function earlierForHome<T extends { profileId?: string | null; completedAt?: Date | string | null }>(
+  completions: T[],
+  selectedIds: string[],
+  familyIds: string[],
+  day: Date,
+): T[] {
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  const allSelected = familyIds.length > 0 && familyIds.every((id) => selectedIds.includes(id));
+  return completions.filter((completion) => {
+    if (!completion.completedAt) return false;
+    const at = new Date(completion.completedAt);
+    if (at < start || at >= end) return false;
+    if (selectedIds.length === 0 || allSelected) return true;
+    return !!completion.profileId && selectedIds.includes(completion.profileId);
+  });
+}
+
 /** All Family counts the household. One person counts only their chores. */
 export function choresForCount<T extends { profileIds: string[] }>(chores: T[], selectedIds: string[], familyIds: string[]): T[] {
   const allSelected = familyIds.length > 0 && familyIds.every((id) => selectedIds.includes(id));
