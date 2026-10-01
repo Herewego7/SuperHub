@@ -1,4 +1,4 @@
-import { outlookEventProfileIds } from "@/lib/outlookAttribution";
+import { assignmentProfileIds, outlookEventProfileIds, withoutUnwatched } from "@/lib/outlookAttribution";
 import { UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, upcomingRows, type UpcomingKind } from "@/lib/upcoming";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -77,6 +77,7 @@ interface Cal3Event {
   googleEventId?: string;
   googleProfileId?: string;
   googleCalendarId?: string;
+  outlookCalendarId?: string | null;
   recurringEventId?: string | null;
   // Local recurrence (see api-server/src/lib/eventRecurrence.ts) — a
   // synthetic occurrence's `id` is not a real row; edits/deletes must
@@ -1559,7 +1560,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
         const gcalId = ge.extendedProperties?.private?.["google_calendar_id"];
         if (!pIds.length && gcalId) {
           const a = calendarAssignments.find((a: any) => a.calendarId === gcalId && a.calendarType === "google");
-          if (a) pIds = [a.profileId];
+          if (a) pIds = assignmentProfileIds(a);
         }
 
         // Priority 4: fall back to the iterating profile
@@ -1616,6 +1617,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
           location: oe.location?.displayName,
           isAllDay: oe.isAllDay ?? false,
           source: "outlook",
+          outlookCalendarId: oe.calendar?.id ?? null,
           color: getProfileColor(oPids, profiles),
         });
       }
@@ -1695,13 +1697,14 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
   // set via Settings' "Manage" picker) — there's no separate client-side
   // enable/disable filter to apply here anymore.
   const visibleEvents = useMemo(() => {
-    return allEventsWithCelebrations.filter(e => {
+    const picked = allEventsWithCelebrations.filter(e => {
       if (selectedProfiles.length === 0) return true;
       return e.profileIds.length === 0 ||
         e.profileIds.some(id => selectedProfiles.includes(id)) ||
         e.drivingProfileIds.some(id => selectedProfiles.includes(id));
     });
-  }, [allEventsWithCelebrations, selectedProfiles]);
+    return withoutUnwatched(picked, calendarAssignments);
+  }, [allEventsWithCelebrations, selectedProfiles, calendarAssignments]);
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const createEventMutation = useMutation({

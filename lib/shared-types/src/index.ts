@@ -441,6 +441,8 @@ export type CalendarAssignment = {
   calendarColor: string | null;
   emailAddress: string;
   isActive: boolean | null;
+  audienceProfileIds?: string[] | null;
+  watched?: boolean | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 };
