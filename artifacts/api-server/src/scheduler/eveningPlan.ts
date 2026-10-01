@@ -203,7 +203,14 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const elapsed = minutesSince(profile.eveningPlanTime, localHHMM(now, tz));
     if (elapsed < 0 || elapsed > CATCH_UP_MINUTES) continue;
     const claimKey = `${profile.id}:${day}`;
-    if (!(await storage.claimPlanKey(profile.userId, claimKey, day))) continue;
+    let claimed = false;
+    try {
+      claimed = await storage.claimPlanKey(profile.userId, claimKey, day);
+    } catch (err) {
+      logger.warn({ err, profileId: profile.id }, "Evening plan claim failed");
+      continue;
+    }
+    if (!claimed) continue;
     try {
     const isChild = profile.role === "child" || profile.isChild === true;
     const chores = await storage.getChoresByUser(profile.userId);
