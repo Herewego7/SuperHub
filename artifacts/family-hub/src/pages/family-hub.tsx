@@ -425,6 +425,7 @@ export default function FamilyHub() {
       // hardening the spotlight itself could never have fixed it
       // (2026-09-14).
       if (link.profileId) {
+        writeDevicePerson(link.profileId);
         setSelectedProfiles([link.profileId]);
       } else {
         // Pushes sent before the profile was included in the link: fall back
