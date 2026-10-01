@@ -310,12 +310,12 @@ export function drivingReply(
 
 export function familyReply(
   text: string,
-  profiles: { name: string; school?: string | null; isAllFamilyProfile?: boolean | null }[],
+  profiles: { name: string; school?: string | null; facts?: string[] | null; isAllFamilyProfile?: boolean | null }[],
 ): string | null {
   if (!/^who(?:'s| is) (?:in|on) the family\??$/i.test(text.trim())) return null;
   const people = profiles.filter((person) => person.name.trim() && !person.isAllFamilyProfile);
   if (people.length === 0) return "Nobody is in the family yet.";
-  return people.map((person) => (person.school ? `${person.name}, ${person.school}` : person.name)).join("\n");
+  return people.map((person) => [person.name, person.school, ...(person.facts ?? [])].filter(Boolean).join(", ")).join("\n");
 }
 
 export function placeReply(text: string, events: { title: string; location?: string | null }[]): string | null {

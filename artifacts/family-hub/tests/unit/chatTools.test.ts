@@ -36,6 +36,10 @@ test("who's in the family names each person", () => {
     ]),
     "Liam, Lincoln\nChad",
   );
+  assert.equal(
+    familyReply("who's in the family?", [{ name: "Liam", school: "Lincoln", facts: ["is allergic to peanuts"] }]),
+    "Liam, Lincoln, is allergic to peanuts",
+  );
   assert.equal(familyReply("hello", []), null);
 });
 
