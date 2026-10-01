@@ -83,6 +83,12 @@ export function planBody(input: {
   return kept.join("\n") || "Nothing on the plan.";
 }
 
+export function planTitle(isChild: boolean, timing: string | null | undefined): string {
+  const today = timing === "morningOf";
+  if (isChild) return today ? "Today" : "Tomorrow";
+  return today ? "Today's plan" : "Tomorrow's plan";
+}
+
 export function planOpenPath(body: string): string {
   return `/?openTab=chat&openPlan=${encodeURIComponent(body)}`;
 }
@@ -136,7 +142,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
       await sendPushToUser(
         { userId: profile.userId, profileId: profile.id },
         {
-          title: isChild ? "Tomorrow" : "Tomorrow's plan",
+          title: planTitle(isChild, profile.eveningPlanTiming),
           body,
           url: planOpenPath(body),
           tag: `evening-plan-${profile.id}`,

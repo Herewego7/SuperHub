@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { choresForPlan, claimPlanSend, moveClock, planBody, planKeysForClaim, planOpenPath, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
+import { choresForPlan, claimPlanSend, moveClock, planBody, planKeysForClaim, planOpenPath, planTitle, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
+
+test("a morning plan is titled for today", () => {
+  assert.equal(planTitle(false, "morningOf"), "Today's plan");
+  assert.equal(planTitle(true, "eveningBefore"), "Tomorrow");
+});
 
 test("a profile with a plan time does not also receive a daily brief", () => {
   const kinds = pushesForProfile({ planTime: "19:00", dailyBriefTime: "07:30" });
