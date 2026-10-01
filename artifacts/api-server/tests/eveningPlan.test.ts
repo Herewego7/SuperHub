@@ -112,6 +112,7 @@ test("a changed start keeps the old clock time", () => {
   const next = new Date(2026, 9, 2, 17, 30);
   assert.equal(moveClock(previous, next), "4:00 PM");
   assert.equal(moveClock(previous, previous), null);
+  assert.equal(moveClock(new Date("2026-10-02T21:00:00.000Z"), new Date("2026-10-02T22:30:00.000Z"), "America/Chicago"), "4:00 PM");
 });
 
 test("a plan keeps household events and the ones for that person", () => {

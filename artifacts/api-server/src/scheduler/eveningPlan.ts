@@ -48,8 +48,16 @@ export function planKeysForClaim(saved: string[] | null | undefined, held: strin
   return keys;
 }
 
-export function moveClock(previous: Date | null | undefined, next: Date | null | undefined): string | null {
+export function moveClock(previous: Date | null | undefined, next: Date | null | undefined, timeZone?: string): string | null {
   if (!previous || !next || previous.getTime() === next.getTime()) return null;
+  if (timeZone) {
+    const hhmm = localHHMM(previous, timeZone);
+    if (!/^\d{2}:\d{2}$/.test(hhmm) || hhmm === "00:00" || hhmm === "24:00") return null;
+    const [rawHours, minutes] = hhmm.split(":").map(Number);
+    const suffix = rawHours >= 12 ? "PM" : "AM";
+    const hours = rawHours % 12 || 12;
+    return `${hours}:${String(minutes).padStart(2, "0")} ${suffix}`;
+  }
   let hours = previous.getHours();
   const minutes = previous.getMinutes();
   const suffix = hours >= 12 ? "PM" : "AM";

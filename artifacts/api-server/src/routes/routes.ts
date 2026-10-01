@@ -506,9 +506,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         processedData.endTime = new Date(processedData.endTime);
       }
       if (processedData.startTime instanceof Date) {
-        const [existing] = await db.select({ startTime: eventsTbl.startTime }).from(eventsTbl).where(eq(eventsTbl.id, seriesId)).limit(1);
-        const label = moveClock(existing?.startTime, processedData.startTime);
-        if (label) processedData.movedFrom = label;
+        const [existing] = await db.select({ startTime: eventsTbl.startTime, isAllDay: eventsTbl.isAllDay }).from(eventsTbl).where(eq(eventsTbl.id, seriesId)).limit(1);
+        const allDay = processedData.isAllDay !== undefined ? processedData.isAllDay === true : existing?.isAllDay === true;
+        if (!allDay) {
+          const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
+          const label = moveClock(existing?.startTime, processedData.startTime, timeZone);
+          if (label) processedData.movedFrom = label;
+        }
       }
       
 
