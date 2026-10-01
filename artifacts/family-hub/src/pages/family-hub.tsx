@@ -9,7 +9,7 @@ import { EventModal, type EventFormData } from "@/components/event-modal";
 import { TabType, ChoresSubTabType } from "@/lib/types";
 import { BOTTOM_NAV_IDS } from "@/lib/bottomNav";
 import { ChatView } from "@/components/chat-view";
-import { appendUserMessage } from "@/lib/chatThread";
+import { appendUserMessage, unreadCount } from "@/lib/chatThread";
 import { stageEveningPlan } from "@/components/chat-view";
 import { consumeTabDeepLinkFromUrl, onTabDeepLink, consumeCelebrationDeepLinkFromUrl, onCelebrationDeepLink } from "@/lib/pushDeepLink";
 import { ProfileCircle } from "@/components/profile-circle";
@@ -200,7 +200,7 @@ export default function FamilyHub() {
     if (!saved || saved === "todos" || saved === "people") return "home";
     return saved;
   });
-  const [chatUnread, setChatUnread] = useState(0);
+  const [chatUnread, setChatUnread] = useState(() => unreadCount(typeof localStorage === "undefined" ? null : localStorage.getItem("superhub_chat_unread")));
   const [chatDraft, setChatDraft] = useState("");
   const [chatRevision, setChatRevision] = useState(0);
   const [plusOpen, setPlusOpen] = useState(false);
@@ -895,13 +895,17 @@ export default function FamilyHub() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (activeTab === "chat") {
-      localStorage.setItem("superhub_chat_unread", "0");
-      setChatUnread(0);
-      return;
-    }
-    const raw = Number(localStorage.getItem("superhub_chat_unread") || "0");
-    setChatUnread(Number.isFinite(raw) && raw > 0 ? raw : 0);
+    const sync = () => {
+      if (activeTab === "chat") {
+        localStorage.setItem("superhub_chat_unread", "0");
+        setChatUnread(0);
+        return;
+      }
+      setChatUnread(unreadCount(localStorage.getItem("superhub_chat_unread")));
+    };
+    sync();
+    window.addEventListener("superhub-chat-unread", sync);
+    return () => window.removeEventListener("superhub-chat-unread", sync);
   }, [activeTab]);
 
   // Redirect legacy "celebrations" tab (now surfaced inside the Calendar tab).

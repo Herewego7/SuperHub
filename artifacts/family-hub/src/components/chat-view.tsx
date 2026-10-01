@@ -5,12 +5,13 @@ import type { Chore } from "@workspace/shared-types";
 import { checkOffTitle, createEventTitle, deleteEventTitle, familyCalendarOffer, importedEventNeedsConfirm, pointsProfileId, toolsForRole } from "@/lib/chatTools";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
-import { appendUserMessage, readThread, type ChatBubble } from "@/lib/chatThread";
+import { appendUserMessage, noteChatUnread, readThread, type ChatBubble } from "@/lib/chatThread";
 
 const PLAN_KEY = "superhub_evening_plan";
 
 export function stageEveningPlan(text: string) {
   sessionStorage.setItem(PLAN_KEY, text);
+  noteChatUnread();
 }
 
 type Props = {
