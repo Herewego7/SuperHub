@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { choreProgress, choresForCount, dinnerName, earlierForHome, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, earlierForHome, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -92,6 +92,19 @@ test("Chad's filter hides an event that is only for Liam", () => {
     ["chad"],
   );
   assert.deepEqual(driving.map((row) => row.title), ["Carpool"]);
+});
+
+test("chat leaves out an unwatched calendar", () => {
+  const rows = chatVisibleEvents(
+    [
+      { title: "Practice", googleCalendarId: "school", outlookCalendarId: null },
+      { title: "Dinner", googleCalendarId: null, outlookCalendarId: null },
+    ],
+    [{ calendarId: "school", watched: false, isActive: true }],
+    [],
+    null,
+  );
+  assert.deepEqual(rows.map((row) => row.title), ["Dinner"]);
 });
 
 test("dinner is the meal in that slot on that date", () => {

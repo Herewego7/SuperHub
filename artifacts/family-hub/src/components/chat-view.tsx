@@ -3,7 +3,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
 import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
-import { mailVisibleToKid, openTodos, schoolEmailNames, visibleForProfiles } from "@/lib/homeDay";
+import { chatVisibleEvents, openTodos, schoolEmailNames } from "@/lib/homeDay";
+import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, noteChatUnread, readThread, threadWithPlan, type ChatBubble } from "@/lib/chatThread";
@@ -69,7 +70,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       return res.json();
     },
   });
-  const { data: events = [], isFetched: eventsFetched } = useQuery<{ id: string; title: string; description?: string | null; location?: string | null; source?: string | null; drivingProfileIds?: string[] | null; profileIds?: string[] | null; startTime?: string | null; endTime?: string | null }[]>({ queryKey: ["/api/events"] });
+  const { data: events = [], isFetched: eventsFetched } = useQuery<{ id: string; title: string; description?: string | null; location?: string | null; source?: string | null; drivingProfileIds?: string[] | null; profileIds?: string[] | null; startTime?: string | null; endTime?: string | null; googleCalendarId?: string | null; outlookCalendarId?: string | null; category?: string | null }[]>({ queryKey: ["/api/events"] });
+  const { data: calendarAssignments = [] } = useQuery<{ calendarId: string; watched?: boolean | null; isActive?: boolean | null }[]>({ queryKey: ["/api/calendar-assignments"] });
   const { data: profiles = [] } = useQuery<{ id: string; name: string; school?: string | null; facts?: string[] | null; isAllFamilyProfile?: boolean | null }[]>({ queryKey: ["/api/profiles"] });
   const { data: weather } = useQuery<{ location?: string; temperature?: number; condition?: string }>({ queryKey: ["/api/weather"], retry: false });
   const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
@@ -170,7 +172,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     }
     const selectedIds = profileKey.split(",").filter((id) => id && id !== "family");
     const kid = isChild ? profiles.find((profile) => selectedIds.includes(profile.id)) : undefined;
-    const talkEvents = visibleForProfiles(events, selectedIds).filter((event) => mailVisibleToKid(event, kid?.name ?? null));
+    const watchedEvents = withoutUnwatched(events, calendarAssignments);
+    const talkEvents = chatVisibleEvents(events, calendarAssignments, selectedIds, kid?.name ?? null);
     const talkChores = chores.filter((item) => !kid || schoolEmailNames(item, kid.name));
     const title = checkOffTitle(text);
     const titled = title ? talkChores.filter((item) => item.title.toLowerCase() === title.toLowerCase()) : [];
@@ -414,7 +417,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       next.push({ id: `${Date.now()}-l`, role: "assistant", text: letters.length ? letters.join("\n") : "No newsletters." });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
     }
-    const hits = tools.includes("search") ? searchHits(text, [...chores, ...events]) : null;
+    const hits = tools.includes("search") ? searchHits(text, [...chores, ...watchedEvents]) : null;
     if (hits) {
       next.push({ id: `${Date.now()}-q`, role: "assistant", text: hits.length ? hits.join("\n") : "Nothing matches." });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));

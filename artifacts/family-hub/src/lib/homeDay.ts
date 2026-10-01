@@ -1,4 +1,5 @@
 /** What Home shows for one day. A shared to-do is one chore row, however many people are on it. */
+import { withoutUnwatched, type AssignmentLike } from "./outlookAttribution";
 
 export type HomeTodo = {
   id: string;
@@ -15,6 +16,24 @@ export function visibleForProfiles<T extends { profileIds?: string[] | null; dri
     if (ids.length === 0) return true;
     return ids.some((id) => selectedIds.includes(id)) || drivers.some((id) => selectedIds.includes(id));
   });
+}
+
+export function chatVisibleEvents<T extends {
+  profileIds?: string[] | null;
+  drivingProfileIds?: string[] | null;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  source?: string | null;
+  googleCalendarId?: string | null;
+  outlookCalendarId?: string | null;
+}>(
+  events: T[],
+  assignments: readonly Pick<AssignmentLike, "calendarId" | "watched" | "isActive">[],
+  selectedIds: string[],
+  kidName: string | null,
+): T[] {
+  return visibleForProfiles(withoutUnwatched(events, assignments), selectedIds).filter((event) => mailVisibleToKid(event, kidName));
 }
 
 export function todosForHome<T extends HomeTodo>(chores: T[], selectedIds: string[], familyIds: string[]): T[] {
