@@ -245,6 +245,13 @@ test("a slip clock is the event time", () => {
   );
   assert.equal(planned.events[0]?.hours, 15);
   assert.equal(planned.events[0]?.minutes, 30);
+  const replyBy = ingestMessages(
+    [{ subject: "Picture day", fromAddress: "office@school.edu", snippet: "Reply by 9:00 AM. Thursday at 3:30 PM.", accountId: "chad" }],
+    { mutedSenders: [], dismissedSlipKeys: [] },
+    [],
+    ["liam"],
+  );
+  assert.equal(replyBy.events[0]?.hours, 15);
 });
 
 test("a named weekday is the next time that day comes", () => {

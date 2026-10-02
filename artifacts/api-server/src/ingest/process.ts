@@ -116,9 +116,7 @@ export function slipDayOffset(text: string, from: Date): number | null {
   return offset;
 }
 
-export function slipClock(text: string): { hours: number; minutes: number } | null {
-  const match = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
-  if (!match) return null;
+function clockFrom(match: RegExpMatchArray): { hours: number; minutes: number } | null {
   let hours = Number(match[1]);
   const minutes = match[2] ? Number(match[2]) : 0;
   const suffix = match[3].toLowerCase();
@@ -126,6 +124,20 @@ export function slipClock(text: string): { hours: number; minutes: number } | nu
   if (suffix === "pm" && hours !== 12) hours += 12;
   if (suffix === "am" && hours === 12) hours = 0;
   return { hours, minutes };
+}
+
+const DAY_NEAR = /\b(?:today|tonight|tomorrow|this (?:morning|afternoon|evening)|sunday|monday|tuesday|wednesday|thursday|friday|saturday|january|february|march|april|may|june|july|august|september|october|november|december)\b|\b\d{1,2}\/\d{1,2}\b/i;
+
+export function slipClock(text: string): { hours: number; minutes: number } | null {
+  const parsed = [...text.matchAll(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/gi)].flatMap((match) => {
+    const clock = clockFrom(match);
+    return clock ? [{ clock, index: match.index ?? 0, length: match[0].length }] : [];
+  });
+  if (parsed.length === 0) return null;
+  const before = parsed.find((item) => DAY_NEAR.test(text.slice(Math.max(0, item.index - 24), item.index)));
+  if (before) return before.clock;
+  const after = parsed.find((item) => DAY_NEAR.test(text.slice(item.index + item.length, item.index + item.length + 24)));
+  return (after ?? parsed[0]).clock;
 }
 
 function wallNow(now: Date, timeZone: string): Date {
