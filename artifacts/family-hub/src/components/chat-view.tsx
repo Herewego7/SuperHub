@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
@@ -309,7 +309,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     if (target && tools.includes("delete_event")) {
       const action = deleteEventAction(target.source, target.id);
       if (action === "keep") {
-        next.push({ id: `${Date.now()}-c`, role: "assistant", text: target.source === "meal" ? `${target.title} stays on the meal plan.` : `${target.title} stays on Google Calendar.` });
+        next.push({ id: `${Date.now()}-c`, role: "assistant", text: `${target.title} stays on ${eventStaysPut(target.source, target.id) ?? "Google Calendar"}.` });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
         setBubbles(next);
         setDraft("");
@@ -336,14 +336,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     const moved = moving ? talkEvents.find((event) => event.title.toLowerCase() === moving.title.toLowerCase()) : undefined;
     if (moved && moving && tools.includes("update_event")) {
       const action = moveEventAction(moved.source, moved.id);
-      if (action === "keep-meal") {
-        next.push({ id: `${Date.now()}-m`, role: "assistant", text: `${moved.title} stays on the meal plan.` });
-        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
-        setBubbles(next);
-        setDraft("");
-        return;
-      } else if (action === "keep-google") {
-        next.push({ id: `${Date.now()}-m`, role: "assistant", text: `${moved.title} stays on Google Calendar.` });
+      if (action === "keep-meal" || action === "keep-google" || action === "keep-outlook" || action === "keep-ical") {
+        next.push({ id: `${Date.now()}-m`, role: "assistant", text: `${moved.title} stays on ${eventStaysPut(moved.source, moved.id) ?? "Google Calendar"}.` });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
         setBubbles(next);
         setDraft("");

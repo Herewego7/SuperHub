@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -31,6 +31,9 @@ test("an app-made event deletes and an outside event asks first", () => {
   assert.equal(deleteEventAction("scan", "evt"), "confirm");
   assert.equal(deleteEventAction("meal", "evt"), "keep");
   assert.equal(deleteEventAction("app", "google-1"), "keep");
+  assert.equal(deleteEventAction("outlook", "outlook-1"), "keep");
+  assert.equal(moveEventAction("outlook", "outlook-1"), "keep-outlook");
+  assert.equal(eventStaysPut("ical", "ical-1"), "the subscribed calendar");
 });
 
 test("who's in the family names each person", () => {

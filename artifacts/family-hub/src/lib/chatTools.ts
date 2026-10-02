@@ -510,15 +510,27 @@ export function importedEventNeedsConfirm(source: string | null | undefined): bo
   return !!source && source !== "app" && source !== "meal";
 }
 
-export function moveEventAction(source: string | null | undefined, id: string): "keep-meal" | "keep-google" | "confirm" | "move" {
-  if (source === "meal") return "keep-meal";
-  if (id.startsWith("google-")) return "keep-google";
+/** A copy that only lives on another calendar cannot be deleted from chat. */
+export function eventStaysPut(source: string | null | undefined, id: string): string | null {
+  if (source === "meal") return "the meal plan";
+  if (id.startsWith("google-") || source === "google") return "Google Calendar";
+  if (id.startsWith("outlook-") || source === "outlook") return "Outlook";
+  if (id.startsWith("ical-") || source === "ical") return "the subscribed calendar";
+  return null;
+}
+
+export function moveEventAction(source: string | null | undefined, id: string): "keep-meal" | "keep-google" | "keep-outlook" | "keep-ical" | "confirm" | "move" {
+  const place = eventStaysPut(source, id);
+  if (place === "the meal plan") return "keep-meal";
+  if (place === "Google Calendar") return "keep-google";
+  if (place === "Outlook") return "keep-outlook";
+  if (place === "the subscribed calendar") return "keep-ical";
   if (importedEventNeedsConfirm(source)) return "confirm";
   return "move";
 }
 
 export function deleteEventAction(source: string | null | undefined, id: string): "keep" | "confirm" | "delete" {
-  if (id.startsWith("google-") || source === "meal") return "keep";
+  if (eventStaysPut(source, id)) return "keep";
   if (importedEventNeedsConfirm(source)) return "confirm";
   return "delete";
 }
