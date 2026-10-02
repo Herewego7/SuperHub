@@ -397,6 +397,13 @@ export function planForOthers(
   return list.map((id) => people.find((person) => person.id === id)?.name).filter((name): name is string => !!name?.trim());
 }
 
+/** The school to-do title, without the clock, place, or driver added to the line. */
+export function schoolSlipTitle(title: string): string {
+  const clock = title.match(/^(.*?),\s+\d{1,2}:\d{2}\s+[AP]M\b/i);
+  if (clock?.[1]) return clock[1].trim();
+  return title.replace(/,\s+[^,]+\s+driving$/i, "").trim();
+}
+
 export function planEventTitle(title: string, drivers?: string[] | null): string {
   const names = (drivers ?? []).map((name) => name.trim()).filter(Boolean);
   if (names.length === 0) return title;
@@ -457,7 +464,7 @@ export function dayReply(
   );
   const heldSchool = new Set(
     input.chores
-      .filter((chore) => chore.category === "school_email" && chore.id && done.has(chore.id))
+      .filter((chore) => chore.category === "school_email" && chore.id && (done.has(chore.id) || finishedTodos.has(chore.id)))
       .map((chore) => chore.title.toLowerCase()),
   );
   const askedToday = start.toDateString() === new Date(input.day).toDateString();
@@ -473,7 +480,7 @@ export function dayReply(
   }
   for (const event of input.events) {
     if (event.source === "meal" && dinner) continue;
-    if (event.source === "school" && heldSchool.has(event.title.toLowerCase())) continue;
+    if (event.source === "school" && heldSchool.has(schoolSlipTitle(event.title).toLowerCase())) continue;
     const at = new Date(event.startTime);
     if (at < start || at >= end) continue;
     const moved = planMoveLabel(event.movedFrom, input.day);
