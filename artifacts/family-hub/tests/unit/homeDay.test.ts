@@ -90,6 +90,14 @@ test("a kid who is driving still sees that school event", () => {
   assert.deepEqual(drivesOnHomeDay([soccer], day, ["ava"], "Ava").map((event) => event.id), ["soccer"]);
   assert.deepEqual(drivesOnHomeDay([soccer], day, ["liam"], "Liam").map((event) => event.id), []);
   assert.deepEqual(drivesOnHomeDay([{ ...soccer, description: "Ava must bring shin guards" }], day, ["ava"], "Ava"), []);
+  const later = { ...soccer, id: "later", startTime: new Date(2026, 9, 4, 15, 0) };
+  const far = { ...soccer, id: "far", startTime: new Date(2026, 9, 12, 15, 0) };
+  assert.deepEqual(drivesOnHomeDay([later, far], day, ["ava"], "Ava").map((event) => event.id), ["later"]);
+  const nextCopy = { ...soccer, id: "next", startTime: new Date(2026, 9, 8, 15, 0), recurringEventId: "series-soccer" };
+  assert.deepEqual(
+    drivesOnHomeDay([{ ...soccer, recurringEventId: "series-soccer" }, nextCopy], day, ["ava"], "Ava").map((event) => event.id),
+    ["soccer"],
+  );
 });
 
 test("a kid can be asked who is driving a school event that does not name them", () => {

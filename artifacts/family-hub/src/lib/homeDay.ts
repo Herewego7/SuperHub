@@ -260,16 +260,21 @@ export function drivesOnHomeDay<T extends {
   startTime: Date | string;
   drivingProfileId?: string | null;
   drivingProfileIds?: string[] | null;
+  recurringEventId?: string | null;
 }>(events: T[], day: Date, selectedIds: string[], kidName: string | null): T[] {
   if (!kidName) return [];
   const start = new Date(day);
   start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
+  const todayEnd = new Date(start);
+  todayEnd.setDate(todayEnd.getDate() + 1);
+  const until = new Date(start);
+  until.setDate(until.getDate() + 8);
+  const routine = routineSeriesIds(events);
   return events.filter((event) => {
     if (event.source !== "school") return false;
     const at = new Date(event.startTime);
-    if (at < start || at >= end) return false;
+    if (at < start || at >= until) return false;
+    if (event.recurringEventId && routine.has(event.recurringEventId) && at >= todayEnd) return false;
     if (mailVisibleToKid(event, kidName)) return false;
     const drivers = driverIdsOf(event);
     if (selectedIds.length === 0) return drivers.length > 0;

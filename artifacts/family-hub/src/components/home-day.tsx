@@ -193,7 +193,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           <ul className="flex flex-col gap-1">
             {drives.map((event) => (
               <li key={event.id} className="text-sm">
-                {eventClockLine(event.title, event.startTime, false, event.isAllDay === true)}
+                {eventClockLine(event.title, event.startTime, true, event.isAllDay === true)}
               </li>
             ))}
           </ul>
