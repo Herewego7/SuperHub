@@ -6,6 +6,7 @@
 import { eq, isNotNull } from "drizzle-orm";
 import { db, profiles, locationSettings } from "@workspace/db";
 import { sendPushToUser } from "../lib/push";
+import { pushReachedSomeone } from "../lib/pushDelivery";
 import { localDate, localHHMM } from "../lib/choreToday";
 import { driverIdsOf } from "../lib/eventDrivers";
 import { logger } from "../lib/logger";
@@ -241,7 +242,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
         source: event.source,
       }));
     const body = planBody({ isChild, kidName: isChild ? profile.name : null, chores: openChores, events: dayEvents, dinner });
-      await sendPushToUser(
+      const result = await sendPushToUser(
         { userId: profile.userId, profileId: profile.id },
         {
           title: planTitle(isChild, profile.eveningPlanTiming),
@@ -251,6 +252,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
           data: { kind: "evening-plan", profileId: profile.id, body },
         },
       );
+      if (!pushReachedSomeone(result)) throw new Error("Evening plan reached nobody");
     } catch (err) {
       await storage.releasePlanKey(profile.userId, claimKey);
       logger.warn({ err, profileId: profile.id }, "Evening plan failed");

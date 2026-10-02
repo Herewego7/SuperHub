@@ -2,6 +2,7 @@ import { eq, isNotNull } from "drizzle-orm";
 import { db } from "../db";
 import { profiles, locationSettings } from "@workspace/db";
 import { sendPushToUser } from "../lib/push";
+import { pushReachedSomeone } from "../lib/pushDelivery";
 import { buildDailyBrief } from "../lib/dailyBrief";
 import { localDate, localHHMM } from "../lib/choreToday";
 import { logger } from "../lib/logger";
@@ -68,6 +69,7 @@ export async function runDailyBriefTick(now: Date = new Date()): Promise<boolean
           data: { kind: "daily-brief", profileId: p.id },
         },
       );
+      if (!pushReachedSomeone(result)) throw new Error("Daily brief reached nobody");
       logger.info(
         { profileId: p.id, ...result, headline: brief.headline },
         "Daily brief dispatched",

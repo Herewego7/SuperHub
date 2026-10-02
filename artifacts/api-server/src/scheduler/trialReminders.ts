@@ -2,6 +2,7 @@ import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { entitlements } from "@workspace/db";
 import { sendPushToUser } from "../lib/push";
+import { pushReachedSomeone } from "../lib/pushDelivery";
 import { isEnforcementEnabled, decideTrialReminder, TrialReminderKind } from "../lib/subscriptionEntitlement";
 import { logger } from "../lib/logger";
 
@@ -90,7 +91,8 @@ export async function runTrialReminderTick(now: Date = new Date()): Promise<void
         tag: `trial-reminder-${row.userId}-${kind}`,
         data: { kind: "trial-reminder", trialReminderKind: kind },
       };
-      await sendPushToUser({ userId: row.userId }, payload);
+      const result = await sendPushToUser({ userId: row.userId }, payload);
+      if (!pushReachedSomeone(result)) throw new Error("Trial reminder reached nobody");
       logger.info({ userId: row.userId, kind }, "Trial reminder dispatched");
     } catch (err) {
       await db

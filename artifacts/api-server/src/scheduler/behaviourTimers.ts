@@ -2,6 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { behaviourIncidents } from "@workspace/db";
 import { sendPushToUser } from "../lib/push";
+import { pushReachedSomeone } from "../lib/pushDelivery";
 import { getFamilyMemberAccountIds } from "../familyService";
 import { logger } from "../lib/logger";
 import { createWorkGate } from "../lib/workGate";
@@ -78,7 +79,7 @@ export async function runBehaviourTimerTick(now: Date = new Date()): Promise<boo
       }
       if (claimed) {
         try {
-          await sendPushToUser(
+          const result = await sendPushToUser(
             { userId: incident.userId, profileId: incident.profileId },
             {
               title: "⏱ 5 minutes left",
@@ -89,6 +90,7 @@ export async function runBehaviourTimerTick(now: Date = new Date()): Promise<boo
             },
             "behaviourTimer",
           );
+          if (!pushReachedSomeone(result)) throw new Error("Behaviour reminder reached nobody");
         } catch (err) {
           await releaseReminder(incident.id, now);
           logger.warn({ err, incidentId: incident.id }, "Behaviour 5-min reminder failed");
@@ -115,10 +117,13 @@ export async function runBehaviourTimerTick(now: Date = new Date()): Promise<boo
             tag: `behaviour-timer-expired-${incident.id}`,
             data: { kind: "behaviour-timer-expired", incidentId: incident.id, profileId: incident.profileId },
           };
-          await Promise.all([
+          const results = await Promise.all([
             sendPushToUser({ userId: incident.userId, profileId: incident.profileId }, payload, "behaviourTimer"),
             ...memberIds.map((memberId) => sendPushToUser({ userId: memberId }, payload, "behaviourTimer")),
           ]);
+          if (results.length > 0 && results.every((item) => !pushReachedSomeone(item))) {
+            throw new Error("Behaviour timer reached nobody");
+          }
         } catch (err) {
           await releaseExpired(incident.id, now);
           logger.warn({ err, incidentId: incident.id }, "Behaviour timer-expired notification failed");

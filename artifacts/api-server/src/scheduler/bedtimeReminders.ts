@@ -2,6 +2,7 @@ import { eq, isNotNull } from "drizzle-orm";
 import { db } from "../db";
 import { profiles, locationSettings } from "@workspace/db";
 import { sendPushToUser } from "../lib/push";
+import { pushReachedSomeone } from "../lib/pushDelivery";
 import {
   getTodayChoresForProfile,
   localDate,
@@ -119,6 +120,7 @@ export async function runBedtimeRemindersTick(now: Date = new Date()): Promise<b
           data: { kind: "bedtime-reminder", profileId: p.id, remaining },
         },
       );
+      if (!pushReachedSomeone(result)) throw new Error("Bedtime reminder reached nobody");
       logger.info(
         { profileId: p.id, remaining, ...result },
         "Bedtime reminder dispatched",

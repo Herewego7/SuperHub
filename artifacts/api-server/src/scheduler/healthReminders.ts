@@ -4,6 +4,7 @@ import { locationSettings } from "@workspace/db";
 import { storage } from "../storage";
 import { sendPushToUser } from "../lib/push";
 import { expandOccurrences, healthDispatchSticks } from "../lib/healthSchedule";
+import { pushReachedSomeone } from "../lib/pushDelivery";
 import { logger } from "../lib/logger";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { createWorkGate } from "../lib/workGate";
@@ -74,7 +75,7 @@ async function fireEvent(
         // reminder locally — without it, a family whose server happens to be
         // awake gets every dose notified twice on iOS.
         "healthReminder",
-      ).then(() => true).catch((err) => {
+      ).then((result) => pushReachedSomeone(result)).catch((err) => {
         logger.warn({ err, reminderId, eventId, profileId }, "health push failed");
         return false;
       }),

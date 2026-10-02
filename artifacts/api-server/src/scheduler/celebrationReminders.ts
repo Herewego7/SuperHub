@@ -2,6 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { celebrations, locationSettings } from "@workspace/db";
 import { sendPushToUser } from "../lib/push";
+import { pushReachedSomeone } from "../lib/pushDelivery";
 import { getFamilyMemberAccountIds } from "../familyService";
 import { celebrationsWithMeta } from "../lib/celebrations";
 import { logger } from "../lib/logger";
@@ -106,9 +107,12 @@ export async function runCelebrationReminderTick(now: Date = new Date()): Promis
           tag: `celebration-reminder-${c.id}-${milestone.days}-${occurrenceYear}`,
           data: { kind: "celebration-reminder", celebrationId: c.id },
         };
-        await Promise.all(
+        const results = await Promise.all(
           memberIds.map((memberId) => sendPushToUser({ userId: memberId }, payload, "celebrationReminder")),
         );
+        if (results.length > 0 && results.every((item) => !pushReachedSomeone(item))) {
+          throw new Error("Celebration reminder reached nobody");
+        }
         logger.info({ celebrationId: c.id, milestone: milestone.days }, "Celebration reminder dispatched");
       } catch (err) {
         await releaseCelebration(c.id, milestone.field, occurrenceYear, previous);

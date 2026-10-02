@@ -2,6 +2,7 @@ import { eq, isNotNull } from "drizzle-orm";
 import { db } from "../db";
 import { profiles, locationSettings } from "@workspace/db";
 import { sendPushToUser } from "../lib/push";
+import { pushReachedSomeone } from "../lib/pushDelivery";
 import { buildWeeklyRecap } from "../lib/weeklyRecap";
 import { localDate, localHHMM, localDayOfWeek } from "../lib/choreToday";
 import { logger } from "../lib/logger";
@@ -73,6 +74,7 @@ export async function runWeeklyRecapTick(now: Date = new Date()): Promise<boolea
         },
         "weeklyRecap",
       );
+      if (!pushReachedSomeone(result)) throw new Error("Weekly recap reached nobody");
       logger.info({ profileId: p.id, ...result, headline }, "Weekly recap dispatched");
     } catch (err) {
       await storage.releasePlanKey(p.userId, claimKey);
