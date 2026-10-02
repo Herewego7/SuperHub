@@ -2376,6 +2376,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
         people={profiles.filter((p) => !p.isAllFamilyProfile).map((p) => ({
           id: p.id,
           name: p.name,
+          color: p.color,
           school: p.school ?? null,
           isChild: p.isChild,
           role: p.role,
@@ -2383,6 +2384,8 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
         }))}
         onOpenChores={() => setActiveTab("chores")}
         onAddTodo={onAddTodo}
+        onEditTodo={onEditChore}
+        onDeleteTodo={onDeleteChore}
         onShiftDay={onShiftDay}
         onOpenCalendar={() => setActiveTab("calendar")}
         onOpenEvent={onNavigateToEvent}
