@@ -370,6 +370,12 @@ export function horizonBirthdays(
   return found.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
 }
 
+/** A checked school email stays off On the Horizon. A place or a driver does not keep it. */
+export function horizonWithoutChecked<T extends HorizonEvent>(events: T[], day: Date, slips: { title: string }[]): T[] {
+  const titles = new Set(slips.map((slip) => slipTitle(slip.title).toLowerCase()));
+  return horizonEvents(events, day).filter((event) => titles.size === 0 || event.source !== "school" || !titles.has(slipTitle(event.title).toLowerCase()));
+}
+
 export function horizonEvents<T extends HorizonEvent>(events: T[], day: Date): T[] {
   const start = new Date(day);
   start.setHours(0, 0, 0, 0);

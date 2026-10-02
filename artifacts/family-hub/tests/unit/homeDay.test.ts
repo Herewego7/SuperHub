@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, horizonWithoutChecked, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -232,6 +232,19 @@ test("a timed school email stays on the to-do and leaves Today", () => {
   assert.equal(schoolSlipsHeldOnHome([slip], [], day).length, 1);
   assert.equal(schoolSlipsHeldOnHome([slip], [{ choreId: "slip", completedAt: new Date(2026, 9, 1, 9, 0) }], day).length, 1);
   assert.equal(schoolSlipsHeldOnHome([slip], [{ choreId: "slip", completedAt: new Date(2026, 8, 30, 9, 0) }], day).length, 1);
+});
+
+test("a checked school email stays off the horizon", () => {
+  const day = new Date(2026, 9, 1, 12, 0);
+  const rows = horizonWithoutChecked(
+    [
+      { id: "pic", title: "Picture day, 3:30 PM, Field 2, Liam driving", startTime: new Date(2026, 9, 3, 15, 30), source: "school" },
+      { id: "game", title: "Soccer", startTime: new Date(2026, 9, 3, 16, 0), source: "app" },
+    ],
+    day,
+    [{ title: "Picture day" }],
+  );
+  assert.deepEqual(rows.map((row) => row.id), ["game"]);
 });
 
 test("a school email checked off earlier stays off Home", () => {
