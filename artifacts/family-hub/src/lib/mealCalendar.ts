@@ -33,6 +33,20 @@ export type GroceryHaveAction =
   | { kind: "check"; id: string }
   | { kind: "have"; name: string };
 
+function sameGrocery(spoken: string, saved: string): boolean {
+  const left = spoken.trim().toLowerCase();
+  const right = saved.trim().toLowerCase();
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left.includes(" ") || right.includes(" ")) return false;
+  const singular = (word: string) => {
+    if (word.endsWith("es") && word.length > 4) return word.slice(0, -2);
+    if (word.endsWith("s") && word.length > 3) return word.slice(0, -1);
+    return word;
+  };
+  return singular(left) === singular(right);
+}
+
 export function groceryHaveAction(
   name: string,
   persisted: { id: string; name: string }[],
@@ -40,8 +54,8 @@ export function groceryHaveAction(
 ): GroceryHaveAction | null {
   const key = name.trim().toLowerCase();
   if (!key) return null;
-  const saved = persisted.find((item) => item.name.trim().toLowerCase() === key);
-  const meal = fromMeals.find((item) => item.name.trim().toLowerCase() === key);
+  const saved = persisted.find((item) => sameGrocery(key, item.name));
+  const meal = fromMeals.find((item) => sameGrocery(key, item.name));
   if (meal && saved) return { kind: "check", id: saved.id };
   if (meal) return { kind: "have", name: meal.name };
   if (saved) return { kind: "delete", id: saved.id };
@@ -53,11 +67,9 @@ export function groceryListAfterHave<T extends { name: string }>(
   rows: T[],
   saved: { name: string; alreadyHave?: boolean | null }[],
 ): T[] {
-  const gone = new Set(
-    saved.filter((item) => item.alreadyHave).map((item) => item.name.trim().toLowerCase()),
-  );
-  if (gone.size === 0) return rows;
-  return rows.filter((row) => !gone.has(row.name.trim().toLowerCase()));
+  const gone = saved.filter((item) => item.alreadyHave).map((item) => item.name);
+  if (gone.length === 0) return rows;
+  return rows.filter((row) => !gone.some((name) => sameGrocery(name, row.name)));
 }
 
 export function dinnerReply(

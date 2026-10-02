@@ -25,6 +25,16 @@ test("chat hears that the family already has tortillas", () => {
   assert.equal(groceryAlreadyHave("the kids have milk"), null);
 });
 
+test("already have matches a plural of the same item", () => {
+  assert.deepEqual(groceryHaveAction("tortilla", [], [{ name: "Tortillas" }]), { kind: "have", name: "Tortillas" });
+  const left = groceryListAfterHave(
+    [{ name: "Tortillas" }, { name: "Cheese" }],
+    [{ name: "tortilla", alreadyHave: true }],
+  );
+  assert.deepEqual(left.map((row) => row.name), ["Cheese"]);
+  assert.equal(groceryHaveAction("milk", [], [{ name: "Milk chocolate" }]), null);
+});
+
 test("already have takes that line off the list and leaves the rest", () => {
   const action = groceryHaveAction("tortillas", [], [{ name: "Tortillas" }]);
   assert.deepEqual(action, { kind: "have", name: "Tortillas" });
