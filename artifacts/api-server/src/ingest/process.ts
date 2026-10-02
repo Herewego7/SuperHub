@@ -137,11 +137,15 @@ function slipRange(text: string): { hours: number; minutes: number; endHours: nu
     const end = clockFrom(["", match[4], match[5] ?? "", match[6]] as unknown as RegExpMatchArray);
     if (!start || !end) return [];
     if (end.hours * 60 + end.minutes <= start.hours * 60 + start.minutes) return [];
-    return [{ ...start, endHours: end.hours, endMinutes: end.minutes, index: match.index ?? 0 }];
+    return [{ ...start, endHours: end.hours, endMinutes: end.minutes, index: match.index ?? 0, length: match[0].length }];
   });
   if (ranges.length === 0) return null;
   const near = ranges.find((item) => DAY_NEAR.test(text.slice(Math.max(0, item.index - 24), item.index)));
-  const picked = near ?? (ranges.length === 1 ? ranges[0] : null);
+  const only = ranges.length === 1 ? ranges[0] : null;
+  const outside = only
+    ? `${text.slice(0, only.index)} ${text.slice(only.index + only.length)}`
+    : "";
+  const picked = near ?? (only && !/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/i.test(outside) ? only : null);
   if (!picked) return null;
   return { hours: picked.hours, minutes: picked.minutes, endHours: picked.endHours, endMinutes: picked.endMinutes };
 }
