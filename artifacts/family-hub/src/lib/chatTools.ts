@@ -141,6 +141,15 @@ function clock24(hours: number, minutes: number, suffix: string): { hours: numbe
   return { hours: next, minutes };
 }
 
+/** A place in the title is not a clock. "at 4 pm" stays a time. */
+export function createEventPlace(title: string): { title: string; location?: string } {
+  const match = title.match(/^(.*?)\s+at\s+(?!\d)(.+)$/i);
+  const name = match?.[1]?.trim();
+  const location = match?.[2]?.trim();
+  if (!name || !location) return { title };
+  return { title: name, location };
+}
+
 export function createEventClock(title: string, from = new Date()): { title: string; hours?: number; minutes?: number; endHours?: number; endMinutes?: number; day: "today" | "tomorrow"; on?: Date } {
   const match = title.match(/^(.*?)(?:\s+(today|tonight|tomorrow|this (?:morning|afternoon|evening)))?(?:\s+at\s+(\d{1,2})(?::(\d{2}))?(?:\s*(am|pm))?(?:\s*[-–]\s*(\d{1,2})(?::(\d{2}))?)?\s*(am|pm))?$/i);
   const placed = eventOn((match?.[1] ?? title).trim(), from);
