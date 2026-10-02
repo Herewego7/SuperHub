@@ -231,7 +231,24 @@ test("a timed school email stays on the to-do and leaves Today", () => {
   const slip = { id: "slip", title: "Picture day", category: "school_email" as const };
   assert.equal(schoolSlipsHeldOnHome([slip], [], day).length, 1);
   assert.equal(schoolSlipsHeldOnHome([slip], [{ choreId: "slip", completedAt: new Date(2026, 9, 1, 9, 0) }], day).length, 1);
-  assert.equal(schoolSlipsHeldOnHome([slip], [{ choreId: "slip", completedAt: new Date(2026, 8, 30, 9, 0) }], day).length, 0);
+  assert.equal(schoolSlipsHeldOnHome([slip], [{ choreId: "slip", completedAt: new Date(2026, 8, 30, 9, 0) }], day).length, 1);
+});
+
+test("a school email checked off earlier stays off Home", () => {
+  const day = new Date(2026, 9, 2, 12, 0);
+  const slip = { id: "slip", title: "Picture day", category: "school_email" as const };
+  const held = schoolSlipsHeldOnHome([slip], [{ choreId: "slip", completedAt: new Date(2026, 9, 1, 20, 0) }], day);
+  const rows = eventsOnHomeDay(
+    [
+      { title: "Picture day, 3:30 PM, Field 2, Liam driving", startTime: new Date(2026, 9, 2, 15, 30), source: "school" },
+      { title: "Soccer", startTime: new Date(2026, 9, 2, 16, 0), source: "app" },
+    ],
+    day,
+    null,
+    null,
+    held,
+  );
+  assert.deepEqual(rows.map((row) => row.title), ["Soccer"]);
 });
 
 test("a school to-do on home names the place and the driver", () => {

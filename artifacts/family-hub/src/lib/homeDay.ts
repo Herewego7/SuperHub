@@ -205,28 +205,13 @@ export function routineSeriesIds(events: HorizonEvent[]): Set<string> {
 }
 
 /** Open school mail stays on the to-do. One checked off today stays off Today so it does not reappear. */
+/** A school email hides its calendar copy, including after it is checked off. */
 export function schoolSlipsHeldOnHome<T extends { id: string; title: string; category?: string | null }>(
   todos: T[],
-  completions: { choreId: string; completedAt?: Date | string | null }[],
-  day: Date,
+  _completions: { choreId: string; completedAt?: Date | string | null }[],
+  _day: Date,
 ): T[] {
-  const start = new Date(day);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  const anyDone = new Set(completions.map((completion) => completion.choreId));
-  const doneToday = new Set(
-    completions.filter((completion) => {
-      if (!completion.completedAt) return false;
-      const at = new Date(completion.completedAt);
-      return at >= start && at < end;
-    }).map((completion) => completion.choreId),
-  );
-  return todos.filter((todo) => {
-    if (todo.category !== "school_email") return false;
-    if (!anyDone.has(todo.id)) return true;
-    return doneToday.has(todo.id);
-  });
+  return todos.filter((todo) => todo.category === "school_email");
 }
 
 export function schoolEventClock(
@@ -291,13 +276,19 @@ export function eventsOnHomeDay<T extends {
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
-  const slips = new Set(todos.filter((todo) => todo.category === "school_email").map((todo) => todo.title.toLowerCase()));
+  const slips = new Set(todos.filter((todo) => todo.category === "school_email").map((todo) => slipTitle(todo.title).toLowerCase()));
   return events.filter((event) => {
     if (event.source === "meal" && dinner) return false;
-    if (event.source === "school" && slips.has(event.title.toLowerCase())) return false;
+    if (event.source === "school" && slips.has(slipTitle(event.title).toLowerCase())) return false;
     const at = new Date(event.startTime);
     return at >= start && at < end && mailVisibleToKid(event, kidName);
   });
+}
+
+function slipTitle(title: string): string {
+  const clock = title.match(/^(.*?),\s+\d{1,2}:\d{2}\s+[AP]M\b/i);
+  if (clock?.[1]) return clock[1].trim();
+  return title.replace(/,\s+[^,]+\s+driving$/i, "").trim();
 }
 
 /** Names for the people set to drive. An unknown id stays off the line. */
