@@ -27,6 +27,8 @@ import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
 import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, muteSender, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
 import { applyIngestedMail } from "../ingest/saveMail";
+import { scanConnectedInboxes } from "../ingest/scanHousehold";
+import { markSchedulerWorkDirty } from "../lib/workGate";
 import { dinnerCalendarChange, dinnerEventInsert, dinnersToCopy } from "../meals/dinnerEvent";
 import { slipKey } from "../ingest/parse";
 import { moveClock } from "../scheduler/eveningPlan";
@@ -3278,6 +3280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "scanInbox or shareOriginals must be a boolean" });
       }
       const settings = await storage.updateCalendarSettings(patch);
+      if (patch.scanInbox === true) markSchedulerWorkDirty("inboxScan");
       res.json(settings);
     } catch (error) {
       console.error("Error updating inbox settings:", error);
@@ -3304,46 +3307,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/ingest/scan", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req);
-      const people = await storage.getProfilesByUser(userId);
-      const audience = people.filter((person) => !person.isAllFamilyProfile && person.isActive !== false).map((person) => person.id);
-      const owners = people.filter((person) => !person.isAllFamilyProfile && person.role !== "child" && !person.isChild);
-      const messages = [];
-      let connected = 0;
-      let needsReconnect = false;
-      const denied = (err: unknown) => {
-        const code = err && typeof err === "object" && "code" in err ? (err as { code?: number }).code : undefined;
-        const status = err && typeof err === "object" && "response" in err
-          ? (err as { response?: { status?: number } }).response?.status
-          : undefined;
-        return code === 401 || code === 403 || status === 401 || status === 403;
-      };
-      for (const owner of owners) {
-        const tokens = await storage.getGoogleCalendarTokens(owner.id);
-        if (tokens?.accessToken) {
-          connected += 1;
-          try {
-            const found = await googleCalendarService.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id);
-            messages.push(...found);
-          } catch (err) {
-            if (denied(err)) needsReconnect = true;
-            else console.warn("Inbox scan failed:", err instanceof Error ? err.message : err);
-          }
-        }
-        const outlook = await storage.getOutlookCalendarTokens(owner.id);
-        if (outlook?.accessToken && outlook.isActive !== false) {
-          connected += 1;
-          try {
-            const found = await outlookCalendarService.listInbox(outlook.accessToken, outlook.email || owner.id);
-            messages.push(...found);
-          } catch (err) {
-            if (denied(err)) needsReconnect = true;
-            else console.warn("Outlook inbox scan failed:", err instanceof Error ? err.message : err);
-          }
-        }
-      }
-      const saved = await applyIngestedMail(userId, messages, audience);
-      res.json({ ...saved, connected, needsReconnect });
+      const saved = await scanConnectedInboxes(getUserId(req));
+      res.json(saved);
     } catch (error) {
       console.error("Error scanning inbox:", error);
       res.status(500).json({ error: "Failed to scan inbox" });

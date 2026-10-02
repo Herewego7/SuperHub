@@ -7,6 +7,10 @@
 import { zonedWallClock } from "../lib/timezone";
 import { slipKey, type InboundMessage } from "./parse";
 
+export function inboxScanEnabled(scanInbox: boolean | null | undefined): boolean {
+  return scanInbox !== false;
+}
+
 export type HouseholdMail = {
   mutedSenders: string[];
   dismissedSlipKeys: string[];

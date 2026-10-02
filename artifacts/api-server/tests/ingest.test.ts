@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, ingestMessages, muteSender, schoolEventStart, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, inboxScanEnabled, ingestMessages, muteSender, schoolEventStart, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
 import { outlookToInbound, toInbound } from "../src/ingest/parse.ts";
+
+test("scan stays on until someone turns it off", () => {
+  assert.equal(inboxScanEnabled(undefined), true);
+  assert.equal(inboxScanEnabled(null), true);
+  assert.equal(inboxScanEnabled(true), true);
+  assert.equal(inboxScanEnabled(false), false);
+});
 
 test("a gmail message becomes a slip with the subject and sender", () => {
   const message = toInbound({

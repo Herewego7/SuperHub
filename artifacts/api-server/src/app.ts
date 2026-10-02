@@ -10,6 +10,7 @@ import { initPush } from "./lib/push";
 import { startBedtimeReminderScheduler } from "./scheduler/bedtimeReminders";
 import { startDailyBriefScheduler } from "./scheduler/dailyBrief";
 import { startEveningPlanScheduler } from "./scheduler/eveningPlan";
+import { startInboxScanScheduler } from "./scheduler/inboxScan";
 import { startHealthReminderScheduler } from "./scheduler/healthReminders";
 import { startWeeklyRecapScheduler } from "./scheduler/weeklyRecap";
 import { startBehaviourTimerScheduler } from "./scheduler/behaviourTimers";
@@ -102,6 +103,7 @@ async function buildApp(): Promise<Express> {
         startBedtimeReminderScheduler();
         startDailyBriefScheduler();
         startEveningPlanScheduler();
+        startInboxScanScheduler();
         startHealthReminderScheduler();
         startWeeklyRecapScheduler();
         startBehaviourTimerScheduler();
