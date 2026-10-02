@@ -23,6 +23,12 @@ export function openEmailHref(
   return null;
 }
 
+/** A blank school field clears the saved school. */
+export function savedSchool(raw: string | null | undefined): string | null {
+  const school = raw?.trim() ?? "";
+  return school || null;
+}
+
 export function personRecordLines(person: { school?: string | null; facts?: string[] | null }): string[] {
   const lines: string[] = [];
   const school = person.school?.trim();

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { openEmailHref, personRecordLines, schoolFromSlip, schoolSaveTarget, slipQuote, slipSender, suggestedSchool } from "../../src/lib/slipMail";
+import { openEmailHref, personRecordLines, savedSchool, schoolFromSlip, schoolSaveTarget, slipQuote, slipSender, suggestedSchool } from "../../src/lib/slipMail";
 import { schoolEmailNames } from "../../src/lib/homeDay";
 
 test("the person record shows the school once and each remembered fact once", () => {
@@ -9,6 +9,12 @@ test("the person record shows the school once and each remembered fact once", ()
     ["Lincoln Elementary", "allergic to peanuts · likes soccer"],
   );
   assert.deepEqual(personRecordLines({ school: "  ", facts: [] }), []);
+});
+
+test("a blank school field clears the saved school", () => {
+  assert.equal(savedSchool("  Lincoln Elementary  "), "Lincoln Elementary");
+  assert.equal(savedSchool("  "), null);
+  assert.equal(savedSchool(null), null);
 });
 
 test("a slip keeps the sender off the visible quote", () => {

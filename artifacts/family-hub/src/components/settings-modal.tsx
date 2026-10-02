@@ -26,7 +26,7 @@ import { confirmDialog } from "@/lib/confirmDialog";
 import { Profile, InsertProfile, LocationSettings, insertLocationSettingsSchema, CustomProfileGroup, RewardSettings } from "@workspace/shared-types";
 import { regionToTimezone, deviceTimezone, guessCountry, countryFromName, regionLabel, COUNTRIES, type CountryCode } from "@/lib/regions";
 import { familyCalendarSelectValue, parseFamilyCalendarOption, familyCalendarOptionValue } from "@/lib/familyCalendarChoice";
-import { personRecordLines } from "@/lib/slipMail";
+import { personRecordLines, savedSchool } from "@/lib/slipMail";
 import { ObjectUploader } from "./ObjectUploader";
 import { motion, AnimatePresence } from "framer-motion";
 import { Settings, Plus, Edit, X, Upload, User, Users, UserPlus, MapPin, Calendar, ChevronDown, ChevronUp, Lock, LogOut, Trash2, AlertTriangle, Bell, LayoutDashboard, GripVertical, Gift, ShieldCheck, CheckCircle, XCircle, Sun, Moon, Monitor, Camera, Save, Compass, Search, Share2, KeyRound, Star, HelpCircle, Link2, Bug, Sparkles, Home, ListTodo, UtensilsCrossed, MessageCircle } from "lucide-react";
@@ -2457,6 +2457,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
     photoUrl: null as string | null,
     role: "adult" as "adult" | "child",
     isChild: false,
+    school: "",
   });
   // For the kid-restrictions "you need a Parent PIN" nudge in the profile form.
   const { data: profileFormRewardSettings } = useQuery<RewardSettings>({ queryKey: ["/api/reward-settings"] });
@@ -2612,7 +2613,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
       toast({ title: "Profile created successfully!" });
       setIsAddingProfile(false);
       const nextColor = getNextColor();
-      setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false });
+      setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "" });
     },
     onError: (err: any) => {
       toast({ title: err?.message || "Failed to create profile", variant: "destructive" });
@@ -2646,7 +2647,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
       }
       setEditingProfile(null);
       const nextColor = getNextColor();
-      setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false });
+      setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "" });
     },
     onError: (err: any) => {
       toast({ title: err?.message || "Failed to update profile", variant: "destructive" });
@@ -2835,6 +2836,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
           role: formData.role,
           // isChild (COPPA under-13) only applies to kids; force false for adults.
           isChild: formData.role === "child" ? formData.isChild : false,
+          school: savedSchool(formData.school),
         },
       });
       if (grantConsent) await grantConsentMutation.mutateAsync(editingProfile.id);
@@ -2927,6 +2929,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
       // A legacy under-13 (isChild) profile with no explicit role is a Kid.
       role: (profile.role === "child" || profile.isChild) ? "child" : "adult",
       isChild: !!profile.isChild,
+      school: profile.school ?? "",
     });
     setIsAddingProfile(false);
   };
@@ -2942,7 +2945,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
     setEditingProfile(null);
     setInitialsTouched(false);
     const nextColor = getNextColor();
-    setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false });
+    setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "" });
   };
 
   const cancelEdit = () => {
@@ -2950,7 +2953,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
     setIsAddingProfile(false);
     setInitialsTouched(false);
     const nextColor = getNextColor();
-    setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false });
+    setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "" });
   };
 
   const handleImageUploadComplete = (result: { objectPath: string }) => {
@@ -3725,6 +3728,12 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                             <Label htmlFor="edit-email" className="text-sm">Email (Optional)</Label>
                             <Input id="edit-email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="example@email.com" className="h-8" data-testid="profile-email-input" />
                           </div>
+                          {!editingProfile?.isAllFamilyProfile && (
+                            <div>
+                              <Label htmlFor="edit-school" className="text-sm">School</Label>
+                              <Input id="edit-school" value={formData.school} onChange={(e) => setFormData({ ...formData, school: e.target.value })} placeholder="Lincoln Elementary" className="h-8" data-testid="profile-school-input" />
+                            </div>
+                          )}
 
                                                     <div className="flex items-start gap-3">
 <div className="flex justify-center shrink-0">
