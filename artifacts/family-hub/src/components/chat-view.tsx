@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
@@ -81,6 +81,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   const { data: profiles = [] } = useQuery<{ id: string; name: string; school?: string | null; facts?: string[] | null; isAllFamilyProfile?: boolean | null }[]>({ queryKey: ["/api/profiles"] });
   const { data: weather } = useQuery<{ location?: string; temperature?: number; condition?: string }>({ queryKey: ["/api/weather"], retry: false });
   const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
+  const { data: celebrations = [], isFetched: celebrationsFetched } = useQuery<{ name: string; monthDay: string; year?: number | null; type?: string | null }[]>({ queryKey: ["/api/celebrations"] });
   const { data: meals = [], isFetched: mealsFetched } = useQuery<Meal[]>({
     queryKey: ["/api/meals", "chat-dinner"],
     queryFn: async () => {
@@ -94,14 +95,14 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   });
 
   useEffect(() => {
-    if (!profileReady || !choresFetched || !eventsFetched || !mealsFetched || sentPending.current) return;
+    if (!profileReady || !choresFetched || !eventsFetched || !mealsFetched || !celebrationsFetched || sentPending.current) return;
     if (typeof sessionStorage === "undefined") return;
     const pending = sessionStorage.getItem(PENDING_KEY);
     if (!pending) return;
     sentPending.current = true;
     sessionStorage.removeItem(PENDING_KEY);
     send(pending, true);
-  }, [profileReady, choresFetched, eventsFetched, mealsFetched, profileKey]);
+  }, [profileReady, choresFetched, eventsFetched, mealsFetched, celebrationsFetched, profileKey]);
 
   const complete = useMutation({
     mutationFn: async (chore: Chore) => {
@@ -247,6 +248,29 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         }),
         `Saved ${fact.name}'s school as ${fact.school}.`,
       );
+      return;
+    }
+    if (/^when(?:'s| is)\s+(?:the next birthday|.+?['’]s birthday)\??$/i.test(text.trim())) {
+      const sayBirthday = (rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[]) =>
+        birthdayReply(text, rows, new Date()) ?? "I don't have any birthdays saved.";
+      if (celebrationsFetched) {
+        next.push({ id: `${Date.now()}-b`, role: "assistant", text: sayBirthday(celebrations) });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
+      }
+      setBubbles(next);
+      setDraft("");
+      void queryClient.fetchQuery({ queryKey: ["/api/celebrations"] }).then((rows) => {
+        const saved = [...next, { id: `${Date.now()}-b`, role: "assistant" as const, text: sayBirthday(rows as { name: string; monthDay: string; year?: number | null; type?: string | null }[]) }];
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(saved));
+        setBubbles(saved);
+      }).catch(() => {
+        const failed = [...next, { id: `${Date.now()}-b`, role: "assistant" as const, text: "I couldn't look up birthdays yet." }];
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(failed));
+        setBubbles(failed);
+      });
       return;
     }
     const school = schoolReply(text, profiles, kid?.name ?? profiles.find((profile) => selectedIds.length === 1 && profile.id === selectedIds[0])?.name);

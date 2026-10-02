@@ -380,6 +380,74 @@ export function schoolFact(
   return { profileId: profile.id, name: profile.name, school };
 }
 
+const BIRTHDAY_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function birthdayDate(year: number, monthDay: string): Date | null {
+  const match = monthDay.match(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/);
+  if (!match) return null;
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const date = new Date(year, month - 1, day);
+  if (date.getMonth() !== month - 1) return new Date(year, 1, 28);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function nextBirthday(monthDay: string, now: Date): Date | null {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  let date = birthdayDate(start.getFullYear(), monthDay);
+  if (!date) return null;
+  if (date.getTime() < start.getTime()) date = birthdayDate(start.getFullYear() + 1, monthDay);
+  return date;
+}
+
+function birthdayLine(name: string, date: Date, days: number, year: number | null | undefined): string {
+  const age = year ? date.getFullYear() - year : null;
+  const label = `${BIRTHDAY_MONTHS[date.getMonth()]} ${date.getDate()}`;
+  if (age && age > 0) {
+    if (days === 0) return `${name} turns ${age} today.`;
+    if (days === 1) return `${name} turns ${age} tomorrow.`;
+    return `${name} turns ${age} on ${label}.`;
+  }
+  if (days === 0) return `${name}'s birthday is today.`;
+  if (days === 1) return `${name}'s birthday is tomorrow.`;
+  return `${name}'s birthday is ${label}.`;
+}
+
+export function birthdayReply(
+  text: string,
+  rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[],
+  now = new Date(),
+): string | null {
+  const trimmed = text.trim();
+  const named = trimmed.match(/^when(?:'s| is)\s+(.+?)['’]s birthday\??$/i);
+  const next = /^when(?:'s| is) the next birthday\??$/i.test(trimmed);
+  if (!named && !next) return null;
+  const birthdays = rows.filter((row) => !row.type || row.type === "birthday");
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  if (named) {
+    const who = named[1].trim();
+    const row = birthdays.find((item) => item.name.trim().toLowerCase() === who.toLowerCase());
+    if (!row) return `I don't have a birthday for ${who}.`;
+    const date = nextBirthday(row.monthDay, now);
+    if (!date) return `I don't have a birthday for ${who}.`;
+    const days = Math.round((date.getTime() - start.getTime()) / 86400000);
+    return birthdayLine(row.name, date, days, row.year);
+  }
+  const upcoming = birthdays
+    .map((row) => ({ row, date: nextBirthday(row.monthDay, now) }))
+    .filter((item): item is { row: (typeof birthdays)[number]; date: Date } => !!item.date)
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  if (upcoming.length === 0) return "I don't have any birthdays saved.";
+  const soonest = upcoming[0].date;
+  return upcoming
+    .filter((item) => item.date.getTime() === soonest.getTime())
+    .map((item) => birthdayLine(item.row.name, item.date, Math.round((item.date.getTime() - start.getTime()) / 86400000), item.row.year))
+    .join("\n");
+}
+
 export function schoolReply(
   text: string,
   profiles: { name: string; school?: string | null }[],

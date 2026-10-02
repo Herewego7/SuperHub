@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -255,6 +255,21 @@ test("what's the plan names the day and dinner", () => {
   assert.equal(friday, "Feed the dog\nDishes\nBuy milk\nPiano, 4:00 PM\nDinner. Pasta");
   assert.equal(dayReply("what's the plan for the weekend", { chores: [], events: [], dinner: null, day }), "I don't know that day.");
   assert.equal(dayReply("what's the plan tonight", { chores: [], events: [{ title: "Soccer", startTime: day }], dinner: "Tacos", day }), "Soccer, 3:00 PM\nDinner. Tacos");
+});
+
+test("when is Liam's birthday names the saved day", () => {
+  const liam = { name: "Liam", monthDay: "03-04", year: 2018, type: "birthday" };
+  const march1 = new Date(2026, 2, 1);
+  assert.equal(birthdayReply("when is Liam's birthday?", [liam], march1), "Liam turns 8 on March 4.");
+  assert.equal(birthdayReply("when's Liam's birthday?", [liam], new Date(2026, 2, 3)), "Liam turns 8 tomorrow.");
+  assert.equal(birthdayReply("when is Liam's birthday?", [liam], new Date(2026, 2, 4)), "Liam turns 8 today.");
+  assert.equal(birthdayReply("when is Liam's birthday?", [{ name: "Liam", monthDay: "03-04" }], march1), "Liam's birthday is March 4.");
+  assert.equal(birthdayReply("when is Ava's birthday?", [liam], march1), "I don't have a birthday for Ava.");
+  assert.equal(
+    birthdayReply("when is the next birthday?", [liam, { name: "Ava", monthDay: "06-01", year: 2016, type: "birthday" }, { name: "Anniversary", monthDay: "01-02", type: "anniversary" }], march1),
+    "Liam turns 8 on March 4.",
+  );
+  assert.equal(birthdayReply("what's the plan", [liam], march1), null);
 });
 
 test("remember keeps a fact on that person", () => {
