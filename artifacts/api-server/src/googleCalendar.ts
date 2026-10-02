@@ -284,12 +284,13 @@ export class GoogleCalendarService {
           maxResults: Math.min(50, INBOX_SCAN_LIMIT - ids.length),
           pageToken,
         });
+        const before = ids.length;
         for (const item of listed.data.messages ?? []) {
-          if (item.id) ids.push(item.id);
+          if (item.id && !ids.includes(item.id)) ids.push(item.id);
           if (ids.length >= INBOX_SCAN_LIMIT) break;
         }
         pageToken = listed.data.nextPageToken ?? undefined;
-        if (!pageToken) break;
+        if (!pageToken || ids.length === before) break;
       } catch (err) {
         if (!inboxListStopped(err, ids.length)) throw err;
         console.warn("Inbox list stopped early:", err instanceof Error ? err.message : err);

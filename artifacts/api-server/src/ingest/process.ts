@@ -21,6 +21,17 @@ export function inboxScanEnabled(scanInbox: boolean | null | undefined): boolean
   return scanInbox !== false;
 }
 
+export function graphNextLink(link: unknown): string | null {
+  if (typeof link !== "string" || !link) return null;
+  try {
+    const url = new URL(link);
+    if (url.protocol !== "https:" || url.hostname !== "graph.microsoft.com") return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function inboxListStopped(err: unknown, have: number): boolean {
   return inboxFailure(err) !== "reconnect" && have > 0;
 }
