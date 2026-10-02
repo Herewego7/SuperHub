@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Event } from "@workspace/db";
-import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, googlePlanRows, heldSchoolTitles, icalPlanRows, moveClock, moveLabel, outlookPlanRows, planBirthdayLine, planBody, planDayEvents, planEventTitle, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, uniqueExternalRows, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
+import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, googlePlanRows, heldSchoolTitles, icalPlanRows, moveClock, moveLabel, outlookPlanRows, planBirthdayLine, planBody, planDayEvents, planEventTitle, planKeysForClaim, planOpenPath, planTitle, planWho, pushesForProfile, uniqueExternalRows, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
 
 test("a Google event can be named on the evening plan", () => {
   const rows = googlePlanRows([
@@ -208,6 +208,16 @@ test("a second run the same day does not send again", () => {
   assert.equal(first.send, true);
   assert.equal(second.send, false);
   assert.deepEqual(planKeysForClaim(["chad:2026-09-01", "chad:2026-10-02"], [], "2026-10-02"), ["chad:2026-10-02"]);
+});
+
+test("a parent's plan names a child's event", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [{ title: "Make bed", who: ["Liam"] }, { title: "Take out trash" }],
+    events: [{ title: "Soccer, 4:00 PM", who: ["Liam"] }, { title: "Dentist, 9:00 AM" }],
+  });
+  assert.equal(body, "Take out trash\nDentist, 9:00 AM\nMake bed, for Liam\nSoccer, 4:00 PM, for Liam");
+  assert.equal(planWho("Soccer, 4:00 PM, Liam driving", ["Liam"]), "Soccer, 4:00 PM, Liam driving");
 });
 
 test("a kid plan leaves out a school email line", () => {

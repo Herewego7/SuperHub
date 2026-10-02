@@ -398,7 +398,7 @@ export function eventsForPlan<T extends { profileIds?: string[] | null; drivingP
 export function choresForPlan<T extends { id: string; profileIds?: string[] | null; taskType?: string | null }>(
   chores: T[],
   completedIds: string[],
-  profileId: string,
+  profileId: string | null,
   finishedTodoIds: string[] = [],
 ): T[] {
   const done = new Set(completedIds);
@@ -406,6 +406,7 @@ export function choresForPlan<T extends { id: string; profileIds?: string[] | nu
   return chores.filter((chore) => {
     if (done.has(chore.id)) return false;
     if (chore.taskType === "todo" && finished.has(chore.id)) return false;
+    if (profileId === null) return true;
     const ids = chore.profileIds ?? [];
     return ids.length === 0 || ids.includes(profileId);
   });
@@ -483,20 +484,32 @@ export function planBirthdayLine(
   return `${lines.join(". ")}.`;
 }
 
+/** A parent plan names who an item is for. A name already on the line, including a driver, is not repeated. */
+export function planWho(title: string, names?: string[] | null): string {
+  const others = (names ?? []).map((name) => name.trim()).filter(Boolean);
+  if (others.length === 0) return title;
+  if (others.every((name) => title.toLowerCase().includes(name.toLowerCase()))) return title;
+  const pretty = others.length <= 2 ? others.join(" and ") : `${others.slice(0, -1).join(", ")} and ${others[others.length - 1]}`;
+  const line = `for ${pretty}`;
+  if (title.toLowerCase().includes(line.toLowerCase())) return title;
+  return `${title}, ${line}`;
+}
+
 export function planBody(input: {
   isChild: boolean;
   kidName?: string | null;
-  chores: { title: string; description?: string | null; taskType?: string | null; category?: string | null }[];
-  events: { title: string; description?: string | null; movedFrom?: string | null; source?: string | null; driving?: boolean }[];
+  chores: { title: string; description?: string | null; taskType?: string | null; category?: string | null; who?: string[] | null }[];
+  events: { title: string; description?: string | null; movedFrom?: string | null; source?: string | null; driving?: boolean; who?: string[] | null }[];
   dinner?: string | null;
   birthday?: string | null;
 }): string {
-  const rows: { text: string; change: boolean }[] = [];
-  if (input.birthday) rows.push({ text: input.birthday, change: true });
+  const rows: { text: string; change: boolean; mine: boolean; match: string }[] = [];
+  if (input.birthday) rows.push({ text: input.birthday, change: true, mine: true, match: input.birthday });
   for (const chore of input.chores) {
     if (chore.taskType && chore.taskType !== "todo" && chore.taskType !== "chore") continue;
     if (input.isChild && chore.category === "school_email" && !namesPerson(`${chore.title}\n${chore.description ?? ""}`, input.kidName)) continue;
-    rows.push({ text: chore.title, change: false });
+    const who = chore.who ?? [];
+    rows.push({ text: planWho(chore.title, who), change: false, mine: who.length === 0, match: chore.title });
   }
   for (const event of input.events) {
     if (event.source === "meal" && input.dinner) continue;
@@ -504,12 +517,17 @@ export function planBody(input: {
     if (unnamedSchool && !event.driving) continue;
     const line = event.movedFrom ? `${event.title}, moved from ${event.movedFrom}` : event.title;
     const bare = schoolSlipTitle(event.title);
-    const sameSlip = event.source === "school" ? rows.findIndex((item) => item.text.toLowerCase() === bare.toLowerCase()) : -1;
-    const row = { text: line, change: Boolean(event.movedFrom) };
+    const who = event.who ?? [];
+    const sameSlip = event.source === "school" ? rows.findIndex((item) => item.match.toLowerCase() === bare.toLowerCase()) : -1;
+    const row = { text: planWho(line, who), change: Boolean(event.movedFrom), mine: who.length === 0, match: bare };
     if (sameSlip >= 0) rows[sameSlip] = row;
     else rows.push(row);
   }
-  const lines = [...rows.filter((row) => row.change), ...rows.filter((row) => !row.change)].map((row) => row.text);
+  const lines = [
+    ...rows.filter((row) => row.change),
+    ...rows.filter((row) => !row.change && row.mine),
+    ...rows.filter((row) => !row.change && !row.mine),
+  ].map((row) => row.text);
   const dinnerLine = input.dinner ? `Dinner. ${input.dinner}` : null;
   const room = dinnerLine ? 5 : 6;
   const kept = lines.slice(0, room);
@@ -623,15 +641,19 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
       .filter((completion) => chores.some((chore) => chore.id === completion.choreId && chore.taskType === "todo"))
       .map((completion) => completion.choreId);
     const heldSchool = heldSchoolTitles(chores, completions);
-    const openChores = dueForPlan(
-      choresForPlan(withoutDismissedChores(chores, settings?.dismissedSlipKeys ?? []), doneToday, profile.id, finishedTodos),
-      new Date(`${target}T12:00:00`),
-    );
     const family = new Map((await loadProfiles(eq(profiles.userId, profile.userId))).map((person) => [person.id, person.name]));
-    const dayEvents = eventsForPlan(
-      eventsOnWatchedCalendars(planDayEvents(withoutDismissedSlips(events, settings?.dismissedSlipKeys ?? []), target, tz), assignments),
-      profile.id,
-    )
+    const otherNames = (ids: string[] | null | undefined) => {
+      if (isChild) return [];
+      const list = ids ?? [];
+      if (list.length === 0 || list.includes(profile.id)) return [];
+      return list.map((id) => family.get(id)).filter((name): name is string => !!name);
+    };
+    const openChores = dueForPlan(
+      choresForPlan(withoutDismissedChores(chores, settings?.dismissedSlipKeys ?? []), doneToday, isChild ? profile.id : null, finishedTodos),
+      new Date(`${target}T12:00:00`),
+    ).map((chore) => ({ ...chore, who: otherNames(chore.profileIds) }));
+    const watched = eventsOnWatchedCalendars(planDayEvents(withoutDismissedSlips(events, settings?.dismissedSlipKeys ?? []), target, tz), assignments);
+    const dayEvents = (isChild ? eventsForPlan(watched, profile.id) : watched)
       .map((event) => ({
         title: planEventTitle(
           appendPlace(eventClockTitle(event.title, new Date(event.startTime), tz, event.isAllDay === true), event.location),
@@ -641,6 +663,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
         movedFrom: moveLabel(event.movedFrom, now),
         source: event.source,
         driving: driverIdsOf(event).includes(profile.id),
+        who: otherNames(event.profileIds),
       }));
     const body = planBody({
       isChild,
