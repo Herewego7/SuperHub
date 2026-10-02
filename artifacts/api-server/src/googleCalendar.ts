@@ -1,5 +1,5 @@
 import { google, calendar_v3 } from 'googleapis';
-import { toInbound, type InboundMessage } from './ingest/parse';
+import { gmailPayload, INBOX_SCAN_LIMIT, toInbound, type InboundMessage } from './ingest/parse';
 import { inboxTokenExpiry } from './ingest/process';
 
 // Calendar plus read-only mail. No userinfo.email/userinfo.profile. Those
@@ -274,28 +274,33 @@ export class GoogleCalendarService {
       expiry_date: inboxTokenExpiry(tokenExpiry, !!refreshToken),
     });
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-    const listed = await gmail.users.messages.list({
-      userId: "me",
-      q: "newer_than:2d in:inbox",
-      maxResults: 20,
-    });
+    const ids: string[] = [];
+    let pageToken: string | undefined;
+    while (ids.length < INBOX_SCAN_LIMIT) {
+      const listed = await gmail.users.messages.list({
+        userId: "me",
+        q: "newer_than:2d in:inbox",
+        maxResults: Math.min(50, INBOX_SCAN_LIMIT - ids.length),
+        pageToken,
+      });
+      for (const item of listed.data.messages ?? []) {
+        if (item.id) ids.push(item.id);
+        if (ids.length >= INBOX_SCAN_LIMIT) break;
+      }
+      pageToken = listed.data.nextPageToken ?? undefined;
+      if (!pageToken) break;
+    }
     const out: InboundMessage[] = [];
-    for (const item of listed.data.messages ?? []) {
-      if (!item.id) continue;
+    for (const id of ids) {
       const full = await gmail.users.messages.get({
         userId: "me",
-        id: item.id,
+        id,
         format: "full",
       });
       out.push(toInbound({
-        id: item.id,
+        id,
         snippet: full.data.snippet ?? undefined,
-        payload: {
-          mimeType: full.data.payload?.mimeType ?? "text/plain",
-          headers: (full.data.payload?.headers ?? []).flatMap((header) =>
-            header.name && header.value ? [{ name: header.name, value: header.value }] : [],
-          ),
-        },
+        payload: gmailPayload(full.data.payload),
       }, accountId));
     }
     return out;

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { outlookInstancesToDelete } from "./lib/recurrenceRule";
-import { outlookToInbound, type InboundMessage } from "./ingest/parse";
+import { INBOX_SCAN_LIMIT, outlookToInbound, type InboundMessage } from "./ingest/parse";
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
 
@@ -184,7 +184,7 @@ export class OutlookCalendarService {
     const response = await graph.get(`${GRAPH_API_BASE}/me/mailFolders/inbox/messages`, {
       headers: { Authorization: `Bearer ${accessToken}` },
       params: {
-        $top: 20,
+        $top: INBOX_SCAN_LIMIT,
         $select: "subject,from,bodyPreview,body,receivedDateTime",
         $orderby: "receivedDateTime desc",
       },

@@ -128,6 +128,31 @@ export function outlookToInbound(
   };
 }
 
+export const INBOX_SCAN_LIMIT = 100;
+
+/** Keep the body parts Gmail returns. The scan used to pass headers only, so a time in the body was never read. */
+export function gmailPayload(part: {
+  mimeType?: string | null;
+  body?: { data?: string | null } | null;
+  headers?: { name?: string | null; value?: string | null }[] | null;
+  parts?: unknown[] | null;
+} | null | undefined): GmailPart | undefined {
+  if (!part) return undefined;
+  const headers = (part.headers ?? []).flatMap((header) =>
+    header.name && header.value ? [{ name: header.name, value: header.value }] : [],
+  );
+  const parts = (part.parts ?? []).flatMap((child) => {
+    const mapped = gmailPayload(child as Parameters<typeof gmailPayload>[0]);
+    return mapped ? [mapped] : [];
+  });
+  return {
+    mimeType: part.mimeType ?? "text/plain",
+    ...(headers.length ? { headers } : {}),
+    ...(part.body?.data ? { body: { data: part.body.data } } : {}),
+    ...(parts.length ? { parts } : {}),
+  };
+}
+
 export function toInbound(msg: GmailMessage, accountId: string): InboundMessage {
   const from = parseAddress(header(msg, "From"));
   const body = messageText(msg.payload).slice(0, 4000);
