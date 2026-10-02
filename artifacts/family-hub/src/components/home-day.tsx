@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolHomeTitle, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { appendPlace, eventClockLine, planEventTitle, pointsProfileId } from "@/lib/chatTools";
 import { openEmailHref, schoolSaveTarget, slipQuote, slipSender } from "@/lib/slipMail";
@@ -115,7 +115,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           <ul className="flex flex-col gap-2">
             {todos.map((todo) => {
               const quote = slipQuote(todo.description);
-              const clock = todo.category === "school_email" ? schoolEventClock(todo.title, events, day) : null;
+              const title = todo.category === "school_email" ? schoolHomeTitle(todo.title, events, day, people) : todo.title;
               const sender = slipSender(todo.description);
               const offer = schoolSaveTarget(todo.title, todo.description, people, personId ?? null);
               const viewer = people.find((person) => person.id === personId);
@@ -132,7 +132,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
                   onClick={() => complete.mutate(todo.id)}
                 />
                 <div className="min-w-0">
-                  <div className="text-[15px] font-medium">{clock ? `${todo.title}, ${clock}` : todo.title}</div>
+                  <div className="text-[15px] font-medium">{title}</div>
                   {quote && <div data-testid="home-todo-quote" className="text-sm text-muted-foreground">{quote}</div>}
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     {todo.category === "school_email" ? (

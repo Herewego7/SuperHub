@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -232,6 +232,17 @@ test("a timed school email stays on the to-do and leaves Today", () => {
   assert.equal(schoolSlipsHeldOnHome([slip], [], day).length, 1);
   assert.equal(schoolSlipsHeldOnHome([slip], [{ choreId: "slip", completedAt: new Date(2026, 9, 1, 9, 0) }], day).length, 1);
   assert.equal(schoolSlipsHeldOnHome([slip], [{ choreId: "slip", completedAt: new Date(2026, 8, 30, 9, 0) }], day).length, 0);
+});
+
+test("a school to-do on home names the place and the driver", () => {
+  const day = new Date(2026, 9, 1, 12);
+  assert.equal(schoolHomeTitle("Picture day", [{
+    title: "Picture day",
+    startTime: new Date(2026, 9, 1, 15, 30),
+    source: "school",
+    location: "Field 2",
+    drivingProfileIds: ["liam"],
+  }], day, [{ id: "liam", name: "Liam" }]), "Picture day, 3:30 PM, Field 2, Liam driving");
 });
 
 test("horizon lists a birthday in the next week", () => {

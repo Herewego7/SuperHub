@@ -252,6 +252,34 @@ export function schoolEventClock(
   return `${hours}:${String(at.getMinutes()).padStart(2, "0")} ${suffix}`;
 }
 
+/** The Home to-do line for a school email: title, clock, place, and who is driving. */
+export function schoolHomeTitle(
+  title: string,
+  events: { title: string; startTime: Date | string; source?: string | null; isAllDay?: boolean | null; location?: string | null; drivingProfileIds?: string[] | null }[],
+  day: Date,
+  people: { id: string; name: string }[] = [],
+): string {
+  const clock = schoolEventClock(title, events, day);
+  let line = clock ? `${title}, ${clock}` : title;
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  const event = events.find((item) => {
+    if (item.source !== "school" || item.title.toLowerCase() !== title.toLowerCase()) return false;
+    const at = new Date(item.startTime);
+    return at >= start && at < end;
+  });
+  const place = event?.location?.trim();
+  if (place && !line.toLowerCase().includes(place.toLowerCase())) line = `${line}, ${place}`;
+  const names = driverNamesFor(event?.drivingProfileIds, people);
+  if (names.length === 0) return line;
+  const pretty = names.length <= 2 ? names.join(" and ") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const driving = `${pretty} driving`;
+  if (line.toLowerCase().includes(driving.toLowerCase())) return line;
+  return `${line}, ${driving}`;
+}
+
 export function eventsOnHomeDay<T extends {
   startTime: Date | string;
   source?: string | null;
