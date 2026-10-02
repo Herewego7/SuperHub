@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
 import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
 import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleDeleteChoice, googleMoveBody, outlookChatWrite, outlookDeleteChoice, outlookMoveBody } from "@/lib/chatGoogle";
 import type { Chore } from "@workspace/shared-types";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, forgetSchool, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
@@ -298,6 +298,23 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
       setBubbles(next);
       setDraft("");
+      return;
+    }
+    const forgottenSchool = isChild ? null : forgetSchool(text, profiles);
+    if (forgottenSchool && tools.includes("remember_fact")) {
+      if (!("profileId" in forgottenSchool)) {
+        next.push({ id: `${Date.now()}-s`, role: "assistant", text: forgottenSchool.reply });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
+      }
+      replyAfter(
+        apiRequest("PATCH", `/api/profiles/${forgottenSchool.profileId}`, { school: null }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
+        }),
+        `Forgot ${forgottenSchool.name}'s school.`,
+      );
       return;
     }
     const fact = isChild ? null : schoolFact(text, profiles);

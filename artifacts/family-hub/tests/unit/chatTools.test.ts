@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, planForOthers, planWho, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, planForOthers, planWho, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, forgetSchool, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -460,6 +460,13 @@ test("remind me becomes a to-do title, not a notification", () => {
   assert.deepEqual(reminderRequest("remind Liam at 4 pm to pack", [{ id: "liam", name: "Liam" }]), { title: "pack, 4:00 PM", profileIds: ["liam"] });
   assert.deepEqual(reminderRequest("remind me at 4:30 pm to take the chicken out", []), { title: "take the chicken out, 4:30 PM", profileIds: [] });
   assert.deepEqual(reminderRequest("remind Liam to pack at 4 pm", [{ id: "liam", name: "Liam" }]), { title: "pack, 4:00 PM", profileIds: ["liam"] });
+});
+
+test("an adult can forget a person's school", () => {
+  assert.deepEqual(forgetSchool("forget Liam's school", [{ id: "liam", name: "Liam", school: "Lincoln" }]), { profileId: "liam", name: "Liam", school: null });
+  assert.deepEqual(forgetSchool("forget Liam's school", [{ id: "liam", name: "Liam" }]), { reply: "I don't have a school for Liam." });
+  assert.deepEqual(forgetSchool("forget Noah's school", [{ id: "liam", name: "Liam", school: "Lincoln" }]), { reply: "I don't see Noah." });
+  assert.equal(forgetSchool("Liam's school is Lincoln", [{ id: "liam", name: "Liam", school: "Lincoln" }]), null);
 });
 
 test("an adult can name a person's school", () => {

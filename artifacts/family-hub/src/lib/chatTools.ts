@@ -556,6 +556,20 @@ export function memoryReply(
   return lines.join("\n");
 }
 
+/** Clears a saved school. A missing person or a blank school is said back instead of saved. */
+export function forgetSchool(
+  text: string,
+  profiles: { id: string; name: string; school?: string | null }[],
+): { profileId: string; name: string; school: null } | { reply: string } | null {
+  const match = text.trim().match(/^forget (.+?)['’]s school\.?$/i);
+  const who = match?.[1]?.trim().toLowerCase();
+  if (!who) return null;
+  const profile = profiles.find((person) => person.name.trim().toLowerCase() === who);
+  if (!profile) return { reply: `I don't see ${match?.[1]?.trim()}.` };
+  if (!profile.school?.trim()) return { reply: `I don't have a school for ${profile.name}.` };
+  return { profileId: profile.id, name: profile.name, school: null };
+}
+
 export function schoolFact(
   text: string,
   profiles: { id: string; name: string }[],
