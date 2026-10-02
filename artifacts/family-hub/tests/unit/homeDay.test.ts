@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, drivesOnHomeDay, earlierForHome, eventsForDrivingQuestion, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -90,6 +90,22 @@ test("a kid who is driving still sees that school event", () => {
   assert.deepEqual(drivesOnHomeDay([soccer], day, ["ava"], "Ava").map((event) => event.id), ["soccer"]);
   assert.deepEqual(drivesOnHomeDay([soccer], day, ["liam"], "Liam").map((event) => event.id), []);
   assert.deepEqual(drivesOnHomeDay([{ ...soccer, description: "Ava must bring shin guards" }], day, ["ava"], "Ava"), []);
+});
+
+test("a kid can be asked who is driving a school event that does not name them", () => {
+  const soccer = {
+    id: "soccer",
+    title: "Soccer practice",
+    description: "Bring shin guards",
+    source: "school",
+    profileIds: ["dad"],
+    drivingProfileIds: ["ava"],
+    googleCalendarId: null,
+    outlookCalendarId: null,
+  };
+  assert.deepEqual(chatVisibleEvents([soccer], [], ["ava"], "Ava").map((event) => event.id), []);
+  assert.deepEqual(eventsForDrivingQuestion([soccer], [], ["ava"], "Ava").map((event) => event.id), ["soccer"]);
+  assert.deepEqual(eventsForDrivingQuestion([soccer], [], ["liam"], "Liam").map((event) => event.id), []);
 });
 
 test("a kid does not see a school email that does not name them", () => {

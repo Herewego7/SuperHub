@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
 import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
-import { chatVisibleEvents, openTodos, schoolEmailNames } from "@/lib/homeDay";
+import { chatVisibleEvents, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
@@ -259,7 +259,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       setDraft("");
       return;
     }
-    const driving = drivingReply(text, talkEvents, profiles);
+    const driving = drivingReply(text, eventsForDrivingQuestion(events, calendarAssignments, selectedIds, kid?.name ?? null), profiles);
     if (driving) {
       next.push({ id: `${Date.now()}-r`, role: "assistant", text: driving });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));

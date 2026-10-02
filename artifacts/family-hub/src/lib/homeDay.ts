@@ -36,6 +36,36 @@ export function chatVisibleEvents<T extends {
   return visibleForProfiles(withoutUnwatched(events, assignments), selectedIds).filter((event) => mailVisibleToKid(event, kidName));
 }
 
+/** Chat can answer who is driving a school event the kid is listed on, without showing that email in the plan. */
+export function eventsForDrivingQuestion<T extends {
+  id: string;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  source?: string | null;
+  profileIds?: string[] | null;
+  drivingProfileId?: string | null;
+  drivingProfileIds?: string[] | null;
+  googleCalendarId?: string | null;
+  outlookCalendarId?: string | null;
+}>(
+  events: T[],
+  assignments: readonly Pick<AssignmentLike, "calendarId" | "watched" | "isActive">[],
+  selectedIds: string[],
+  kidName: string | null,
+): T[] {
+  const visible = chatVisibleEvents(events, assignments, selectedIds, kidName);
+  if (!kidName) return visible;
+  const seen = new Set(visible.map((event) => event.id));
+  const drives = withoutUnwatched(events, assignments).filter((event) => {
+    if (seen.has(event.id)) return false;
+    if (event.source !== "school") return false;
+    if (mailVisibleToKid(event, kidName)) return false;
+    return driverIdsOf(event).some((id) => selectedIds.includes(id));
+  });
+  return [...visible, ...drives];
+}
+
 export function todosForHome<T extends HomeTodo>(chores: T[], selectedIds: string[], familyIds: string[]): T[] {
   const todos = chores.filter((chore) => chore.taskType === "todo" && chore.isActive !== false);
   const allSelected = familyIds.length > 0 && familyIds.every((id) => selectedIds.includes(id));
