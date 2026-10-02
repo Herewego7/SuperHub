@@ -2573,7 +2573,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         await sendEmail({
           to: account.email,
-          subject: "Your Family Hub+ PIN reset code",
+          subject: "Your SuperHub PIN reset code",
           html: `<p>Hi ${name},</p><p>Your one-time code to reset the Parent PIN is:</p><p style="font-size:28px;font-weight:bold;letter-spacing:4px;">${code}</p><p>It expires in 10 minutes. If you didn't request this, you can safely ignore this email — your PIN won't change.</p>`,
           text: `Hi ${name},\n\nYour one-time code to reset the Parent PIN is: ${code}\n\nIt expires in 10 minutes. If you didn't request this, you can safely ignore this email — your PIN won't change.`,
         });

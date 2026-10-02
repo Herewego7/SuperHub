@@ -55,7 +55,7 @@ export const notificationsArticles: KbArticle[] = [
           "Open Settings → Notifications on THIS device. If the top box says \"Off for this device\", tap Enable. Setup doesn't carry over between devices, or between the app and a browser tab.",
           "Open Alerts and check that kind of notification is ticked for this device.",
           "Tap Test. If it fails, the message usually says why (for example, a rejected or expired device token).",
-          "On iPhone or iPad, check the device's own Settings → Notifications → Family Hub+ to make sure notifications are allowed at the iOS level.",
+          "On iPhone or iPad, check the device's own Settings → Notifications → SuperHub to make sure notifications are allowed at the iOS level.",
           "If you reinstalled the app or restored your phone, tap Re-register. Old entries under Devices can be removed safely — a device re-adds itself the next time it's opened.",
           "In a web browser, if the top box says \"Blocked — allow notifications for this site in your browser settings\", allow notifications for the site in the browser, then tap Enable.",
         ],
@@ -124,7 +124,7 @@ export const notificationsArticles: KbArticle[] = [
         items: [
           {
             q: "\"Medication reminders: N scheduled on this device\"",
-            a: "All good — iOS is holding them. If one still doesn't arrive, check iPhone Settings → Notifications → Family Hub+ and any Focus mode.",
+            a: "All good — iOS is holding them. If one still doesn't arrive, check iPhone Settings → Notifications → SuperHub and any Focus mode.",
           },
           {
             q: "\"N found, none schedulable\"",
@@ -132,7 +132,7 @@ export const notificationsArticles: KbArticle[] = [
           },
           {
             q: "\"Medication reminders are not scheduled on this device\"",
-            a: "Usually notifications aren't allowed for Family Hub+ in iPhone Settings. Turn them on, reopen this screen, and tap Re-check reminders.",
+            a: "Usually notifications aren't allowed for SuperHub in iPhone Settings. Turn them on, reopen this screen, and tap Re-check reminders.",
           },
         ],
       },

@@ -107,7 +107,7 @@ export function WeatherWidget() {
                 {user.displayName || user.firstName}
               </span>
             )}
-            <span className="text-xl font-bold text-foreground tracking-wide">Family Hub+</span>
+            <span className="text-xl font-bold text-foreground tracking-wide">SuperHub</span>
           </div>
 
           {/* Right: weather */}

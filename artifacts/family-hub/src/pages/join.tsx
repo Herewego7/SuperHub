@@ -123,7 +123,7 @@ export default function JoinFamily() {
               className="block mt-3 text-sm text-gray-500 hover:text-gray-700 hover:underline"
               data-testid="link-decline-join"
             >
-              No thanks — take me to my own Family Hub+
+              No thanks — take me to my own SuperHub
             </a>
           </>
         )}
@@ -135,7 +135,7 @@ export default function JoinFamily() {
         )}
         {status === "done" && (
           <p className="text-gray-700" data-testid="text-join-success">
-            You're in! Taking you to your Family Hub+…
+            You're in! Taking you to your SuperHub…
           </p>
         )}
         {status === "error" && (
@@ -147,7 +147,7 @@ export default function JoinFamily() {
               {error}
             </div>
             <a href="/" className="text-orange-600 font-medium hover:underline">
-              Continue to Family Hub+
+              Continue to SuperHub
             </a>
           </>
         )}

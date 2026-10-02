@@ -51,7 +51,7 @@ const REASK_AFTER_MS = 365 * 24 * 60 * 60 * 1000;
  * filled in 2026-09-10. It is stable for the life of the app — it does not
  * change when the app name, bundle id or version does.
  */
-const APP_STORE_ID = "6786119279";
+const APP_STORE_ID = "";
 
 function dateKey(d: Date): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;

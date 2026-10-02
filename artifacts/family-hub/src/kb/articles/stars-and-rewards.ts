@@ -12,7 +12,7 @@ export const starsAndRewardsArticles: KbArticle[] = [
       {
         kind: "text",
         text:
-          "Stars are Family Hub+'s currency for chores. A family earns them in one of two ways, chosen once for the whole family in Settings → Rewards & Approvals → Everyone, under \"How do kids earn stars?\":",
+          "Stars are SuperHub's currency for chores. A family earns them in one of two ways, chosen once for the whole family in Settings → Rewards & Approvals → Everyone, under \"How do kids earn stars?\":",
       },
       {
         kind: "faq",

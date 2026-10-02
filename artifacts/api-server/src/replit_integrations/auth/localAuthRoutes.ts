@@ -342,9 +342,9 @@ export function registerLocalAuthRoutes(app: Express) {
           const safeResetUrl = escapeHtml(resetUrl);
           await sendEmail({
             to: normalizedEmail,
-            subject: "Reset your Family Hub+ password",
-            html: `<p>Hi ${name},</p><p>We received a request to reset your Family Hub+ password. This link expires in 1 hour:</p><p><a href="${safeResetUrl}">${safeResetUrl}</a></p><p>If you didn't request this, you can safely ignore this email — your password won't change.</p>`,
-            text: `Hi ${name},\n\nWe received a request to reset your Family Hub+ password. This link expires in 1 hour:\n\n${resetUrl}\n\nIf you didn't request this, you can safely ignore this email — your password won't change.`,
+            subject: "Reset your SuperHub password",
+            html: `<p>Hi ${name},</p><p>We received a request to reset your SuperHub password. This link expires in 1 hour:</p><p><a href="${safeResetUrl}">${safeResetUrl}</a></p><p>If you didn't request this, you can safely ignore this email — your password won't change.</p>`,
+            text: `Hi ${name},\n\nWe received a request to reset your SuperHub password. This link expires in 1 hour:\n\n${resetUrl}\n\nIf you didn't request this, you can safely ignore this email — your password won't change.`,
           });
         } else {
           // Account exists but doesn't use a password — tell them how they
@@ -352,7 +352,7 @@ export function registerLocalAuthRoutes(app: Express) {
           const method = user.authProvider === "apple" ? "Sign in with Apple" : "your existing sign-in method";
           await sendEmail({
             to: normalizedEmail,
-            subject: "About your Family Hub+ account",
+            subject: "About your SuperHub account",
             html: `<p>We received a password reset request for this email, but this account doesn't use a password — it signs in with <strong>${method}</strong>. Use that instead to get back in.</p>`,
             text: `We received a password reset request for this email, but this account doesn't use a password — it signs in with ${method}. Use that instead to get back in.`,
           });

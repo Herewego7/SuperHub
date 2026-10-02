@@ -30,7 +30,7 @@ function resolveVapidSubject(stored?: string | null): string {
   if (stored && !stored.includes(".local") && (stored.startsWith("mailto:") || stored.startsWith("https://"))) {
     return stored;
   }
-  return "mailto:support@hubforfamilies.com";
+  return "mailto:chadcgiles@gmail.com";
 }
 
 export async function initPush(): Promise<void> {

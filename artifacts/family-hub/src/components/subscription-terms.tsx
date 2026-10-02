@@ -17,7 +17,7 @@ import type { ProductInfo } from "@/lib/storeKitPurchase";
  * the App Store sheet that appears next.
  */
 export function SubscriptionTerms({ product }: { product: ProductInfo | null }) {
-  const name = product?.displayName || "Family Hub+ Premium";
+  const name = product?.displayName || "SuperHub Premium";
   return (
     <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground space-y-1.5">
       <p className="text-foreground font-medium text-sm">

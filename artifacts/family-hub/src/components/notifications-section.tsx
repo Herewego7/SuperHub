@@ -581,7 +581,7 @@ function MedicationScheduleStatus() {
 
   const why =
     sync.reason === "no_permission"
-      ? "This device has not allowed notifications, so iOS refused the schedule. Turn notifications on for Family Hub+ in iPhone Settings, then reopen this screen."
+      ? "This device has not allowed notifications, so iOS refused the schedule. Turn notifications on for SuperHub in iPhone Settings, then reopen this screen."
       : sync.reason === "not_all_pending"
         ? `iOS is only holding ${sync.scheduled} of them. The rest were refused.`
         : `Scheduling failed${sync.detail ? `: ${sync.detail}` : ""}.`;
@@ -630,7 +630,7 @@ function RecheckMedicationSchedule() {
             title: r.ok && r.scheduled > 0 ? "Scheduled on this device" : "Not scheduled",
             description:
               r.reason === "no_permission"
-                ? "iOS refused: notifications are not allowed for Family Hub+."
+                ? "iOS refused: notifications are not allowed for SuperHub."
                 : `${r.seen} reminder(s), ${r.planned} planned, ${r.scheduled} held by iOS.` +
                   (r.detail ? ` ${r.detail}` : ""),
             variant: r.ok && r.scheduled > 0 ? undefined : "destructive",
@@ -691,7 +691,7 @@ function LocalNotificationProbe() {
                 title: r ? "Test scheduled" : "Could not schedule",
                 description: r
                   ? `Due at ${r.at.toLocaleTimeString()}. Close the app completely and wait.`
-                  : "iOS refused it — notifications are not allowed for Family Hub+.",
+                  : "iOS refused it — notifications are not allowed for SuperHub.",
                 variant: r ? undefined : "destructive",
               });
             } finally {

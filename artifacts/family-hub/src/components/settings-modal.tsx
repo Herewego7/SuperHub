@@ -1315,7 +1315,7 @@ function PersonCalendarTypeSection({
           <div className="pt-2 mt-1 border-t border-border">
             <p className="text-xs font-medium text-foreground">Create new events in</p>
             <p className="text-[11px] text-muted-foreground mb-1.5">
-              When Family Hub+ pushes a new event to {providerLabel}, it goes here.
+              When SuperHub pushes a new event to {providerLabel}, it goes here.
             </p>
             <Select value={currentWriteTarget} onValueChange={setWriteTarget}>
               <SelectTrigger className="h-7 text-xs" data-testid={`select-write-target-${profile.id}`}>
@@ -1985,7 +1985,7 @@ export function CalendarConnectionsSection({
                               <br />
                               {e.eventStartTime && (
                                 <>
-                                  On your Family Hub+ calendar: {new Date(e.eventStartTime).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                                  On your SuperHub calendar: {new Date(e.eventStartTime).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                                   <br />
                                 </>
                               )}
@@ -2006,7 +2006,7 @@ export function CalendarConnectionsSection({
                       ))}
                     </ul>
                     <p className="text-[11px] text-muted-foreground">
-                      These events are still on your Family Hub+ calendar — only the copy pushed to Google/Outlook failed. Reconnect that calendar if it keeps happening.
+                      These events are still on your SuperHub calendar — only the copy pushed to Google/Outlook failed. Reconnect that calendar if it keeps happening.
                     </p>
                   </div>
                 )}
@@ -4414,7 +4414,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                 App Store Connect. */}
             {canOpenStoreReviewPage() && (
               <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => openStoreReviewPage()} data-testid="settings-rate-app-button">
-                <Star className="w-4 h-4 mr-2" /> Rate Family Hub+
+                <Star className="w-4 h-4 mr-2" /> Rate SuperHub
               </Button>
             )}
 
@@ -4490,7 +4490,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                 data-testid="parental-consent-checkbox"
               />
               <span className="text-xs leading-snug">
-                I am this child's parent or legal guardian, and I consent to Family Hub+
+                I am this child's parent or legal guardian, and I consent to SuperHub
                 collecting and storing the information described above.
               </span>
             </label>
@@ -4622,7 +4622,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
             </DialogTitle>
             <p className="text-sm text-muted-foreground pt-1">
               {signOutStep === 1
-                ? "You'll need to log back in to access Family Hub+. Click Continue to proceed."
+                ? "You'll need to log back in to access SuperHub. Click Continue to proceed."
                 : "This is your final confirmation. Click Sign out to end your session."}
             </p>
           </DialogHeader>

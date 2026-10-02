@@ -43,7 +43,7 @@ createRoot(document.getElementById("root")!).render(
           <div className="text-4xl">😕</div>
           <h1 className="text-lg font-semibold">Something went wrong</h1>
           <p className="text-sm text-muted-foreground">
-            Family Hub+ hit an unexpected error. Try reloading — if it keeps
+            SuperHub hit an unexpected error. Try reloading — if it keeps
             happening, let us know what you were doing when it occurred.
           </p>
           <button

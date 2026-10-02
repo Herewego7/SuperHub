@@ -3,16 +3,16 @@ import type { KbArticle } from "../types";
 export const gettingStartedArticles: KbArticle[] = [
   {
     id: "welcome",
-    title: "Welcome to Family Hub+ — what it does",
+    title: "Welcome to SuperHub — what it does",
     category: "getting-started",
     type: "concept",
-    summary: "A quick tour of what Family Hub+ actually covers.",
+    summary: "A quick tour of what SuperHub actually covers.",
     tags: ["overview", "intro", "what is this app", "getting started", "tour"],
     blocks: [
       {
         kind: "text",
         text:
-          "Family Hub+ is one shared home base for your household: a family calendar, chores and rewards, meal planning, health reminders, and a few things to help everyone stay on the same page. Everything here is organized around the tabs at the bottom (or side) of the app.",
+          "SuperHub is one shared home base for your household: a family calendar, chores and rewards, meal planning, health reminders, and a few things to help everyone stay on the same page. Everything here is organized around the tabs at the bottom (or side) of the app.",
       },
       {
         kind: "steps",
@@ -135,7 +135,7 @@ export const gettingStartedArticles: KbArticle[] = [
         kind: "note",
         tone: "warn",
         text:
-          "Joining a family replaces the account's current family data with the invited family's. If the person you're inviting already has their own separate Family Hub+ data, make sure they understand that before accepting.",
+          "Joining a family replaces the account's current family data with the invited family's. If the person you're inviting already has their own separate SuperHub data, make sure they understand that before accepting.",
       },
       {
         kind: "text",

@@ -76,15 +76,15 @@ export function registerKbRoutes(app: Express): void {
 
         await sendEmail({
           to: account.email,
-          subject: "We got your question — Family Hub+",
+          subject: "We got your question — SuperHub",
           html: `
             <p>Hi ${escapeHtml(askerName)},</p>
             <p>Thanks for reaching out! We received your question:</p>
             <p style="background:#f5f5f5;border-radius:8px;padding:12px">${escapeHtml(question).replace(/\n/g, "<br>")}</p>
             <p>We'll reply to this email as soon as we can.</p>
-            <p>— Family Hub+</p>
+            <p>— SuperHub</p>
           `,
-          text: `Hi ${askerName},\n\nThanks for reaching out! We received your question:\n\n${question}\n\nWe'll reply to this email as soon as we can.\n\n— Family Hub+`,
+          text: `Hi ${askerName},\n\nThanks for reaching out! We received your question:\n\n${question}\n\nWe'll reply to this email as soon as we can.\n\n— SuperHub`,
         }).catch((err) => console.error("Failed to send KB confirmation email to asker:", err));
       }
 

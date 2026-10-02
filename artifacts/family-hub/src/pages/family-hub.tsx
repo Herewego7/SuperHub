@@ -976,7 +976,7 @@ export default function FamilyHub() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading Family Hub+…</p>
+          <p className="text-muted-foreground">Loading SuperHub…</p>
         </div>
       </div>
     );
@@ -1011,7 +1011,7 @@ export default function FamilyHub() {
             </DialogTitle>
             <DialogDescription>
               {signOutStep === 1
-                ? "You'll need to log back in to access Family Hub+. Click Continue to proceed."
+                ? "You'll need to log back in to access SuperHub. Click Continue to proceed."
                 : "This is your final confirmation. Click Sign out to end your session."}
             </DialogDescription>
           </DialogHeader>
@@ -2254,7 +2254,7 @@ export default function FamilyHub() {
             </DialogTitle>
             <DialogDescription>
               {signOutStep === 1
-                ? "You'll need to log back in to access Family Hub+. Click Continue to proceed."
+                ? "You'll need to log back in to access SuperHub. Click Continue to proceed."
                 : "This is your final confirmation. Click Sign out to end your session."}
             </DialogDescription>
           </DialogHeader>

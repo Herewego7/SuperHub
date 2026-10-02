@@ -2,14 +2,14 @@ export default function PrivacyPolicy() {
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-3xl mx-auto px-6 py-16">
-        <a href="/?openSettings=1" className="inline-block text-indigo-600 hover:underline text-sm mb-6">← Back to Family Hub+</a>
+        <a href="/?openSettings=1" className="inline-block text-indigo-600 hover:underline text-sm mb-6">← Back to SuperHub</a>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
         <p className="text-sm text-gray-500 mb-10">Last updated: September 2026</p>
 
         <section className="mb-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-3">1. Information We Collect</h2>
           <p className="text-gray-600 leading-relaxed mb-3">
-            Family Hub+ collects the following information to provide our service:
+            SuperHub collects the following information to provide our service:
           </p>
           <ul className="list-disc pl-6 text-gray-600 space-y-2">
             <li><strong>Account information:</strong> Your name and email address provided when you sign in.</li>
@@ -28,7 +28,7 @@ export default function PrivacyPolicy() {
         <section className="mb-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-3">2. How We Use Your Information</h2>
           <ul className="list-disc pl-6 text-gray-600 space-y-2">
-            <li>To operate and display the Family Hub+ application.</li>
+            <li>To operate and display the SuperHub application.</li>
             <li>To sync and display your Google Calendar or Outlook events (only with your explicit permission).</li>
             <li>To send notifications you have opted into (e.g. bedtime reminders, daily briefs, health reminders).</li>
             <li>To show the weather for the location you entered.</li>
@@ -42,7 +42,7 @@ export default function PrivacyPolicy() {
         <section className="mb-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-3">3. Google Calendar and Outlook Access</h2>
           <p className="text-gray-600 leading-relaxed mb-3">
-            When you connect a Google or Microsoft account, Family Hub+ requests read and write access to your
+            When you connect a Google or Microsoft account, SuperHub requests read and write access to your
             calendars. This access is used solely to display your events within the app and to create or update
             events on your behalf when you make changes. We store OAuth tokens securely in our database and
             use them only to fetch calendar data. You can disconnect your calendar at any time from the Settings screen.
@@ -50,7 +50,7 @@ export default function PrivacyPolicy() {
           <p className="text-gray-600 leading-relaxed">
             <strong>You choose which calendars sync.</strong> Right after connecting an account — and any time
             afterward from Settings — you can select exactly which of that account's calendars (e.g. work,
-            personal, shared) should sync into Family Hub+. Only the calendars you select are fetched; the rest
+            personal, shared) should sync into SuperHub. Only the calendars you select are fetched; the rest
             are left alone.
           </p>
         </section>
@@ -58,7 +58,7 @@ export default function PrivacyPolicy() {
         <section className="mb-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-3">4. Health Information</h2>
           <p className="text-gray-600 leading-relaxed mb-3">
-            Health reminders exist to help a family remember a dose, not to create a medical record. Family Hub+
+            Health reminders exist to help a family remember a dose, not to create a medical record. SuperHub
             is not a medical device, gives no medical advice, and must not be relied on as the only safeguard
             for a medication that matters. Reminders can be delayed or missed &mdash; by a device that is off or
             out of battery, by notification permissions being switched off, or by a network problem.
@@ -119,7 +119,7 @@ export default function PrivacyPolicy() {
         <section className="mb-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-3">8. Children&rsquo;s Privacy</h2>
           <p className="text-gray-600 leading-relaxed">
-            Family Hub+ is designed for family use and may contain profiles for children. We do not knowingly
+            SuperHub is designed for family use and may contain profiles for children. We do not knowingly
             collect personal information directly from children under 13. Profile data for children (name,
             initials, color, optional photo, optional birth year, and chore/star history) is entered and
             managed by a parent or guardian.
@@ -155,7 +155,7 @@ export default function PrivacyPolicy() {
         </section>
 
         <div className="border-t pt-6 mt-10">
-          <a href="/?openSettings=1" className="text-indigo-600 hover:underline text-sm">← Back to Family Hub+</a>
+          <a href="/?openSettings=1" className="text-indigo-600 hover:underline text-sm">← Back to SuperHub</a>
         </div>
       </div>
     </div>

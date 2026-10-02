@@ -1,6 +1,6 @@
 {
-  "name": "Family Hub",
-  "short_name": "Family Hub",
+  "name": "SuperHub",
+  "short_name": "SuperHub",
   "description": "Shared calendar, chores, and reminders for the whole family.",
   "start_url": ".",
   "scope": ".",
