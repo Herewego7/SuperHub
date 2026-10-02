@@ -149,14 +149,44 @@ export function withoutSchoolEventsHeldToday<T extends { title: string; source?:
   });
 }
 
+function leapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+function birthdayOnDay(monthDay: string, day: string): boolean {
+  const monthAndDay = day.slice(5);
+  if (monthDay === monthAndDay) return true;
+  if (monthDay !== "02-29" || monthAndDay !== "02-28") return false;
+  return !leapYear(Number(day.slice(0, 4)));
+}
+
+/** The birthday line for the plan's day. An anniversary is not a birthday. */
+export function planBirthdayLine(
+  rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[],
+  day: string,
+): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const year = Number(day.slice(0, 4));
+  const lines = rows
+    .filter((row) => (!row.type || row.type === "birthday") && birthdayOnDay(row.monthDay, day))
+    .map((row) => {
+      const age = row.year ? year - row.year : null;
+      return age && age > 0 ? `${row.name} turns ${age}` : `${row.name}'s birthday`;
+    });
+  if (lines.length === 0) return null;
+  return `${lines.join(". ")}.`;
+}
+
 export function planBody(input: {
   isChild: boolean;
   kidName?: string | null;
   chores: { title: string; description?: string | null; taskType?: string | null; category?: string | null }[];
   events: { title: string; description?: string | null; movedFrom?: string | null; source?: string | null; driving?: boolean }[];
   dinner?: string | null;
+  birthday?: string | null;
 }): string {
   const rows: { text: string; change: boolean }[] = [];
+  if (input.birthday) rows.push({ text: input.birthday, change: true });
   for (const chore of input.chores) {
     if (chore.taskType && chore.taskType !== "todo" && chore.taskType !== "chore") continue;
     if (input.isChild && chore.category === "school_email" && !namesPerson(`${chore.title}\n${chore.description ?? ""}`, input.kidName)) continue;
@@ -253,6 +283,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const completions = await storage.getChoreCompletionsByUser(profile.userId);
     const events = await storage.getEventsByUser(profile.userId);
     const meals = await storage.getMealsByUser(profile.userId);
+    const celebrations = await storage.getCelebrationsByUser(profile.userId);
     const target = profile.eveningPlanTiming === "morningOf" ? day : nextDayKey(day);
     const dinner = meals.find((meal) => meal.date === target && meal.slot === "dinner")?.name ?? null;
     const doneToday = completions
@@ -286,6 +317,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
       chores: openChores,
       events: withoutSchoolEventsHeldToday(dayEvents, heldSchool),
       dinner,
+      birthday: planBirthdayLine(celebrations, target),
     });
       const result = await sendPushToUser(
         { userId: profile.userId, profileId: profile.id },

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Event } from "@workspace/db";
-import { choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, moveClock, moveLabel, planBody, planDayEvents, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
+import { choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, moveClock, moveLabel, planBirthdayLine, planBody, planDayEvents, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
 
 test("a morning plan is titled for today", () => {
   assert.equal(planTitle(false, "morningOf"), "Today's plan");
@@ -72,6 +72,30 @@ test("dinner stays in the plan when the list is long", () => {
     events: [],
     dinner: "Tacos",
   });
+  assert.equal(body.includes("Dinner. Tacos"), true);
+  assert.equal(body.includes("Six"), false);
+});
+
+test("a birthday stays in the plan when the list is long", () => {
+  assert.equal(planBirthdayLine([{ name: "Liam", monthDay: "10-03", year: 2018, type: "birthday" }], "2026-10-03"), "Liam turns 8.");
+  assert.equal(planBirthdayLine([{ name: "Liam", monthDay: "10-04", year: 2018 }], "2026-10-03"), null);
+  assert.equal(planBirthdayLine([{ name: "Us", monthDay: "10-03", type: "anniversary" }], "2026-10-03"), null);
+  assert.equal(planBirthdayLine([{ name: "Liam", monthDay: "02-29", year: 2016 }], "2027-02-28"), "Liam turns 11.");
+  const body = planBody({
+    isChild: false,
+    chores: [
+      { title: "One", taskType: "chore" },
+      { title: "Two", taskType: "chore" },
+      { title: "Three", taskType: "chore" },
+      { title: "Four", taskType: "chore" },
+      { title: "Five", taskType: "chore" },
+      { title: "Six", taskType: "chore" },
+    ],
+    events: [],
+    dinner: "Tacos",
+    birthday: "Liam turns 8.",
+  });
+  assert.equal(body.split("\n")[0], "Liam turns 8.");
   assert.equal(body.includes("Dinner. Tacos"), true);
   assert.equal(body.includes("Six"), false);
 });
