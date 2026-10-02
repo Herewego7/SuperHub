@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, homeBirthdayLine, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -226,6 +226,21 @@ test("a timed school email stays on the to-do and leaves Today", () => {
   assert.equal(schoolSlipsHeldOnHome([slip], [], day).length, 1);
   assert.equal(schoolSlipsHeldOnHome([slip], [{ choreId: "slip", completedAt: new Date(2026, 9, 1, 9, 0) }], day).length, 1);
   assert.equal(schoolSlipsHeldOnHome([slip], [{ choreId: "slip", completedAt: new Date(2026, 8, 30, 9, 0) }], day).length, 0);
+});
+
+test("horizon lists a birthday in the next week", () => {
+  const day = new Date(2026, 9, 1);
+  const rows = horizonBirthdays([
+    { name: "Liam", monthDay: "10-03", year: 2018, type: "birthday" },
+    { name: "Ava", monthDay: "10-01", year: 2016, type: "birthday" },
+    { name: "Us", monthDay: "10-04", type: "anniversary" },
+    { name: "Noah", monthDay: "11-01", year: 2014 },
+  ], day);
+  assert.deepEqual(rows.map((row) => row.title), ["Liam turns 8"]);
+  assert.equal(rows[0]?.startTime.getDate(), 3);
+  const observed = horizonBirthdays([{ name: "Liam", monthDay: "02-29", year: 2016 }], new Date(2027, 1, 27));
+  assert.deepEqual(observed.map((row) => row.title), ["Liam turns 11"]);
+  assert.equal(observed[0]?.startTime.getDate(), 28);
 });
 
 test("home names a birthday on the day being viewed", () => {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, choresForCount, dinnerName, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, homeBirthdayLine, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { eventClockLine, pointsProfileId } from "@/lib/chatTools";
 import { openEmailHref, schoolSaveTarget, slipQuote, slipSender } from "@/lib/slipMail";
@@ -99,6 +99,10 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   );
   const drives = drivesOnHomeDay(events, day, selectedIds, kidName ?? null);
   const horizon = visibleForProfiles(horizonEvents(events, day), selectedIds).filter((event) => mailVisibleToKid(event, kidName));
+  const coming = [
+    ...horizonBirthdays(celebrations, day).map((row) => ({ key: row.id, title: row.title, startTime: row.startTime, allDay: true, source: null as string | null })),
+    ...horizon.map((event) => ({ key: event.id, title: event.title, startTime: event.startTime, allDay: event.isAllDay === true, source: event.source ?? null })),
+  ].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   const earlier = earlierForHome(completions, selectedIds, familyIds, day);
 
   return (
@@ -206,15 +210,15 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
 
       <section data-testid="home-horizon">
         <h2 className="font-display text-lg mb-2">On the Horizon</h2>
-        {horizon.length === 0 ? (
+        {coming.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing in the next week.</p>
         ) : (
           <ul className="flex flex-col gap-1">
-            {horizon.slice(0, 5).map((event) => (
-              <li key={event.id} className="text-sm">
-                {eventClockLine(event.title, event.startTime, true, event.isAllDay === true)}
-                {eventSourceChip(event.source) && (
-                  <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(event.source)}</span>
+            {coming.slice(0, 5).map((row) => (
+              <li key={row.key} className="text-sm">
+                {eventClockLine(row.title, row.startTime, true, row.allDay)}
+                {eventSourceChip(row.source) && (
+                  <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(row.source)}</span>
                 )}
               </li>
             ))}

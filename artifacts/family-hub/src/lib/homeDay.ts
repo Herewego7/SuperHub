@@ -303,6 +303,41 @@ export function drivesOnHomeDay<T extends {
   });
 }
 
+function celebrationDate(year: number, monthDay: string): Date | null {
+  const match = monthDay.match(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/);
+  if (!match) return null;
+  const month = Number(match[1]);
+  const date = new Date(year, month - 1, Number(match[2]));
+  date.setHours(0, 0, 0, 0);
+  if (date.getMonth() !== month - 1) return new Date(year, 1, 28);
+  return date;
+}
+
+/** Birthdays after the viewed day, through the same week Horizon uses. Today stays on the Home line. */
+export function horizonBirthdays(
+  rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[],
+  day: Date,
+): { id: string; title: string; startTime: Date }[] {
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  const from = new Date(start);
+  from.setDate(from.getDate() + 1);
+  const until = new Date(start);
+  until.setDate(until.getDate() + 8);
+  const found: { id: string; title: string; startTime: Date }[] = [];
+  for (const row of rows) {
+    if (row.type && row.type !== "birthday") continue;
+    let date = celebrationDate(from.getFullYear(), row.monthDay);
+    if (!date) continue;
+    if (date < from) date = celebrationDate(from.getFullYear() + 1, row.monthDay);
+    if (!date || date < from || date >= until) continue;
+    const age = row.year ? date.getFullYear() - row.year : null;
+    const title = age && age > 0 ? `${row.name} turns ${age}` : `${row.name}'s birthday`;
+    found.push({ id: `birthday-${row.name}-${row.monthDay}`, title, startTime: date });
+  }
+  return found.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+}
+
 export function horizonEvents<T extends HorizonEvent>(events: T[], day: Date): T[] {
   const start = new Date(day);
   start.setHours(0, 0, 0, 0);
