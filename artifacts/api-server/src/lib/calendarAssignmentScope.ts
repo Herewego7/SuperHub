@@ -132,6 +132,16 @@ export function familyCalendarCreates<T extends { profileId: string; provider: s
   return creates.filter((item) => item.profileId === writer.profileId && item.provider === writer.provider);
 }
 
+/** A chosen family calendar is the write target even when Watch is off. Watch still blocks the account's ordinary write calendar. */
+export function writeTargetAllowed(
+  explicitCalendarId: string | undefined,
+  assignments: { calendarId: string; watched?: boolean | null; isActive?: boolean | null }[],
+  targetCalendarId: string,
+): boolean {
+  if (explicitCalendarId) return true;
+  return calendarIsWritable(assignments, targetCalendarId);
+}
+
 export function calendarIsWritable(
   assignments: { calendarId: string; watched?: boolean | null; isActive?: boolean | null }[],
   calendarId: string,

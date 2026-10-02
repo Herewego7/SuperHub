@@ -13,7 +13,7 @@
  */
 import { storage } from "./storage";
 import { twoWaySyncFromSettings } from "./lib/settingsOwnership";
-import { calendarIsWritable, familyCalendarAccount, familyCalendarCreates, syncTargetsForEvent } from "./lib/calendarAssignmentScope";
+import { familyCalendarAccount, familyCalendarCreates, syncTargetsForEvent, writeTargetAllowed } from "./lib/calendarAssignmentScope";
 import { googleRecurrence, outlookRecurrence, excludedInstants } from "./lib/recurrenceRule";
 import { DEFAULT_TIMEZONE } from "./lib/timezone";
 import { GoogleCalendarService } from "./googleCalendar";
@@ -179,7 +179,7 @@ async function createGoogleCopy(event: Event, profileId: string, calendarId?: st
   // configurable. A family calendar is that one calendar, not every write target.
   const targetCalendarId = calendarId || tokens.writeCalendarId || GOOGLE_PRIMARY_CALENDAR;
   const assignments = await storage.getCalendarAssignments(profileId);
-  if (!calendarIsWritable(assignments, targetCalendarId)) return;
+  if (!writeTargetAllowed(calendarId, assignments, targetCalendarId)) return;
   try {
     const created = await googleCalendarService.createEvent(
       tokens.accessToken,
@@ -227,7 +227,7 @@ async function createOutlookCopy(event: Event, profileId: string, calendarId?: s
   const targetCalendarId = calendarId || tokens?.writeCalendarId || undefined;
   if (targetCalendarId) {
     const assignments = await storage.getCalendarAssignments(profileId);
-    if (!calendarIsWritable(assignments, targetCalendarId)) return;
+    if (!writeTargetAllowed(calendarId, assignments, targetCalendarId)) return;
   }
   try {
     const created = await outlookCalendarService.createEvent(

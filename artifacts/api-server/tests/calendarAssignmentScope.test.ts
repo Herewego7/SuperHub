@@ -5,6 +5,7 @@ import {
   assignmentsToDeactivate,
   assignPeopleToCalendar,
   calendarIsWritable,
+  writeTargetAllowed,
   familyCalendarCreates,
   calendarTokenOwner,
   familyCalendarAccount,
@@ -159,6 +160,12 @@ test("an already-inactive row is not re-deactivated", () => {
     calendarType: "google",
   });
   assert.deepEqual(toDeactivate, []);
+});
+
+test("a chosen family calendar stays writable when Watch is off", () => {
+  const rows = [{ calendarId: "family", watched: false, isActive: true }];
+  assert.equal(writeTargetAllowed("family", rows, "family"), true);
+  assert.equal(writeTargetAllowed(undefined, rows, "family"), false);
 });
 
 test("an unwatched calendar is not a write target", () => {
