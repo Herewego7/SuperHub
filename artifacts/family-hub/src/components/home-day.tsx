@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, choresForCount, dinnerName, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { eventClockLine, pointsProfileId } from "@/lib/chatTools";
 import { openEmailHref, schoolSaveTarget, slipQuote, slipSender } from "@/lib/slipMail";
@@ -86,7 +86,13 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   const todos = openTodos(todosForHome(chores, selectedIds, familyIds), completions).filter((todo) => !kidName || schoolEmailNames(todo, kidName));
   const progress = choreProgress(choresForCount(chores, selectedIds, familyIds), completions, day);
   const dinner = dinnerName(meals, day);
-  const todayEvents = eventsOnHomeDay(visibleForProfiles(events, selectedIds), day, kidName, dinner, todos);
+  const todayEvents = eventsOnHomeDay(
+    visibleForProfiles(events, selectedIds),
+    day,
+    kidName,
+    dinner,
+    schoolSlipsHeldOnHome(todosForHome(chores, selectedIds, familyIds), completions, day),
+  );
   const horizon = visibleForProfiles(horizonEvents(events, day), selectedIds).filter((event) => mailVisibleToKid(event, kidName));
   const earlier = earlierForHome(completions, selectedIds, familyIds, day);
 

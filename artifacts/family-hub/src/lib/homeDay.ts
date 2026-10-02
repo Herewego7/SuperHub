@@ -122,6 +122,31 @@ export type HorizonEvent = {
   recurrenceType?: string | null;
 };
 
+/** Open school mail stays on the to-do. One checked off today stays off Today so it does not reappear. */
+export function schoolSlipsHeldOnHome<T extends { id: string; title: string; category?: string | null }>(
+  todos: T[],
+  completions: { choreId: string; completedAt?: Date | string | null }[],
+  day: Date,
+): T[] {
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  const anyDone = new Set(completions.map((completion) => completion.choreId));
+  const doneToday = new Set(
+    completions.filter((completion) => {
+      if (!completion.completedAt) return false;
+      const at = new Date(completion.completedAt);
+      return at >= start && at < end;
+    }).map((completion) => completion.choreId),
+  );
+  return todos.filter((todo) => {
+    if (todo.category !== "school_email") return false;
+    if (!anyDone.has(todo.id)) return true;
+    return doneToday.has(todo.id);
+  });
+}
+
 export function schoolEventClock(
   title: string,
   events: { title: string; startTime: Date | string; source?: string | null; isAllDay?: boolean | null }[],

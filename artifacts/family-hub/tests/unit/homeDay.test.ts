@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -140,6 +140,10 @@ test("a timed school email stays on the to-do and leaves Today", () => {
   );
   assert.deepEqual(rows.map((row) => row.title), ["Soccer"]);
   assert.equal(schoolEventClock("Picture day", [{ title: "Picture day", startTime: new Date(2026, 9, 1, 15, 30), source: "school" }], day), "3:30 PM");
+  const slip = { id: "slip", title: "Picture day", category: "school_email" as const };
+  assert.equal(schoolSlipsHeldOnHome([slip], [], day).length, 1);
+  assert.equal(schoolSlipsHeldOnHome([slip], [{ choreId: "slip", completedAt: new Date(2026, 9, 1, 9, 0) }], day).length, 1);
+  assert.equal(schoolSlipsHeldOnHome([slip], [{ choreId: "slip", completedAt: new Date(2026, 8, 30, 9, 0) }], day).length, 0);
 });
 
 test("dinner is the meal in that slot on that date", () => {
