@@ -606,6 +606,25 @@ export function notRelevantTitle(text: string): string | null {
   return title || null;
 }
 
+/** A place correction. A clock or a day stays a time move. */
+export function placeChange(text: string): { title: string; location: string } | null {
+  const trimmed = text.trim();
+  const moved = trimmed.match(/^move\s+(.+?)\s+to\s+(.+?)\.?$/i);
+  if (moved) {
+    if (moveEventWhen(trimmed)) return null;
+    const title = moved[1].trim();
+    const location = moved[2].trim();
+    if (!title || !location) return null;
+    return { title, location };
+  }
+  const named = trimmed.match(/^(.+?)\s+is at\s+(.+?)\.?$/i);
+  const title = named?.[1]?.trim();
+  const location = named?.[2]?.trim();
+  if (!title || !location || /^(?:what|where|when|who)$/i.test(title)) return null;
+  if (moveEventWhen(`move item to ${location}`)) return null;
+  return { title, location };
+}
+
 export function moveEventWhen(text: string, from = new Date()): { title: string; hours?: number; minutes?: number; on?: Date } | null {
   const match = text.trim().match(/^move\s+(.+?)\s+to\s+(.+?)\.?$/i);
   if (!match) return null;
