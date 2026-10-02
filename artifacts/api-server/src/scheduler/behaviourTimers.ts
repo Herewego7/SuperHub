@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { behaviourIncidents } from "@workspace/db";
 import { sendPushToUser } from "../lib/push";
@@ -15,6 +15,38 @@ import { createWorkGate } from "../lib/workGate";
 // process restart in a way the absolute-time schedulers don't risk.
 const FIVE_MIN_MS = 5 * 60 * 1000;
 const TOLERANCE_MS = 60_000; // one tick's worth of slack around the 5-min mark
+
+async function claimReminder(id: string, now: Date): Promise<boolean> {
+  const rows = await db
+    .update(behaviourIncidents)
+    .set({ reminderFiredAt: now })
+    .where(and(eq(behaviourIncidents.id, id), isNull(behaviourIncidents.reminderFiredAt)))
+    .returning({ id: behaviourIncidents.id });
+  return rows.length > 0;
+}
+
+async function releaseReminder(id: string, now: Date): Promise<void> {
+  await db
+    .update(behaviourIncidents)
+    .set({ reminderFiredAt: null })
+    .where(and(eq(behaviourIncidents.id, id), eq(behaviourIncidents.reminderFiredAt, now)));
+}
+
+async function claimExpired(id: string, now: Date): Promise<boolean> {
+  const rows = await db
+    .update(behaviourIncidents)
+    .set({ timerExpiredPushFiredAt: now })
+    .where(and(eq(behaviourIncidents.id, id), isNull(behaviourIncidents.timerExpiredPushFiredAt)))
+    .returning({ id: behaviourIncidents.id });
+  return rows.length > 0;
+}
+
+async function releaseExpired(id: string, now: Date): Promise<void> {
+  await db
+    .update(behaviourIncidents)
+    .set({ timerExpiredPushFiredAt: null })
+    .where(and(eq(behaviourIncidents.id, id), eq(behaviourIncidents.timerExpiredPushFiredAt, now)));
+}
 
 /**
  * @returns whether there was anything pending — the work gate uses this to
@@ -38,51 +70,59 @@ export async function runBehaviourTimerTick(now: Date = new Date()): Promise<boo
       remaining > 0 &&
       remaining <= FIVE_MIN_MS + TOLERANCE_MS
     ) {
+      let claimed = false;
       try {
-        await sendPushToUser(
-          { userId: incident.userId, profileId: incident.profileId },
-          {
-            title: "⏱ 5 minutes left",
-            body: `Finish "${incident.positiveConsequence}" to resolve`,
-            url: "/",
-            tag: `behaviour-timer-5min-${incident.id}`,
-            data: { kind: "behaviour-timer-5min", incidentId: incident.id, profileId: incident.profileId },
-          },
-          "behaviourTimer",
-        );
-        await db
-          .update(behaviourIncidents)
-          .set({ reminderFiredAt: now })
-          .where(eq(behaviourIncidents.id, incident.id));
+        claimed = await claimReminder(incident.id, now);
       } catch (err) {
-        logger.warn({ err, incidentId: incident.id }, "Behaviour 5-min reminder failed");
-        // don't mark fired — retry next tick
+        logger.warn({ err, incidentId: incident.id }, "Behaviour 5-min claim failed");
+      }
+      if (claimed) {
+        try {
+          await sendPushToUser(
+            { userId: incident.userId, profileId: incident.profileId },
+            {
+              title: "⏱ 5 minutes left",
+              body: `Finish "${incident.positiveConsequence}" to resolve`,
+              url: "/",
+              tag: `behaviour-timer-5min-${incident.id}`,
+              data: { kind: "behaviour-timer-5min", incidentId: incident.id, profileId: incident.profileId },
+            },
+            "behaviourTimer",
+          );
+        } catch (err) {
+          await releaseReminder(incident.id, now);
+          logger.warn({ err, incidentId: incident.id }, "Behaviour 5-min reminder failed");
+        }
       }
     }
 
     // Timer expired — notify the profile AND every parent, since the parent
     // needs to actually enforce the consequence.
     if (!incident.timerExpiredPushFiredAt && remaining <= 0) {
+      let claimed = false;
       try {
-        const memberIds = await getFamilyMemberAccountIds(incident.userId);
-        const payload = {
-          title: "⏱ Time's up!",
-          body: `Apply consequence: ${incident.negativeConsequence}`,
-          url: "/",
-          tag: `behaviour-timer-expired-${incident.id}`,
-          data: { kind: "behaviour-timer-expired", incidentId: incident.id, profileId: incident.profileId },
-        };
-        await Promise.all([
-          sendPushToUser({ userId: incident.userId, profileId: incident.profileId }, payload, "behaviourTimer"),
-          ...memberIds.map((memberId) => sendPushToUser({ userId: memberId }, payload, "behaviourTimer")),
-        ]);
-        await db
-          .update(behaviourIncidents)
-          .set({ timerExpiredPushFiredAt: now })
-          .where(eq(behaviourIncidents.id, incident.id));
+        claimed = await claimExpired(incident.id, now);
       } catch (err) {
-        logger.warn({ err, incidentId: incident.id }, "Behaviour timer-expired notification failed");
-        // don't mark fired — retry next tick
+        logger.warn({ err, incidentId: incident.id }, "Behaviour timer-expired claim failed");
+      }
+      if (claimed) {
+        try {
+          const memberIds = await getFamilyMemberAccountIds(incident.userId);
+          const payload = {
+            title: "⏱ Time's up!",
+            body: `Apply consequence: ${incident.negativeConsequence}`,
+            url: "/",
+            tag: `behaviour-timer-expired-${incident.id}`,
+            data: { kind: "behaviour-timer-expired", incidentId: incident.id, profileId: incident.profileId },
+          };
+          await Promise.all([
+            sendPushToUser({ userId: incident.userId, profileId: incident.profileId }, payload, "behaviourTimer"),
+            ...memberIds.map((memberId) => sendPushToUser({ userId: memberId }, payload, "behaviourTimer")),
+          ]);
+        } catch (err) {
+          await releaseExpired(incident.id, now);
+          logger.warn({ err, incidentId: incident.id }, "Behaviour timer-expired notification failed");
+        }
       }
     }
   }
