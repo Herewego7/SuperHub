@@ -141,6 +141,7 @@ export async function buildDailyBrief(
     : todaysAllEvents
       .filter((e) => {
         if (!briefListsEvent(e, sections.meals)) return false;
+        if (scopeToSelfOnly && !briefShowsForKid(e, profile!.name)) return false;
         if (!scopeToSelfOnly) return true;
           const ids = (e.profileIds as string[] | null) ?? [];
           return ids.length === 0 || ids.includes(profile!.id);
@@ -186,12 +187,16 @@ export async function buildDailyBrief(
     const remainingTitles: string[] = [];
     const byPerson: { name: string; regular: number; target: number; inspiration: number }[] = [];
     for (const p of targetProfiles) {
-      const { due, completedIds } = await getTodayChoresForProfile(
+      const loaded = await getTodayChoresForProfile(
         userId,
         p.id,
         now,
         tz,
       );
+      const due = scopeToSelfOnly
+        ? loaded.due.filter((chore) => briefShowsForKid(chore, p.name))
+        : loaded.due;
+      const completedIds = loaded.completedIds;
       totalDue += due.length;
       for (const c of due) {
         if (!completedIds.has(c.id)) {
@@ -266,6 +271,17 @@ export async function buildDailyBrief(
 
 export function briefListsEvent(event: { source?: string | null }, mealsSection: boolean): boolean {
   return !(event.source === "meal" && mealsSection);
+}
+
+/** A kid's brief hides school mail that does not name them. A parent still sees it. */
+export function briefShowsForKid(
+  row: { title: string; description?: string | null; category?: string | null; source?: string | null },
+  kidName: string | null | undefined,
+): boolean {
+  if (!kidName?.trim()) return true;
+  if (row.category !== "school_email" && row.source !== "school") return true;
+  const escaped = kidName.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escaped}\\b`, "i").test(`${row.title}\n${row.description ?? ""}`);
 }
 
 function slotOrder(slot: string): number {
