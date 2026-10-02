@@ -425,6 +425,15 @@ export function schoolSlipTitle(title: string): string {
   return title.replace(/,\s+[^,]+\s+driving$/i, "").trim();
 }
 
+/** A school email already checked off stays off the plan, even when the check was the night before. */
+export function heldSchoolTitles(
+  chores: { id: string; title: string; category?: string | null }[],
+  completions: { choreId: string }[],
+): string[] {
+  const done = new Set(completions.map((completion) => completion.choreId));
+  return chores.filter((chore) => chore.category === "school_email" && done.has(chore.id)).map((chore) => chore.title);
+}
+
 export function withoutSchoolEventsHeldToday<T extends { title: string; source?: string | null }>(
   events: T[],
   heldTitles: string[],
@@ -613,9 +622,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const finishedTodos = completions
       .filter((completion) => chores.some((chore) => chore.id === completion.choreId && chore.taskType === "todo"))
       .map((completion) => completion.choreId);
-    const heldSchool = chores
-      .filter((chore) => chore.category === "school_email" && doneToday.includes(chore.id))
-      .map((chore) => chore.title);
+    const heldSchool = heldSchoolTitles(chores, completions);
     const openChores = dueForPlan(
       choresForPlan(withoutDismissedChores(chores, settings?.dismissedSlipKeys ?? []), doneToday, profile.id, finishedTodos),
       new Date(`${target}T12:00:00`),

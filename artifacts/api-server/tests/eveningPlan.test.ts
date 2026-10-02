@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Event } from "@workspace/db";
-import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, googlePlanRows, icalPlanRows, moveClock, moveLabel, outlookPlanRows, planBirthdayLine, planBody, planDayEvents, planEventTitle, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, uniqueExternalRows, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
+import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, googlePlanRows, heldSchoolTitles, icalPlanRows, moveClock, moveLabel, outlookPlanRows, planBirthdayLine, planBody, planDayEvents, planEventTitle, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, uniqueExternalRows, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
 
 test("a Google event can be named on the evening plan", () => {
   const rows = googlePlanRows([
@@ -323,6 +323,18 @@ test("a school email with a place and a driver is still one line", () => {
     ["Picture day"],
   );
   assert.deepEqual(held, []);
+});
+
+test("a school email checked off before the plan day stays off", () => {
+  const titles = heldSchoolTitles(
+    [{ id: "c1", title: "Picture day", category: "school_email" }],
+    [{ choreId: "c1" }],
+  );
+  const events = withoutSchoolEventsHeldToday(
+    [{ title: "Picture day, 3:30 PM, Field 2, Liam driving", source: "school" }, { title: "Soccer, 4:00 PM", source: "app" }],
+    titles,
+  );
+  assert.deepEqual(events.map((event) => event.title), ["Soccer, 4:00 PM"]);
 });
 
 test("a school email checked off that day stays off the plan", () => {
