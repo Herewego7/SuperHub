@@ -16,7 +16,7 @@ type Props = {
   day: Date;
   kidName?: string | null;
   personId?: string | null;
-  people?: { id: string; name: string; school?: string | null; isChild?: boolean | null; role?: string | null }[];
+  people?: { id: string; name: string; school?: string | null; isChild?: boolean | null; role?: string | null; connected?: boolean }[];
   onOpenChores: () => void;
 };
 
@@ -109,7 +109,11 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
               const clock = todo.category === "school_email" ? schoolEventClock(todo.title, events, day) : null;
               const sender = slipSender(todo.description);
               const offer = schoolSaveTarget(todo.title, todo.description, people, personId ?? null);
-              const emailHref = openEmailHref(calendarSettings?.shareOriginals === true, sender);
+              const viewer = people.find((person) => person.id === personId);
+              const emailHref = openEmailHref(calendarSettings?.shareOriginals === true, sender, {
+                isChild: !!kidName,
+                ownsAccount: viewer?.connected === true,
+              });
               return (
               <li key={todo.id} data-testid={`home-todo-${todo.id}`} className="flex items-start gap-3 rounded-2xl border border-border bg-card px-3 py-2">
                 <button

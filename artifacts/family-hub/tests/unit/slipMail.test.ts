@@ -10,6 +10,10 @@ test("a slip keeps the sender off the visible quote", () => {
   assert.equal(suggestedSchool(slipQuote(body)), "Lincoln Elementary");
   assert.equal(openEmailHref(false, "office@school.edu"), null);
   assert.equal(openEmailHref(true, "office@school.edu"), "mailto:office@school.edu");
+  assert.equal(openEmailHref(false, "office@school.edu", { ownsAccount: true }), "mailto:office@school.edu");
+  assert.equal(openEmailHref(false, "office@school.edu", { ownsAccount: false }), null);
+  assert.equal(openEmailHref(true, "office@school.edu", { ownsAccount: false }), "mailto:office@school.edu");
+  assert.equal(openEmailHref(true, "office@school.edu", { ownsAccount: true, isChild: true }), null);
 });
 
 test("a name in the email body still counts, and the quote stays short", () => {

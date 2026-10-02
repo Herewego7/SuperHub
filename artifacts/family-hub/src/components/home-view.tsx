@@ -2374,6 +2374,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           school: p.school ?? null,
           isChild: p.isChild,
           role: p.role,
+          connected: !!(p.googleCalendarConnected || p.outlookCalendarConnected),
         }))}
         onOpenChores={() => setActiveTab("chores")}
       />

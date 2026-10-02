@@ -12,9 +12,15 @@ export function slipQuote(description: string | null | undefined): string {
   return slipText(description).split(/\n\s*\n/)[0] ?? "";
 }
 
-export function openEmailHref(shareOriginals: boolean, sender: string | null): string | null {
-  if (!shareOriginals || !sender) return null;
-  return `mailto:${sender}`;
+/** The adult who connected the account can open the original. Other adults need the share switch. A child never gets the link. */
+export function openEmailHref(
+  shareOriginals: boolean,
+  sender: string | null,
+  viewer?: { isChild?: boolean; ownsAccount?: boolean },
+): string | null {
+  if (!sender || viewer?.isChild) return null;
+  if (viewer?.ownsAccount || shareOriginals) return `mailto:${sender}`;
+  return null;
 }
 
 export function suggestedSchool(text: string): string | null {
