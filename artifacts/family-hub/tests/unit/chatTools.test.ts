@@ -170,6 +170,37 @@ test("check off names the chore", () => {
   assert.equal(checkOffTitle("Who is driving soccer?"), null);
 });
 
+test("what's the plan names a birthday on that day", () => {
+  const day = new Date(2026, 9, 1, 15, 0);
+  const chores = ["One", "Two", "Three", "Four", "Five"].map((title) => ({
+    title,
+    taskType: "chore" as const,
+    recurrenceType: "daily" as const,
+  }));
+  const reply = dayReply("what's the plan?", {
+    chores,
+    events: [],
+    dinner: "Tacos",
+    celebrations: [{ name: "Liam", monthDay: "10-01", year: 2018, type: "birthday" }],
+    day,
+  });
+  assert.equal(reply?.split("\n")[0], "Liam turns 8.");
+  assert.equal(reply?.includes("Dinner. Tacos"), true);
+  assert.equal(reply?.includes("Five"), false);
+  assert.equal(dayReply("what's the plan Friday", {
+    chores: [],
+    events: [],
+    celebrations: [{ name: "Liam", monthDay: "10-01", year: 2018, type: "birthday" }],
+    day,
+  }), "Nothing on the plan.");
+  assert.equal(dayReply("what's the plan?", {
+    chores: [],
+    events: [],
+    celebrations: [{ name: "Us", monthDay: "10-01", type: "anniversary" }],
+    day,
+  }), "Nothing on the plan.");
+});
+
 test("what's the plan names a recent move and keeps it when the day is full", () => {
   const day = new Date(2026, 9, 1, 15, 0);
   const recent = `4:00 PM\n${new Date(day.getTime() - 60 * 60 * 1000).toISOString()}`;

@@ -1,5 +1,5 @@
 /** Chat tools carried over from Bot Life. Mail tools stay off a kid's thread. */
-import { dinnerName, eventsForDayPlan } from "./homeDay";
+import { dinnerName, eventsForDayPlan, homeBirthdayLine } from "./homeDay";
 
 export const CHAT_TOOLS = [
   "get_plan",
@@ -254,6 +254,7 @@ export function dayReply(
     completions?: { choreId: string; completedAt?: Date | string | null }[];
     dinner?: string | null;
     meals?: { date: string; slot: string; name: string }[];
+    celebrations?: { name: string; monthDay: string; year?: number | null; type?: string | null }[];
     day: Date;
   },
 ): string | null {
@@ -291,6 +292,8 @@ export function dayReply(
   const askedToday = start.toDateString() === new Date(input.day).toDateString();
   const dinner = input.meals ? dinnerName(input.meals, start) : askedToday ? input.dinner : null;
   const rows: { text: string; change: boolean }[] = [];
+  const birthday = homeBirthdayLine(input.celebrations ?? [], start);
+  if (birthday) rows.push({ text: birthday, change: true });
   for (const chore of input.chores) {
     if (chore.id && (done.has(chore.id) || finishedTodos.has(chore.id))) continue;
     if (!dueOnDay(chore, start)) continue;
