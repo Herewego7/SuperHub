@@ -3,7 +3,9 @@ import { OutlookCalendarService } from "../outlookCalendar";
 import { getFreshOutlookAccessToken } from "../calendarSync";
 import { storage } from "../storage";
 import { applyIngestedMail } from "./saveMail";
-import { inboxScanEnabled } from "./process";
+import { inboxScanEnabled, shareScan } from "./process";
+
+const inflight = new Map<string, Promise<Awaited<ReturnType<typeof scanOnce>>>>();
 
 function denied(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
@@ -13,7 +15,11 @@ function denied(err: unknown): boolean {
   return value === 401 || value === 403 || status === 401 || status === 403;
 }
 
-export async function scanConnectedInboxes(userId: string) {
+export function scanConnectedInboxes(userId: string) {
+  return shareScan(inflight, userId, () => scanOnce(userId));
+}
+
+async function scanOnce(userId: string) {
   const settings = await storage.getCalendarSettingsByUser(userId);
   if (!inboxScanEnabled(settings?.scanInbox)) {
     return { todos: [], events: [], scanOff: true, connected: 0, needsReconnect: false };

@@ -82,7 +82,27 @@ export interface InboundMessage {
   subject: string;
   fromAddress?: string;
   snippet: string;
+  body?: string;
   accountId: string;
+}
+
+export function decodeBody(part: GmailPart): string {
+  const data = part.body?.data;
+  if (!data) return "";
+  return Buffer.from(data, "base64url").toString("utf8");
+}
+
+export function messageText(payload: GmailPart | undefined): string {
+  const plain: string[] = [];
+  const html: string[] = [];
+  const walk = (part: GmailPart) => {
+    if (part.mimeType === "text/plain") plain.push(decodeBody(part));
+    else if (part.mimeType === "text/html") html.push(decodeBody(part));
+    for (const child of part.parts ?? []) walk(child);
+  };
+  if (payload) walk(payload);
+  const text = plain.join("\n").trim() || (html.length ? htmlToText(html.join("\n")).text : "");
+  return decodeEntities(text).replace(/\s+/g, " ").trim();
 }
 
 export function outlookToInbound(
@@ -104,11 +124,14 @@ export function outlookToInbound(
 
 export function toInbound(msg: GmailMessage, accountId: string): InboundMessage {
   const from = parseAddress(header(msg, "From"));
+  const body = messageText(msg.payload).slice(0, 4000);
+  const snippet = decodeEntities(msg.snippet ?? "").trim() || body.slice(0, 240);
   return {
     accountId,
     ...(from ? { fromAddress: from.address } : {}),
     subject: header(msg, "Subject") ?? "",
-    snippet: decodeEntities(msg.snippet ?? ""),
+    snippet,
+    ...(body ? { body } : {}),
   };
 }
 

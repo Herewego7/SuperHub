@@ -7,6 +7,16 @@
 import { zonedWallClock } from "../lib/timezone";
 import { slipKey, type InboundMessage } from "./parse";
 
+export function shareScan<T>(inflight: Map<string, Promise<T>>, userId: string, start: () => Promise<T>): Promise<T> {
+  const existing = inflight.get(userId);
+  if (existing) return existing;
+  const job = start().finally(() => {
+    if (inflight.get(userId) === job) inflight.delete(userId);
+  });
+  inflight.set(userId, job);
+  return job;
+}
+
 export function inboxScanEnabled(scanInbox: boolean | null | undefined): boolean {
   return scanInbox !== false;
 }
@@ -220,11 +230,12 @@ export function ingestMessages(
       daysOfWeek: [],
       slipKey: key,
     });
-    const clock = slipClock(`${message.subject} ${message.snippet}`);
+    const note = `${message.subject} ${message.body || message.snippet}`.slice(0, 2000);
+    const clock = slipClock(note);
     if (clock) {
       events.push({
         title: message.subject.trim(),
-        description: message.snippet,
+        description: note,
         source: "school",
         externalId: key,
         profileIds,

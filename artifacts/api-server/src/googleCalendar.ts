@@ -285,8 +285,7 @@ export class GoogleCalendarService {
       const full = await gmail.users.messages.get({
         userId: "me",
         id: item.id,
-        format: "metadata",
-        metadataHeaders: ["Subject", "From"],
+        format: "full",
       });
       out.push(toInbound({
         id: item.id,

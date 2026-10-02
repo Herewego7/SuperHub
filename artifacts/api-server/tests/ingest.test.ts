@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, inboxScanEnabled, inboxTokenExpiry, ingestMessages, muteSender, schoolEventStart, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, inboxScanEnabled, inboxTokenExpiry, ingestMessages, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
 import { outlookToInbound, toInbound } from "../src/ingest/parse.ts";
 
 test("a stored Google token is refreshed once it has expired", () => {
@@ -31,6 +31,46 @@ test("a gmail message becomes a slip with the subject and sender", () => {
   assert.equal(message.subject, "Permission slip");
   assert.equal(message.fromAddress, "office@school.edu");
   assert.equal(message.snippet, "Please sign & return.");
+});
+
+test("a time written only in the email body still becomes an event", () => {
+  const message = toInbound({
+    id: "m2",
+    snippet: "See the note.",
+    payload: {
+      mimeType: "multipart/alternative",
+      parts: [{
+        mimeType: "text/plain",
+        body: { data: Buffer.from("Picture day is Thursday at 3:30 PM.").toString("base64url") },
+      }],
+    },
+  }, "chad");
+  assert.equal(message.snippet, "See the note.");
+  assert.match(message.body ?? "", /Thursday at 3:30 PM/);
+  const planned = ingestMessages(
+    [{ subject: "Picture day", fromAddress: "office@school.edu", snippet: message.snippet, body: message.body, accountId: "chad" }],
+    { mutedSenders: [], dismissedSlipKeys: [] },
+    [],
+    ["liam"],
+  );
+  assert.equal(planned.events.length, 1);
+  assert.equal(planned.events[0]?.hours, 15);
+  assert.equal(planned.events[0]?.minutes, 30);
+  assert.match(planned.todos[0]?.description ?? "", /See the note/);
+});
+
+test("two scans of one household share one read", async () => {
+  let started = 0;
+  const inflight = new Map<string, Promise<number>>();
+  const start = () => {
+    started += 1;
+    return new Promise<number>((resolve) => setTimeout(() => resolve(started), 20));
+  };
+  const first = shareScan(inflight, "home", start);
+  const second = shareScan(inflight, "home", start);
+  assert.equal(first, second);
+  assert.equal(await first, 1);
+  assert.equal(started, 1);
 });
 
 test("an outlook message becomes a slip with the subject and sender", () => {
