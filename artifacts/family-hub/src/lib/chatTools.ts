@@ -250,7 +250,12 @@ export function dayReply(
   for (const event of input.events) {
     if (event.source === "meal" && dinner) continue;
     const at = new Date(event.startTime);
-    if (at >= start && at < end) lines.push(eventClockLine(event.title, at, false, event.isAllDay === true));
+    if (at < start || at >= end) continue;
+    const line = eventClockLine(event.title, at, false, event.isAllDay === true);
+    const bare = line.replace(/, \d{1,2}:\d{2} [AP]M$/i, "");
+    const same = event.source === "school" ? lines.findIndex((item) => item.toLowerCase() === bare.toLowerCase()) : -1;
+    if (same >= 0) lines[same] = line;
+    else lines.push(line);
   }
   const kept = lines.slice(0, 5);
   if (dinner) kept.push(`Dinner. ${dinner}`);

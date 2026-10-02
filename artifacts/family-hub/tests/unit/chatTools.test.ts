@@ -164,6 +164,16 @@ test("check off names the chore", () => {
   assert.equal(checkOffTitle("Who is driving soccer?"), null);
 });
 
+test("what's the plan lists a timed school email once", () => {
+  const day = new Date(2026, 9, 1, 15, 30);
+  const reply = dayReply("what's the plan?", {
+    chores: [{ id: "pic", title: "Picture day", taskType: "todo" }],
+    events: [{ title: "Picture day", startTime: day, source: "school" }],
+    day,
+  });
+  assert.equal(reply, "Picture day, 3:30 PM");
+});
+
 test("what's the plan names the day and dinner", () => {
   const day = new Date(2026, 9, 1, 15, 0);
   const reply = dayReply("what's the plan?", {
