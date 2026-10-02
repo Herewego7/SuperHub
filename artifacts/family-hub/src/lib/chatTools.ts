@@ -549,6 +549,45 @@ export function schoolReply(
   return `${profile.name}'s school is ${profile.school}.`;
 }
 
+/** Who drives an event. "who is driving" stays a question. */
+export function driverChange(
+  text: string,
+  profiles: { id: string; name: string }[],
+  selfName?: string | null,
+): { title: string; profileIds: string[]; reply: string } | { title: string; reply: string } | null {
+  const trimmed = text.trim();
+  const self = trimmed.match(/^(?:i'm|i am)\s+driving\s+(.+?)\.?$/i);
+  if (self?.[1]?.trim()) {
+    const title = self[1].trim();
+    const mine = selfName?.trim();
+    if (!mine) return { title, reply: "Pick one person first." };
+    const profile = profiles.find((person) => person.name.toLowerCase() === mine.toLowerCase());
+    if (!profile) return { title, reply: "Pick one person first." };
+    return { title, profileIds: [profile.id], reply: `${profile.name} is driving ${title}.` };
+  }
+  const match = trimmed.match(/^(.+?)\s+(?:is|are) driving\s+(.+?)\.?$/i);
+  const who = match?.[1]?.trim();
+  const title = match?.[2]?.trim();
+  if (!who || !title || /^(?:who|what|where|when)$/i.test(who)) return null;
+  if (/^(?:nobody|no one|no-one)$/i.test(who)) {
+    return { title, profileIds: [], reply: `Nobody is driving ${title}.` };
+  }
+  const parts = who.split(/\s*,\s*|\s+and\s+/i).map((part) => part.trim()).filter(Boolean);
+  const chosen: { id: string; name: string }[] = [];
+  for (const part of parts) {
+    const profile = profiles.find((person) => person.name.toLowerCase() === part.toLowerCase());
+    if (!profile) return { title, reply: `I don't see ${part}.` };
+    if (!chosen.some((person) => person.id === profile.id)) chosen.push(profile);
+  }
+  if (chosen.length === 0) return null;
+  const names = chosen.map((person) => person.name);
+  const pretty = names.length <= 2
+    ? names.join(" and ")
+    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const verb = names.length === 1 ? "is" : "are";
+  return { title, profileIds: chosen.map((person) => person.id), reply: `${pretty} ${verb} driving ${title}.` };
+}
+
 export function drivingReply(
   text: string,
   events: { title: string; drivingProfileIds?: string[] | null }[],

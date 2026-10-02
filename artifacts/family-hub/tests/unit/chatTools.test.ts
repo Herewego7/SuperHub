@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -105,6 +105,16 @@ test("an event can be for one person or several", () => {
   assert.deepEqual(eventPeople("assign Soccer to Liam", profiles), { title: "Soccer", profileIds: ["liam"], reply: "Soccer is for Liam." });
   assert.equal(eventPeople("what is for dinner", profiles), null);
   assert.deepEqual(eventPeople("Soccer is for Noah", profiles), { title: "Soccer", reply: "I don't see Noah." });
+});
+
+test("chat can name who is driving", () => {
+  const profiles = [{ id: "liam", name: "Liam" }, { id: "ava", name: "Ava" }];
+  assert.deepEqual(driverChange("Liam is driving Soccer", profiles), { title: "Soccer", profileIds: ["liam"], reply: "Liam is driving Soccer." });
+  assert.deepEqual(driverChange("Liam and Ava are driving Soccer", profiles), { title: "Soccer", profileIds: ["liam", "ava"], reply: "Liam and Ava are driving Soccer." });
+  assert.deepEqual(driverChange("nobody is driving Soccer", profiles), { title: "Soccer", profileIds: [], reply: "Nobody is driving Soccer." });
+  assert.equal(driverChange("who is driving Soccer", profiles), null);
+  assert.deepEqual(driverChange("I'm driving Soccer", profiles, "Liam"), { title: "Soccer", profileIds: ["liam"], reply: "Liam is driving Soccer." });
+  assert.deepEqual(driverChange("I'm driving Soccer", profiles, null), { title: "Soccer", reply: "Pick one person first." });
 });
 
 test("assign names the to-do and the person", () => {

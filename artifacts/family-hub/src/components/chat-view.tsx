@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
@@ -303,6 +303,41 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
       setBubbles(next);
       setDraft("");
+      return;
+    }
+    const selfName = selectedIds.length === 1
+      ? profiles.find((profile) => profile.id === selectedIds[0])?.name ?? null
+      : null;
+    const drivingChange = tools.includes("update_event") ? driverChange(text, profiles, selfName) : null;
+    if (drivingChange) {
+      const target = talkEvents.find((event) => event.title.toLowerCase() === drivingChange.title.toLowerCase());
+      if (!target) {
+        next.push({ id: `${Date.now()}-r`, role: "assistant", text: `I don't see ${drivingChange.title}.` });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
+      }
+      if (!("profileIds" in drivingChange)) {
+        next.push({ id: `${Date.now()}-r`, role: "assistant", text: drivingChange.reply });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
+      }
+      const already = target.profileIds ?? [];
+      const profileIds = already.length > 0 && drivingChange.profileIds.length > 0
+        ? [...new Set([...already, ...drivingChange.profileIds])]
+        : undefined;
+      replyAfter(
+        apiRequest("PATCH", `/api/events/${target.id}`, {
+          drivingProfileIds: drivingChange.profileIds,
+          ...(profileIds ? { profileIds } : {}),
+        }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        }),
+        drivingChange.reply,
+      );
       return;
     }
     const planChores = talkChores.filter((chore) => {
