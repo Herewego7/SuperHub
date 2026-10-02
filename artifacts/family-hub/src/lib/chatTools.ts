@@ -482,6 +482,17 @@ export function moveDay(dayPart: string, from: Date): Date | undefined {
   return eventOn(`event ${dayPart}`, from)?.on;
 }
 
+const CONFIRM_YES = /^\s*(yes|yep|yeah|yup|sure|ok|okay|confirm|confirmed|do it|go ahead|please do|sounds good|correct|that's right)\b/i;
+const CONFIRM_NO = /^\s*(no|nope|nah|cancel|don't|do not)\b/i;
+
+export function confirmedReply(text: string): boolean {
+  return CONFIRM_YES.test(text.trim());
+}
+
+export function declinedReply(text: string): boolean {
+  return CONFIRM_NO.test(text.trim());
+}
+
 export function deleteEventTitle(text: string): string | null {
   const match = /^(?:please\s+)?(?:delete|remove|cancel)\s+(?:the\s+)?(?:event\s+)?["']?(.+?)["']?\.?$/i.exec(text.trim());
   const title = match?.[1]?.trim();

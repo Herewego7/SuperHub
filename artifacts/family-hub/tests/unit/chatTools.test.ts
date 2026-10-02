@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -272,6 +272,10 @@ test("a home event names its clock, and the horizon names the day", () => {
 });
 
 test("deleting an imported event asks first", () => {
+  assert.equal(confirmedReply("ok"), true);
+  assert.equal(confirmedReply("yes"), true);
+  assert.equal(declinedReply("no"), true);
+  assert.equal(confirmedReply("no"), false);
   assert.equal(deleteEventTitle("delete the soccer game"), "soccer game");
   assert.equal(importedEventNeedsConfirm("ics"), true);
   assert.equal(importedEventNeedsConfirm("meal"), false);

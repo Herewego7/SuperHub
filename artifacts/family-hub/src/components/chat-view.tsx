@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
@@ -139,7 +139,16 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
           else setBubbles(failed);
         });
     };
-    if (pendingDeleteId && /^yes\.?$/i.test(text.trim())) {
+    if ((pendingDeleteId || pendingMove) && declinedReply(text)) {
+      setPendingDeleteId(null);
+      setPendingMove(null);
+      next.push({ id: `${Date.now()}-n`, role: "assistant", text: "Left it where it is." });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      return;
+    }
+    if (pendingDeleteId && confirmedReply(text)) {
       const id = pendingDeleteId;
       setPendingDeleteId(null);
       replyAfter(
@@ -151,7 +160,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       );
       return;
     }
-    if (pendingMove && /^yes\.?$/i.test(text.trim())) {
+    if (pendingMove && confirmedReply(text)) {
       const move = pendingMove;
       setPendingMove(null);
       replyAfter(
