@@ -117,6 +117,21 @@ export function createTodoTitle(text: string): string | null {
   return title ? title : null;
 }
 
+/** A new to-do. Named people replace whoever is selected. */
+export function todoCreate(
+  text: string,
+  profiles: { id: string; name: string }[],
+  selectedIds: string[],
+): { title: string; profileIds: string[] } | null {
+  const raw = createTodoTitle(text);
+  if (!raw) return null;
+  const cast = createEventCast(raw, profiles);
+  return {
+    title: cast.title,
+    profileIds: cast.profileIds.length > 0 ? cast.profileIds : selectedIds,
+  };
+}
+
 export function createEventTitle(text: string): string | null {
   const match = text.trim().match(/^(?:add|create)\s+(?:an?\s+)?event\s+(?:called\s+)?(.+?)\.?$/i);
   const title = match?.[1]?.trim();

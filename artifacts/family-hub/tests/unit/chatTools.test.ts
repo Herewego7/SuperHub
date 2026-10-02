@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -123,6 +123,14 @@ test("assign names the to-do and the person", () => {
   const change = assignChange("assign Buy milk to Liam", chores, profiles);
   assert.deepEqual(change, { choreId: "milk", profileIds: ["liam"], reply: "Buy milk is assigned to Liam." });
   assert.equal(assignChange("hello", chores, profiles), null);
+});
+
+test("a new to-do can name who it is for", () => {
+  const profiles = [{ id: "liam", name: "Liam" }, { id: "ava", name: "Ava" }];
+  assert.deepEqual(todoCreate("add a to-do Buy milk for Liam", profiles, ["ava"]), { title: "Buy milk", profileIds: ["liam"] });
+  assert.deepEqual(todoCreate("add a to-do Buy milk for Liam and Ava", profiles, ["ava"]), { title: "Buy milk", profileIds: ["liam", "ava"] });
+  assert.deepEqual(todoCreate("add a to-do Buy milk", profiles, ["ava"]), { title: "Buy milk", profileIds: ["ava"] });
+  assert.equal(todoCreate("add event Soccer", profiles, ["ava"]), null);
 });
 
 test("add a to-do names the task", () => {

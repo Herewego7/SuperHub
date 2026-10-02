@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
@@ -541,22 +541,26 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       );
       return;
     }
-    const todoTitle = createTodoTitle(text);
-    if (todoTitle && tools.includes("create_task")) {
-      const profileIds = profileKey.split(",").filter((id) => id && id !== "family");
+    const todo = tools.includes("create_task")
+      ? todoCreate(text, profiles, profileKey.split(",").filter((id) => id && id !== "family"))
+      : null;
+    if (todo) {
+      const named = createEventCast(createTodoTitle(text) ?? "", profiles).profileIds.length > 0;
+      const who = todo.profileIds.map((id) => profiles.find((person) => person.id === id)?.name).filter((name): name is string => !!name);
+      const peopleLabel = who.length <= 2 ? who.join(" and ") : `${who.slice(0, -1).join(", ")} and ${who[who.length - 1]}`;
       replyAfter(
         apiRequest("POST", "/api/chores", {
-          title: todoTitle,
+          title: todo.title,
           taskType: "todo",
           points: 0,
-          profileIds,
+          profileIds: todo.profileIds,
           daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
           recurrenceType: "daily",
           isActive: true,
         }).then(() => {
           void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
         }),
-        `Added ${todoTitle}.`,
+        named && who.length ? `Added ${todo.title} for ${peopleLabel}.` : `Added ${todo.title}.`,
       );
       return;
     }
