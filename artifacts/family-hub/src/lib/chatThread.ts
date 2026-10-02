@@ -107,6 +107,15 @@ export function clearChatUnread(profileKey: string): void {
   localStorage.setItem(UNREAD_KEY, clearedUnread(localStorage.getItem(UNREAD_KEY), profileKey));
 }
 
+/** A notification reply is answered only when it was just added under the plan. */
+export function pendingAfterPlan(before: number, after: { role: string; text: string }[], reply?: string | null): string | null {
+  const said = reply?.trim();
+  if (!said) return null;
+  const last = after[after.length - 1];
+  if (after.length > before && last?.role === "user" && last.text === said) return said;
+  return null;
+}
+
 /** The plan is the latest message, so a notification reply sits directly under it. */
 export function threadWithPlan(current: ChatBubble[], plan: string, reply?: string | null): ChatBubble[] {
   const next = [...current];

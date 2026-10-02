@@ -8,7 +8,7 @@ import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodo
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
-import { appendUserMessage, noteChatUnread, readPendingConfirm, readThread, savePendingConfirm, threadWithPlan, type ChatBubble, type PendingConfirm } from "@/lib/chatThread";
+import { appendUserMessage, noteChatUnread, pendingAfterPlan, readPendingConfirm, readThread, savePendingConfirm, threadWithPlan, type ChatBubble, type PendingConfirm } from "@/lib/chatThread";
 
 const PLAN_KEY = "superhub_evening_plan";
 const PENDING_KEY = "superhub_chat_pending";
@@ -60,6 +60,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     setBubbles((current) => {
       const next = threadWithPlan(current, plan, reply);
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      const pending = pendingAfterPlan(current.length, next, reply);
+      if (pending) sessionStorage.setItem(PENDING_KEY, pending);
       return next;
     });
   }, [profileReady, profileKey]);

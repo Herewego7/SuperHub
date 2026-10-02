@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bumpUnread, clearedUnread, pendingConfirmFrom, threadWithPlan, unreadCount, unreadFor } from "../../src/lib/chatThread";
+import { bumpUnread, clearedUnread, pendingAfterPlan, pendingConfirmFrom, threadWithPlan, unreadCount, unreadFor } from "../../src/lib/chatThread";
 
 test("a notification reply sits under the plan", () => {
   const thread = threadWithPlan(
@@ -15,6 +15,14 @@ test("a notification reply sits under the plan", () => {
   ]);
   const again = threadWithPlan(thread, "Tomorrow's plan\nDinner. Tacos", "Who is driving soccer?");
   assert.deepEqual(again.map((bubble) => bubble.text), thread.map((bubble) => bubble.text));
+});
+
+test("a new notification reply is answered once", () => {
+  const before = [{ id: "old", role: "user" as const, text: "Earlier" }];
+  const after = threadWithPlan(before, "Tomorrow's plan\nDinner. Tacos", "Who is driving soccer?");
+  assert.equal(pendingAfterPlan(before.length, after, "Who is driving soccer?"), "Who is driving soccer?");
+  assert.equal(pendingAfterPlan(after.length, threadWithPlan(after, "Tomorrow's plan\nDinner. Tacos", "Who is driving soccer?"), "Who is driving soccer?"), null);
+  assert.equal(pendingAfterPlan(before.length, threadWithPlan(before, "Tomorrow's plan\nDinner. Tacos"), null), null);
 });
 
 test("unread stays on the person it was sent to", () => {
