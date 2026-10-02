@@ -221,6 +221,32 @@ export function eventsOnHomeDay<T extends {
   });
 }
 
+/** A school event that never says the kid's name still shows when that kid is driving. */
+export function drivesOnHomeDay<T extends {
+  title: string;
+  description?: string | null;
+  source?: string | null;
+  category?: string | null;
+  startTime: Date | string;
+  drivingProfileId?: string | null;
+  drivingProfileIds?: string[] | null;
+}>(events: T[], day: Date, selectedIds: string[], kidName: string | null): T[] {
+  if (!kidName) return [];
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return events.filter((event) => {
+    if (event.source !== "school") return false;
+    const at = new Date(event.startTime);
+    if (at < start || at >= end) return false;
+    if (mailVisibleToKid(event, kidName)) return false;
+    const drivers = driverIdsOf(event);
+    if (selectedIds.length === 0) return drivers.length > 0;
+    return drivers.some((id) => selectedIds.includes(id));
+  });
+}
+
 export function horizonEvents<T extends HorizonEvent>(events: T[], day: Date): T[] {
   const start = new Date(day);
   start.setHours(0, 0, 0, 0);

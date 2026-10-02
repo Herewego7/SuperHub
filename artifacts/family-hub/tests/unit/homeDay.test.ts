@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -75,6 +75,21 @@ test("horizon skips a weekly routine and keeps a one-off next week", () => {
     today,
   );
   assert.deepEqual(copied.map((row) => row.id), ["b1"]);
+});
+
+test("a kid who is driving still sees that school event", () => {
+  const day = new Date(2026, 9, 1, 15, 0);
+  const soccer = {
+    id: "soccer",
+    title: "Soccer practice",
+    description: "Bring shin guards",
+    source: "school",
+    startTime: day,
+    drivingProfileIds: ["ava"],
+  };
+  assert.deepEqual(drivesOnHomeDay([soccer], day, ["ava"], "Ava").map((event) => event.id), ["soccer"]);
+  assert.deepEqual(drivesOnHomeDay([soccer], day, ["liam"], "Liam").map((event) => event.id), []);
+  assert.deepEqual(drivesOnHomeDay([{ ...soccer, description: "Ava must bring shin guards" }], day, ["ava"], "Ava"), []);
 });
 
 test("a kid does not see a school email that does not name them", () => {

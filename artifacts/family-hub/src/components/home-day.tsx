@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, choresForCount, dinnerName, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { eventClockLine, pointsProfileId } from "@/lib/chatTools";
 import { openEmailHref, schoolSaveTarget, slipQuote, slipSender } from "@/lib/slipMail";
@@ -93,6 +93,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
     dinner,
     schoolSlipsHeldOnHome(todosForHome(chores, selectedIds, familyIds), completions, day),
   );
+  const drives = drivesOnHomeDay(events, day, selectedIds, kidName ?? null);
   const horizon = visibleForProfiles(horizonEvents(events, day), selectedIds).filter((event) => mailVisibleToKid(event, kidName));
   const earlier = earlierForHome(completions, selectedIds, familyIds, day);
 
@@ -185,6 +186,19 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           </ul>
         )}
       </section>
+
+      {drives.length > 0 && (
+        <section data-testid="home-driving">
+          <h2 className="font-display text-lg mb-2">Driving</h2>
+          <ul className="flex flex-col gap-1">
+            {drives.map((event) => (
+              <li key={event.id} className="text-sm">
+                {eventClockLine(event.title, event.startTime, false, event.isAllDay === true)}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section data-testid="home-horizon">
         <h2 className="font-display text-lg mb-2">On the Horizon</h2>
