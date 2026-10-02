@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Event } from "@workspace/db";
-import { choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, moveClock, planBody, planDayEvents, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
+import { choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, moveClock, moveLabel, planBody, planDayEvents, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
 
 test("a morning plan is titled for today", () => {
   assert.equal(planTitle(false, "morningOf"), "Today's plan");
@@ -168,6 +168,13 @@ test("a school email checked off that day stays off the plan", () => {
     ["Picture day"],
   );
   assert.deepEqual(events.map((event) => event.title), ["Soccer, 4:00 PM"]);
+});
+
+test("a move from earlier in the day is named, and an old one is not", () => {
+  const now = new Date("2026-10-02T22:00:00Z");
+  assert.equal(moveLabel(`4:00 PM\n${new Date(now.getTime() - 60 * 60 * 1000).toISOString()}`, now), "4:00 PM");
+  assert.equal(moveLabel(`4:00 PM\n${new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()}`, now), null);
+  assert.equal(moveLabel("4:00 PM", now), null);
 });
 
 test("a moved event names the old time", () => {

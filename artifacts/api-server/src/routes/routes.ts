@@ -514,7 +514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!allDay) {
           const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
           const label = moveClock(existing?.startTime, processedData.startTime, timeZone);
-          if (label) processedData.movedFrom = label;
+          if (label) processedData.movedFrom = `${label}\n${new Date().toISOString()}`;
         }
       }
       

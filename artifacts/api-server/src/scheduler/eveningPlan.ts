@@ -67,6 +67,21 @@ export function moveClock(previous: Date | null | undefined, next: Date | null |
   return `${hours}:${mm} ${suffix}`;
 }
 
+const MOVE_WINDOW_MS = 36 * 60 * 60 * 1000;
+
+/** A move is news for a day and a half. Older notes stop repeating on every plan. */
+export function moveLabel(movedFrom: string | null | undefined, now = new Date()): string | null {
+  if (!movedFrom) return null;
+  const [label, stamp] = movedFrom.split("\n");
+  const clock = label?.trim();
+  if (!clock || !stamp?.trim()) return null;
+  const at = new Date(stamp.trim());
+  if (Number.isNaN(at.getTime())) return null;
+  const age = now.getTime() - at.getTime();
+  if (age < 0 || age > MOVE_WINDOW_MS) return null;
+  return clock;
+}
+
 export function dueForPlan<T extends {
   taskType?: string | null;
   isActive?: boolean | null;
@@ -258,7 +273,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
       .map((event) => ({
         title: eventClockTitle(event.title, new Date(event.startTime), tz, event.isAllDay === true),
         description: event.description,
-        movedFrom: event.movedFrom,
+        movedFrom: moveLabel(event.movedFrom, now),
         source: event.source,
       }));
     const body = planBody({
