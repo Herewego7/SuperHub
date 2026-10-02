@@ -75,6 +75,14 @@ test("horizon skips a weekly routine and keeps a one-off next week", () => {
     today,
   );
   assert.deepEqual(copied.map((row) => row.id), ["b1"]);
+  const dinners = horizonEvents(
+    [
+      { id: "tacos", title: "Tacos", startTime: new Date(2026, 9, 2, 18, 0), source: "meal" },
+      { id: "recital", title: "Recital", startTime: new Date(2026, 9, 6), source: null },
+    ],
+    today,
+  );
+  assert.deepEqual(dinners.map((row) => row.id), ["recital"]);
 });
 
 test("a kid who is driving still sees that school event", () => {

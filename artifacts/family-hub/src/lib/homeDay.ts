@@ -171,6 +171,7 @@ export type HorizonEvent = {
   startTime: Date | string;
   recurrenceType?: string | null;
   recurringEventId?: string | null;
+  source?: string | null;
 };
 
 const SPECIAL_DAY = /\b(birthday|bday|anniversary|holiday|graduation|recital|tournament|picture day)\b/i;
@@ -311,6 +312,7 @@ export function horizonEvents<T extends HorizonEvent>(events: T[], day: Date): T
   until.setDate(until.getDate() + 8);
   const routine = routineSeriesIds(events);
   return events.filter((event) => {
+    if (event.source === "meal") return false;
     if (event.recurrenceType === "daily" || event.recurrenceType === "weekly") return false;
     if (event.recurringEventId && routine.has(event.recurringEventId)) return false;
     const at = new Date(event.startTime);
