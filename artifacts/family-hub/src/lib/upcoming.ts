@@ -1,4 +1,5 @@
 import { eventClockLine } from "./chatTools";
+import { routineSeriesIds } from "./homeDay";
 
 export const UPCOMING_KINDS = ["all", "todos", "keyDates", "events", "newsletters"] as const;
 export type UpcomingKind = (typeof UPCOMING_KINDS)[number];
@@ -17,6 +18,7 @@ type Row = {
   startTime: Date | string;
   isAllDay?: boolean;
   recurrenceType?: string | null;
+  recurringEventId?: string | null;
   kind?: "todo" | "keyDate" | "event" | "newsletter";
 };
 
@@ -61,7 +63,10 @@ export function upcomingRows<T extends Row>(rows: T[], kind: UpcomingKind, day: 
   start.setHours(0, 0, 0, 0);
   const until = new Date(start);
   until.setDate(until.getDate() + 30);
+  const routine = routineSeriesIds(rows);
   return rows.filter((row) => {
+    if (row.recurrenceType === "daily" || row.recurrenceType === "weekly") return false;
+    if (row.recurringEventId && routine.has(row.recurringEventId)) return false;
     const at = new Date(row.startTime);
     if (at < start || at >= until) return false;
     if (kind === "all") return true;

@@ -75,6 +75,21 @@ test("upcoming shows a clock on an event and not on a to-do", () => {
   assert.equal(upcomingClock({ startTime: new Date(2026, 9, 1, 19, 0), kind: "event", isAllDay: true }), null);
 });
 
+test("upcoming leaves out a weekly practice and keeps a one-off", () => {
+  const today = new Date(2026, 9, 1);
+  const rows = upcomingRows(
+    [
+      { id: "practice", title: "Practice", startTime: new Date(2026, 9, 3), recurrenceType: "weekly" },
+      { id: "p1", title: "Drop-off", startTime: new Date(2026, 9, 2), recurringEventId: "series-dropoff" },
+      { id: "p2", title: "Drop-off", startTime: new Date(2026, 9, 9), recurringEventId: "series-dropoff" },
+      { id: "recital", title: "Recital", startTime: new Date(2026, 9, 6) },
+    ],
+    "all",
+    today,
+  );
+  assert.deepEqual(rows.map((row) => row.id), ["recital"]);
+});
+
 test("a timed school event stays on the Events chip", () => {
   const today = new Date(2026, 9, 1);
   const rows = [
