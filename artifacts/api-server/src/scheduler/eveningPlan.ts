@@ -156,11 +156,11 @@ export function planBody(input: {
   events: { title: string; description?: string | null; movedFrom?: string | null; source?: string | null; driving?: boolean }[];
   dinner?: string | null;
 }): string {
-  const lines: string[] = [];
+  const rows: { text: string; change: boolean }[] = [];
   for (const chore of input.chores) {
     if (chore.taskType && chore.taskType !== "todo" && chore.taskType !== "chore") continue;
     if (input.isChild && chore.category === "school_email" && !namesPerson(`${chore.title}\n${chore.description ?? ""}`, input.kidName)) continue;
-    lines.push(chore.title);
+    rows.push({ text: chore.title, change: false });
   }
   for (const event of input.events) {
     if (event.source === "meal" && input.dinner) continue;
@@ -168,10 +168,12 @@ export function planBody(input: {
     if (unnamedSchool && !event.driving) continue;
     const line = event.movedFrom ? `${event.title}, moved from ${event.movedFrom}` : event.title;
     const bare = event.title.replace(/, \d{1,2}:\d{2} [AP]M$/i, "");
-    const sameSlip = event.source === "school" ? lines.findIndex((item) => item.toLowerCase() === bare.toLowerCase()) : -1;
-    if (sameSlip >= 0) lines[sameSlip] = line;
-    else lines.push(line);
+    const sameSlip = event.source === "school" ? rows.findIndex((item) => item.text.toLowerCase() === bare.toLowerCase()) : -1;
+    const row = { text: line, change: Boolean(event.movedFrom) };
+    if (sameSlip >= 0) rows[sameSlip] = row;
+    else rows.push(row);
   }
+  const lines = [...rows.filter((row) => row.change), ...rows.filter((row) => !row.change)].map((row) => row.text);
   const dinnerLine = input.dinner ? `Dinner. ${input.dinner}` : null;
   const room = dinnerLine ? 5 : 6;
   const kept = lines.slice(0, room);

@@ -76,6 +76,25 @@ test("dinner stays in the plan when the list is long", () => {
   assert.equal(body.includes("Six"), false);
 });
 
+test("a schedule change stays in the plan when the list is long", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [
+      { title: "One", taskType: "chore" },
+      { title: "Two", taskType: "chore" },
+      { title: "Three", taskType: "chore" },
+      { title: "Four", taskType: "chore" },
+      { title: "Five", taskType: "chore" },
+      { title: "Six", taskType: "chore" },
+    ],
+    events: [{ title: "Soccer, 5:30 PM", movedFrom: "4:00 PM" }],
+    dinner: "Tacos",
+  });
+  assert.equal(body.includes("Soccer, 5:30 PM, moved from 4:00 PM"), true);
+  assert.equal(body.includes("Dinner. Tacos"), true);
+  assert.equal(body.split("\n")[0], "Soccer, 5:30 PM, moved from 4:00 PM");
+});
+
 test("a second run the same day does not send again", () => {
   const first = claimPlanSend([], "chad", "2026-10-02");
   const second = claimPlanSend(first.sentKeys, "chad", "2026-10-02");
