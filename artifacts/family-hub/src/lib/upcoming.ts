@@ -32,6 +32,12 @@ export function recurringIdFromOutlook(event: { seriesMasterId?: string | null }
   return id ? id : null;
 }
 
+/** A subscribed calendar uses one uid for every copy of a repeating event. */
+export function recurringIdFromIcal(event: { uid?: string | null }): string | null {
+  const id = event.uid?.trim();
+  return id ? id : null;
+}
+
 /** A school email with a clock is an event. One with no time stays a newsletter. */
 export function schoolEventKind(event: { source?: string | null; isAllDay?: boolean | null }): "newsletter" | undefined {
   if (event.source !== "school" || event.isAllDay === false) return undefined;
