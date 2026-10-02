@@ -284,6 +284,14 @@ export function briefShowsForKid(
   return new RegExp(`\\b${escaped}\\b`, "i").test(`${row.title}\n${row.description ?? ""}`);
 }
 
+export function choresNamedForKid<T extends { title: string; description?: string | null; category?: string | null; source?: string | null }>(
+  rows: T[],
+  kidName: string | null | undefined,
+): T[] {
+  if (!kidName) return rows;
+  return rows.filter((row) => briefShowsForKid(row, kidName));
+}
+
 function slotOrder(slot: string): number {
   return slot === "breakfast" ? 0 : slot === "lunch" ? 1 : slot === "dinner" ? 2 : 3;
 }

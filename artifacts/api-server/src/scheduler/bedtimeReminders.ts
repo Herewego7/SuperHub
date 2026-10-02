@@ -10,6 +10,7 @@ import {
   describeRemaining,
 } from "../lib/choreToday";
 import { isKidProfile } from "../lib/profileRole";
+import { choresNamedForKid } from "../lib/dailyBrief";
 import { logger } from "../lib/logger";
 import { loadProfiles } from "../lib/profileRows";
 import { createWorkGate } from "../lib/workGate";
@@ -80,7 +81,8 @@ export async function runBedtimeRemindersTick(now: Date = new Date()): Promise<b
         now,
         tz,
       );
-      const { regular, target, inspiration } = splitRemaining(due, completedIds);
+      const visible = choresNamedForKid(due, p.name);
+      const { regular, target, inspiration } = splitRemaining(visible, completedIds);
       remaining = regular + target + inspiration;
       body = `Chores remaining: ${describeRemaining(regular, target, inspiration)}`;
     } else {
