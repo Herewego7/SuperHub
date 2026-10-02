@@ -1,0 +1,48 @@
+import { storage } from "../storage";
+import { syncEventCreate } from "../calendarSync";
+import { DEFAULT_TIMEZONE } from "../lib/timezone";
+import { slipKey, type InboundMessage } from "./parse";
+import { ingestMessages, schoolEventStart } from "./process";
+
+export async function applyIngestedMail(userId: string, messages: InboundMessage[], profileIds: string[]) {
+  const settings = await storage.getCalendarSettingsByUser(userId);
+  if (settings?.scanInbox === false) return { todos: [], events: [], scanOff: true };
+  const chores = await storage.getChoresByUser(userId);
+  const existingKeys = chores.filter((chore) => chore.category === "school_email").map((chore) => slipKey(chore.title));
+  const planned = ingestMessages(
+    messages,
+    { mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] },
+    existingKeys,
+    profileIds,
+  );
+  const todos = [];
+  for (const todo of planned.todos) {
+    const { slipKey: _slipKey, ...row } = todo;
+    todos.push(await storage.createChore({ ...row, userId }));
+  }
+  const familyCalendarId = settings?.familyCalendarId;
+  const calendarId = familyCalendarId && familyCalendarId !== "none" ? familyCalendarId : null;
+  const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
+  const events = [];
+  for (const event of planned.events) {
+    const note = `${event.title} ${event.description}`;
+    const start = schoolEventStart(note, event.hours, event.minutes, new Date(), timeZone);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    const saved = await storage.createEvent({
+      userId,
+      title: event.title,
+      description: event.description,
+      startTime: start,
+      endTime: end,
+      profileIds: event.profileIds,
+      calendarId,
+      source: event.source,
+      externalId: event.externalId,
+    });
+    events.push(saved);
+    void syncEventCreate(saved).catch((err) =>
+      console.warn("syncEventCreate (school email) failed:", err instanceof Error ? err.message : err),
+    );
+  }
+  return { todos, events, scanOff: false };
+}

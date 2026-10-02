@@ -25,7 +25,8 @@ import { geocodeCity } from "../lib/geocode";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, ingestMessages, muteSender, schoolEventStart, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, muteSender, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
+import { applyIngestedMail } from "../ingest/saveMail";
 import { dinnerCalendarChange, dinnerEventInsert, dinnersToCopy } from "../meals/dinnerEvent";
 import { slipKey } from "../ingest/parse";
 import { moveClock } from "../scheduler/eveningPlan";
@@ -3287,55 +3288,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ingest/mail", isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
-      const settings = await storage.getCalendarSettingsByUser(userId);
-      if (settings?.scanInbox === false) return res.json({ todos: [], events: [] });
       const profileIds = Array.isArray(req.body.profileIds) ? req.body.profileIds.filter((id: unknown) => typeof id === "string") : [];
       for (const profileId of profileIds) {
         const isOwner = await validateProfileOwnership(profileId, userId);
         if (!isOwner) return res.status(403).json({ error: "Forbidden" });
       }
       const messages = Array.isArray(req.body.messages) ? req.body.messages : [];
-      const chores = await storage.getChoresByUser(userId);
-      const existingKeys = chores.filter((chore) => chore.category === "school_email").map((chore) => slipKey(chore.title));
-      const planned = ingestMessages(
-        messages,
-        { mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] },
-        existingKeys,
-        profileIds,
-      );
-      const todos = [];
-      for (const todo of planned.todos) {
-        const { slipKey: _slipKey, ...row } = todo;
-        todos.push(await storage.createChore({ ...row, userId }));
-      }
-      const familyCalendarId = settings?.familyCalendarId;
-      const calendarId = familyCalendarId && familyCalendarId !== "none" ? familyCalendarId : null;
-      const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
-      const events = [];
-      for (const event of planned.events) {
-        const note = `${event.title} ${event.description}`;
-        const start = schoolEventStart(note, event.hours, event.minutes, new Date(), timeZone);
-        const end = new Date(start.getTime() + 60 * 60 * 1000);
-        const saved = await storage.createEvent({
-          userId,
-          title: event.title,
-          description: event.description,
-          startTime: start,
-          endTime: end,
-          profileIds: event.profileIds,
-          calendarId,
-          source: event.source,
-          externalId: event.externalId,
-        });
-        events.push(saved);
-        void syncEventCreate(saved).catch((err) =>
-          console.warn("syncEventCreate (school email) failed:", err instanceof Error ? err.message : err),
-        );
-      }
-      res.status(201).json({ todos, events });
+      const saved = await applyIngestedMail(userId, messages, profileIds);
+      res.status(saved.scanOff ? 200 : 201).json(saved);
     } catch (error) {
       console.error("Error ingesting mail:", error);
       res.status(500).json({ error: "Failed to ingest mail" });
+    }
+  });
+
+  app.post("/api/ingest/scan", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const people = await storage.getProfilesByUser(userId);
+      const audience = people.filter((person) => !person.isAllFamilyProfile && person.isActive !== false).map((person) => person.id);
+      const owners = people.filter((person) => !person.isAllFamilyProfile && person.role !== "child" && !person.isChild);
+      const messages = [];
+      let connected = 0;
+      let needsReconnect = false;
+      for (const owner of owners) {
+        const tokens = await storage.getGoogleCalendarTokens(owner.id);
+        if (!tokens?.accessToken) continue;
+        connected += 1;
+        try {
+          const found = await googleCalendarService.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id);
+          messages.push(...found);
+        } catch (err) {
+          const code = err && typeof err === "object" && "code" in err ? (err as { code?: number }).code : undefined;
+          if (code === 403 || code === 401) needsReconnect = true;
+          else console.warn("Inbox scan failed:", err instanceof Error ? err.message : err);
+        }
+      }
+      const saved = await applyIngestedMail(userId, messages, audience);
+      res.json({ ...saved, connected, needsReconnect });
+    } catch (error) {
+      console.error("Error scanning inbox:", error);
+      res.status(500).json({ error: "Failed to scan inbox" });
     }
   });
 

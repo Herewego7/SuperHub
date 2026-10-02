@@ -1,6 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, ingestMessages, muteSender, schoolEventStart, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
+import { toInbound } from "../src/ingest/parse.ts";
+
+test("a gmail message becomes a slip with the subject and sender", () => {
+  const message = toInbound({
+    id: "m1",
+    snippet: "Please sign &amp; return.",
+    payload: {
+      mimeType: "text/plain",
+      headers: [
+        { name: "Subject", value: "Permission slip" },
+        { name: "From", value: "Office <office@school.edu>" },
+      ],
+    },
+  }, "chad");
+  assert.equal(message.subject, "Permission slip");
+  assert.equal(message.fromAddress, "office@school.edu");
+  assert.equal(message.snippet, "Please sign & return.");
+});
 
 test("two copies of the same slip from two adults become one to-do", () => {
   const planned = ingestMessages(

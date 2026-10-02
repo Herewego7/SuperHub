@@ -1496,6 +1496,21 @@ export function CalendarConnectionsSection({
       queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
     },
   });
+  const [scanNote, setScanNote] = useState<string | null>(null);
+  const scanNow = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/ingest/scan");
+      return res.json() as Promise<{ todos: unknown[]; needsReconnect?: boolean; connected?: number; scanOff?: boolean }>;
+    },
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      if (data.scanOff) setScanNote("Scan is off.");
+      else if (data.needsReconnect) setScanNote("Reconnect Google to read mail.");
+      else if (!data.connected) setScanNote("Connect Google first.");
+      else setScanNote(data.todos.length ? `Added ${data.todos.length}.` : "No new school mail.");
+    },
+  });
 
   const familyCalendarMutation = useMutation({
     mutationFn: async (calendarId: string | null) => {
@@ -1873,6 +1888,18 @@ export function CalendarConnectionsSection({
                     onCheckedChange={(checked) => inboxMutation.mutate({ scanInbox: !!checked })}
                     data-testid="toggle-scan-inbox"
                   />
+                </div>
+                <div className="flex items-center justify-between gap-3 px-2.5 py-1.5 mb-2">
+                  <button
+                    type="button"
+                    className="text-xs underline"
+                    data-testid="scan-inbox-now"
+                    disabled={scanNow.isPending}
+                    onClick={() => scanNow.mutate()}
+                  >
+                    Scan now
+                  </button>
+                  {scanNote && <span className="text-xs text-muted-foreground" data-testid="scan-inbox-note">{scanNote}</span>}
                 </div>
                 <div className="flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-md bg-muted/50 mb-3">
                   <p className="text-xs text-foreground">Share originals with other adults</p>
