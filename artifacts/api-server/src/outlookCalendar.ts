@@ -133,7 +133,7 @@ export class OutlookCalendarService {
             });
             allEvents.push(...calendarEvents);
 
-            url = response.data['@odata.nextLink'] || null;
+            url = graphNextLink(response.data['@odata.nextLink']);
             pages += 1;
           }
           console.log(`Fetched events from Outlook calendar: ${calendar.name} (${pages} page(s))`);
