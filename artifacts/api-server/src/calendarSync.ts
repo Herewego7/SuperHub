@@ -13,7 +13,7 @@
  */
 import { storage } from "./storage";
 import { twoWaySyncFromSettings } from "./lib/settingsOwnership";
-import { calendarIsWritable, familyCalendarWriter } from "./lib/calendarAssignmentScope";
+import { calendarIsWritable, familyCalendarCreates, familyCalendarWriter } from "./lib/calendarAssignmentScope";
 import { googleRecurrence, outlookRecurrence, excludedInstants } from "./lib/recurrenceRule";
 import { DEFAULT_TIMEZONE } from "./lib/timezone";
 import { GoogleCalendarService } from "./googleCalendar";
@@ -437,7 +437,12 @@ export async function syncEventUpdate(event: Event): Promise<void> {
     if (!event.userId) return;
     const existing = await storage.getEventCalendarSyncs(event.id);
     const syncEnabled = await isTwoWaySyncEnabled(event.userId);
-    const plan = planEventUpdate(existing, await resolveProfileIds(event), syncEnabled);
+    const writer = familyCalendarWriter(event.calendarId, await storage.getCalendarAssignmentsByUser(event.userId));
+    const profileIds = writer
+      ? [...new Set([writer.profileId, ...existing.map((link) => link.profileId)])]
+      : await resolveProfileIds(event);
+    const plan = planEventUpdate(existing, profileIds, syncEnabled);
+    const creates = familyCalendarCreates(plan.toCreate, writer);
 
     // planEventUpdate guarantees the three buckets cover disjoint
     // (provider, profileId) pairs, so they're safe to run concurrently — and
@@ -455,9 +460,9 @@ export async function syncEventUpdate(event: Event): Promise<void> {
         else if (link.provider === "outlook") await deleteOutlookCopy(link);
         await storage.deleteEventCalendarSync(link.eventId, link.profileId, link.provider);
       }),
-      ...plan.toCreate.map(({ profileId, provider }) =>
-        provider === "google" ? createGoogleCopy(event, profileId)
-        : provider === "outlook" ? createOutlookCopy(event, profileId)
+      ...creates.map(({ profileId, provider }) =>
+        provider === "google" ? createGoogleCopy(event, profileId, writer && profileId === writer.profileId ? event.calendarId ?? undefined : undefined)
+        : provider === "outlook" ? createOutlookCopy(event, profileId, writer && profileId === writer.profileId ? event.calendarId ?? undefined : undefined)
         : Promise.resolve(),
       ),
     ]);

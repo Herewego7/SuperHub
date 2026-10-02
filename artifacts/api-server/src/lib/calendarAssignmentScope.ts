@@ -63,6 +63,14 @@ export function familyCalendarWriter(
   return { profileId: row.profileId, provider: row.calendarType };
 }
 
+export function familyCalendarCreates<T extends { profileId: string; provider: string }>(
+  creates: T[],
+  writer: { profileId: string; provider: "google" | "outlook" } | null,
+): T[] {
+  if (!writer) return creates;
+  return creates.filter((item) => item.profileId === writer.profileId && item.provider === writer.provider);
+}
+
 export function calendarIsWritable(
   assignments: { calendarId: string; watched?: boolean | null; isActive?: boolean | null }[],
   calendarId: string,

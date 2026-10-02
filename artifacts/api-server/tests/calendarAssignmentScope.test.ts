@@ -5,6 +5,7 @@ import {
   assignmentsToDeactivate,
   assignPeopleToCalendar,
   calendarIsWritable,
+  familyCalendarCreates,
   familyCalendarWriter,
   eventsOnWatchedCalendars,
 } from "../src/lib/calendarAssignmentScope.ts";
@@ -32,6 +33,15 @@ test("a family calendar is written by the account that connected it", () => {
   assert.equal(familyCalendarWriter("none", all), null);
   assert.equal(familyCalendarWriter("missing", all), null);
   assert.equal(familyCalendarWriter("old@group.calendar.google.com", all), null);
+  const creates = familyCalendarCreates(
+    [
+      { profileId: "a-mum", provider: "google" },
+      { profileId: "a-mum", provider: "outlook" },
+      { profileId: "a-kid", provider: "google" },
+    ],
+    { profileId: "a-mum", provider: "google" },
+  );
+  assert.deepEqual(creates, [{ profileId: "a-mum", provider: "google" }]);
 });
 
 test("a family sees only its own assignments", () => {
