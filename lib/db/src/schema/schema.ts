@@ -350,6 +350,9 @@ export const calendarSettings = pgTable("calendar_settings", {
   twoWaySyncEnabled: boolean("two_way_sync_enabled").default(true),
   // One household calendar receives events the app creates. Null until an adult picks one.
   familyCalendarId: text("family_calendar_id"),
+  // The adult whose Google or Outlook account listed that calendar. "Who it's for" can be a child.
+  familyCalendarProfileId: text("family_calendar_profile_id"),
+  familyCalendarProvider: text("family_calendar_provider"),
   scanInbox: boolean("scan_inbox").notNull().default(true),
   shareOriginals: boolean("share_originals").notNull().default(false),
   mealsOnCalendar: boolean("meals_on_calendar").notNull().default(false),

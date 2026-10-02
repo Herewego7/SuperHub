@@ -92,9 +92,17 @@ export function familyCalendarAccount(
   calendarId: string | null | undefined,
   assignments: { profileId: string; calendarId: string; calendarType: string; isActive?: boolean | null }[],
   owners: CalendarAccount[],
+  preferred?: { profileId?: string | null; provider?: string | null } | null,
 ): { profileId: string; provider: "google" | "outlook" } | null {
   const id = calendarId?.trim();
   if (!id || id === "none") return null;
+  const preferredId = preferred?.profileId?.trim();
+  if (preferredId) {
+    const theirs = owners.filter((owner) => owner.profileId === preferredId && owner.isActive !== false);
+    const provider = preferred?.provider === "google" || preferred?.provider === "outlook" ? preferred.provider : null;
+    const picked = provider ? theirs.find((owner) => owner.provider === provider) : theirs.length === 1 ? theirs[0] : undefined;
+    if (picked) return { profileId: picked.profileId, provider: picked.provider };
+  }
   const hinted = familyCalendarWriter(id, assignments);
   const providers = hinted ? [hinted.provider] : (["google", "outlook"] as const);
   for (const provider of providers) {

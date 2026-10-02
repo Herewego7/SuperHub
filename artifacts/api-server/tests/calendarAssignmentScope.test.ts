@@ -61,6 +61,18 @@ test("a family calendar is written by the account that connected it", () => {
   assert.equal(calendarTokenOwner("family@group.calendar.google.com", "google", [
     { profileId: "chad", provider: "google", calendarIds: null },
   ], "liam"), "chad");
+  assert.deepEqual(
+    familyCalendarAccount("family@group.calendar.google.com", kidFirst, [
+      { profileId: "chad", provider: "google", calendarIds: ["primary"], writeCalendarId: "primary" },
+    ], { profileId: "chad", provider: "google" }),
+    { profileId: "chad", provider: "google" },
+  );
+  assert.deepEqual(
+    familyCalendarAccount("family@group.calendar.google.com", kidFirst, [
+      { profileId: "alex", provider: "google", writeCalendarId: "family@group.calendar.google.com" },
+    ], { profileId: "liam", provider: "google" }),
+    { profileId: "alex", provider: "google" },
+  );
 });
 
 test("a family sees only its own assignments", () => {

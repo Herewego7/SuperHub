@@ -400,6 +400,19 @@ async function connectedCalendarOwners(userId: string) {
   return owners;
 }
 
+async function familyWriterFor(event: Event) {
+  const [assignments, owners, settings] = await Promise.all([
+    storage.getCalendarAssignmentsByUser(event.userId!),
+    connectedCalendarOwners(event.userId!),
+    storage.getCalendarSettingsByUser(event.userId!),
+  ]);
+  const same = !!event.calendarId && settings?.familyCalendarId === event.calendarId;
+  return familyCalendarAccount(event.calendarId, assignments, owners, same ? {
+    profileId: settings?.familyCalendarProfileId,
+    provider: settings?.familyCalendarProvider,
+  } : null);
+}
+
 /**
  * Resolve which profile IDs to sync to. If the event is assigned to specific
  * profiles, use those. If it is a family event (no assignees), fall back to
@@ -419,8 +432,7 @@ export async function syncEventCreate(event: Event): Promise<void> {
   try {
     if (!event.userId) return;
     if (!(await isTwoWaySyncEnabled(event.userId))) return;
-    const assignments = await storage.getCalendarAssignmentsByUser(event.userId);
-    const writer = familyCalendarAccount(event.calendarId, assignments, await connectedCalendarOwners(event.userId));
+    const writer = await familyWriterFor(event);
     if (writer && event.calendarId) {
       await (writer.provider === "google"
         ? createGoogleCopy(event, writer.profileId, event.calendarId)
@@ -473,11 +485,7 @@ export async function syncEventUpdate(event: Event): Promise<void> {
     if (!event.userId) return;
     const existing = await storage.getEventCalendarSyncs(event.id);
     const syncEnabled = await isTwoWaySyncEnabled(event.userId);
-    const writer = familyCalendarAccount(
-      event.calendarId,
-      await storage.getCalendarAssignmentsByUser(event.userId),
-      await connectedCalendarOwners(event.userId),
-    );
+    const writer = await familyWriterFor(event);
     const profileIds = writer
       ? [...new Set([writer.profileId, ...existing.map((link) => link.profileId)])]
       : await resolveProfileIds(event);

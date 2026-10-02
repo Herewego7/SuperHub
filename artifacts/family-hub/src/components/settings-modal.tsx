@@ -25,6 +25,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { confirmDialog } from "@/lib/confirmDialog";
 import { Profile, InsertProfile, LocationSettings, insertLocationSettingsSchema, CustomProfileGroup, RewardSettings } from "@workspace/shared-types";
 import { regionToTimezone, deviceTimezone, guessCountry, countryFromName, regionLabel, COUNTRIES, type CountryCode } from "@/lib/regions";
+import { familyCalendarSelectValue, parseFamilyCalendarOption, familyCalendarOptionValue } from "@/lib/familyCalendarChoice";
 import { ObjectUploader } from "./ObjectUploader";
 import { motion, AnimatePresence } from "framer-motion";
 import { Settings, Plus, Edit, X, Upload, User, Users, UserPlus, MapPin, Calendar, ChevronDown, ChevronUp, Lock, LogOut, Trash2, AlertTriangle, Bell, LayoutDashboard, GripVertical, Gift, ShieldCheck, CheckCircle, XCircle, Sun, Moon, Monitor, Camera, Save, Compass, Search, Share2, KeyRound, Star, HelpCircle, Link2, Bug, Sparkles, Home, ListTodo, UtensilsCrossed, MessageCircle } from "lucide-react";
@@ -1424,6 +1425,8 @@ export function CalendarConnectionsSection({
   const { data: calendarSettingsData } = useQuery<{
     twoWaySyncEnabled?: boolean | null;
     familyCalendarId?: string | null;
+    familyCalendarProfileId?: string | null;
+    familyCalendarProvider?: string | null;
     scanInbox?: boolean | null;
     shareOriginals?: boolean | null;
   }>({
@@ -1512,14 +1515,27 @@ export function CalendarConnectionsSection({
     },
   });
 
+  const familyCalendars = [
+    ...allGoogleCalendars.map((calendar) => ({ provider: "google" as const, profileId: String(calendar.profileId), calendarId: String(calendar.id), name: String(calendar.name ?? calendar.id) })),
+    ...allOutlookCalendars.map((calendar) => ({ provider: "outlook" as const, profileId: String(calendar.profileId), calendarId: String(calendar.id), name: String(calendar.name ?? calendar.id) })),
+  ];
+  const rememberedFamilyCalendar = useRef<string | null>(null);
   const familyCalendarMutation = useMutation({
-    mutationFn: async (calendarId: string | null) => {
-      await apiRequest("PATCH", "/api/calendar-settings/family-calendar", { calendarId });
+    mutationFn: async (choice: { calendarId: string; profileId: string; provider: "google" | "outlook" } | null) => {
+      await apiRequest("PATCH", "/api/calendar-settings/family-calendar", choice ?? { calendarId: null, profileId: null, provider: null });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
     },
   });
+  useEffect(() => {
+    const id = calendarSettingsData?.familyCalendarId;
+    if (!id || calendarSettingsData?.familyCalendarProfileId) return;
+    const matches = familyCalendars.filter((calendar) => calendar.calendarId === id);
+    if (matches.length !== 1 || rememberedFamilyCalendar.current === id) return;
+    rememberedFamilyCalendar.current = id;
+    familyCalendarMutation.mutate({ calendarId: id, profileId: matches[0].profileId, provider: matches[0].provider });
+  }, [calendarSettingsData?.familyCalendarId, calendarSettingsData?.familyCalendarProfileId, familyCalendars, familyCalendarMutation]);
 
   // Google Calendar disconnect mutation
   const disconnectGoogleCalendarMutation = useMutation({
@@ -1912,16 +1928,26 @@ export function CalendarConnectionsSection({
                 <div className="mb-3">
                   <p className="text-xs font-medium mb-1">Family calendar</p>
                   <Select
-                    value={calendarSettingsData?.familyCalendarId || "none"}
-                    onValueChange={(value) => familyCalendarMutation.mutate(value === "none" ? null : value)}
+                    value={familyCalendars.length === 0 ? (calendarSettingsData?.familyCalendarId || "none") : familyCalendarSelectValue(calendarSettingsData?.familyCalendarId, calendarSettingsData?.familyCalendarProfileId, familyCalendars)}
+                    onValueChange={(value) => {
+                      if (value === "none") {
+                        familyCalendarMutation.mutate(null);
+                        return;
+                      }
+                      const choice = parseFamilyCalendarOption(value);
+                      if (choice) familyCalendarMutation.mutate(choice);
+                    }}
                   >
                     <SelectTrigger className="h-8 text-xs" data-testid="select-family-calendar">
                       <SelectValue placeholder="Where new events are written" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Not chosen yet</SelectItem>
-                      {[...allGoogleCalendars, ...allOutlookCalendars].map((calendar: any) => (
-                        <SelectItem key={calendar.id} value={calendar.id}>{calendar.name}</SelectItem>
+                      {familyCalendars.length === 0 && calendarSettingsData?.familyCalendarId && (
+                        <SelectItem value={calendarSettingsData.familyCalendarId}>{calendarSettingsData.familyCalendarId}</SelectItem>
+                      )}
+                      {familyCalendars.map((calendar) => (
+                        <SelectItem key={familyCalendarOptionValue(calendar)} value={familyCalendarOptionValue(calendar)}>{calendar.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

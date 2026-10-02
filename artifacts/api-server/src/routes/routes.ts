@@ -3169,6 +3169,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         weekStartsOn: 0,
         twoWaySyncEnabled: true,
         familyCalendarId: null,
+        familyCalendarProfileId: null,
+        familyCalendarProvider: null,
         scanInbox: true,
         shareOriginals: false,
         mealsOnCalendar: false,
@@ -3236,10 +3238,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const calendarId = req.body.calendarId;
+      const profileId = req.body.profileId;
+      const provider = req.body.provider;
       if (calendarId !== null && typeof calendarId !== "string") {
         return res.status(400).json({ error: "calendarId must be a string or null" });
       }
-      const settings = await storage.updateCalendarSettings({ familyCalendarId: calendarId, userId });
+      if (profileId != null && typeof profileId !== "string") {
+        return res.status(400).json({ error: "profileId must be a string or null" });
+      }
+      if (provider != null && provider !== "google" && provider !== "outlook") {
+        return res.status(400).json({ error: "provider must be google or outlook" });
+      }
+      const settings = await storage.updateCalendarSettings({
+        familyCalendarId: calendarId,
+        familyCalendarProfileId: calendarId ? (typeof profileId === "string" ? profileId : null) : null,
+        familyCalendarProvider: calendarId ? (provider === "google" || provider === "outlook" ? provider : null) : null,
+        userId,
+      });
       res.json(settings);
     } catch (error) {
       console.error("Error updating family calendar:", error);
