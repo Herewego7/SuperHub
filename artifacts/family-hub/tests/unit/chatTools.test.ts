@@ -450,6 +450,7 @@ test("remember keeps a fact on that person", () => {
 
 test("feedback is recognized and not stored", () => {
   assert.equal(feedbackNote("feedback: the plan missed soccer"), "the plan missed soccer");
+  assert.equal(feedbackNote("I have feedback: the plan missed soccer"), "the plan missed soccer");
   assert.equal(feedbackNote("hello"), null);
 });
 

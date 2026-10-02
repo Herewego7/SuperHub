@@ -90,7 +90,7 @@ export function assignChange(
 }
 
 export function feedbackNote(text: string): string | null {
-  const match = text.trim().match(/^(?:send\s+)?feedback:?\s+(.+?)\.?$/i);
+  const match = text.trim().match(/^(?:(?:i have|send)\s+)?feedback:?\s+(.+?)\.?$/i);
   const note = match?.[1]?.trim();
   return note ? note : null;
 }
