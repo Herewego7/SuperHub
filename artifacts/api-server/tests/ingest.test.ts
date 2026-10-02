@@ -73,6 +73,25 @@ test("two scans of one household share one read", async () => {
   assert.equal(started, 1);
 });
 
+test("an outlook time written only in the body still becomes an event", () => {
+  const message = outlookToInbound({
+    subject: "Picture day",
+    bodyPreview: "See the note.",
+    body: { contentType: "html", content: "<p>Picture day is Thursday at 3:30 PM.</p>" },
+    from: { emailAddress: { address: "office@school.edu" } },
+  }, "alex");
+  assert.equal(message.snippet, "See the note.");
+  assert.match(message.body ?? "", /Thursday at 3:30 PM/);
+  const planned = ingestMessages(
+    [message],
+    { mutedSenders: [], dismissedSlipKeys: [] },
+    [],
+    ["liam"],
+  );
+  assert.equal(planned.events[0]?.hours, 15);
+  assert.match(planned.todos[0]?.description ?? "", /See the note/);
+});
+
 test("an outlook message becomes a slip with the subject and sender", () => {
   const message = outlookToInbound({
     subject: "Picture day",

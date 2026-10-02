@@ -185,14 +185,14 @@ export class OutlookCalendarService {
       headers: { Authorization: `Bearer ${accessToken}` },
       params: {
         $top: 20,
-        $select: "subject,from,bodyPreview,receivedDateTime",
+        $select: "subject,from,bodyPreview,body,receivedDateTime",
         $orderby: "receivedDateTime desc",
       },
     });
     const rows = Array.isArray(response.data?.value) ? response.data.value : [];
     return rows
       .filter((row: { receivedDateTime?: string }) => !row.receivedDateTime || row.receivedDateTime >= since)
-      .map((row: { subject?: string | null; bodyPreview?: string | null; from?: { emailAddress?: { address?: string | null } | null } | null }) =>
+      .map((row: { subject?: string | null; bodyPreview?: string | null; body?: { content?: string | null; contentType?: string | null } | null; from?: { emailAddress?: { address?: string | null } | null } | null }) =>
         outlookToInbound(row, accountId),
       );
   }

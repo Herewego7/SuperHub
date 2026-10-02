@@ -109,15 +109,21 @@ export function outlookToInbound(
   row: {
     subject?: string | null;
     bodyPreview?: string | null;
+    body?: { content?: string | null; contentType?: string | null } | null;
     from?: { emailAddress?: { address?: string | null } | null } | null;
   },
   accountId: string,
 ): InboundMessage {
   const address = row.from?.emailAddress?.address?.trim();
+  const raw = row.body?.content?.trim() ?? "";
+  const text = !raw ? "" : row.body?.contentType === "text" ? raw : htmlToText(raw).text;
+  const body = decodeEntities(text).replace(/\s+/g, " ").trim().slice(0, 4000);
+  const snippet = decodeEntities(row.bodyPreview ?? "").trim() || body.slice(0, 240);
   return {
     accountId,
     subject: row.subject?.trim() ?? "",
-    snippet: decodeEntities(row.bodyPreview ?? ""),
+    snippet,
+    ...(body ? { body } : {}),
     ...(address ? { fromAddress: normalizeAddress(address) } : {}),
   };
 }
