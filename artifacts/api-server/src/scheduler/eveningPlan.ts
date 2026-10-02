@@ -136,6 +136,13 @@ function namesPerson(text: string, name: string | null | undefined): boolean {
   return new RegExp(`\\b${escaped}\\b`, "i").test(text);
 }
 
+/** The school to-do title, without the clock, place, or driver that got added to the line. */
+export function schoolSlipTitle(title: string): string {
+  const clock = title.match(/^(.*?),\s+\d{1,2}:\d{2}\s+[AP]M\b/i);
+  if (clock?.[1]) return clock[1].trim();
+  return title.replace(/,\s+[^,]+\s+driving$/i, "").trim();
+}
+
 export function withoutSchoolEventsHeldToday<T extends { title: string; source?: string | null }>(
   events: T[],
   heldTitles: string[],
@@ -144,8 +151,7 @@ export function withoutSchoolEventsHeldToday<T extends { title: string; source?:
   if (held.size === 0) return events;
   return events.filter((event) => {
     if (event.source !== "school") return true;
-    const bare = event.title.replace(/, \d{1,2}:\d{2} [AP]M$/i, "").toLowerCase();
-    return !held.has(bare);
+    return !held.has(schoolSlipTitle(event.title).toLowerCase());
   });
 }
 
@@ -206,7 +212,7 @@ export function planBody(input: {
     const unnamedSchool = input.isChild && event.source === "school" && !namesPerson(`${event.title}\n${event.description ?? ""}`, input.kidName);
     if (unnamedSchool && !event.driving) continue;
     const line = event.movedFrom ? `${event.title}, moved from ${event.movedFrom}` : event.title;
-    const bare = event.title.replace(/, [^,]+ driving$/i, "").replace(/, \d{1,2}:\d{2} [AP]M$/i, "");
+    const bare = schoolSlipTitle(event.title);
     const sameSlip = event.source === "school" ? rows.findIndex((item) => item.text.toLowerCase() === bare.toLowerCase()) : -1;
     const row = { text: line, change: Boolean(event.movedFrom) };
     if (sameSlip >= 0) rows[sameSlip] = row;

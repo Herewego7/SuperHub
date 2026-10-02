@@ -235,6 +235,20 @@ test("a school email with a time is one line", () => {
   assert.equal(body, "Picture day, 3:30 PM");
 });
 
+test("a school email with a place and a driver is still one line", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [{ title: "Picture day", category: "school_email", taskType: "todo" }],
+    events: [{ title: "Picture day, 3:30 PM, Field 2, Liam driving", source: "school" }],
+  });
+  assert.equal(body, "Picture day, 3:30 PM, Field 2, Liam driving");
+  const held = withoutSchoolEventsHeldToday(
+    [{ title: "Picture day, 3:30 PM, Field 2, Liam, Ava, and Noah driving", source: "school" }],
+    ["Picture day"],
+  );
+  assert.deepEqual(held, []);
+});
+
 test("a school email checked off that day stays off the plan", () => {
   const events = withoutSchoolEventsHeldToday(
     [{ title: "Picture day, 3:30 PM", source: "school" }, { title: "Soccer, 4:00 PM", source: "app" }],
