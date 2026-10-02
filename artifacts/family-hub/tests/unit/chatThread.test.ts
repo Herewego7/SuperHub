@@ -13,6 +13,8 @@ test("a notification reply sits under the plan", () => {
     "Tomorrow's plan\nDinner. Tacos",
     "Who is driving soccer?",
   ]);
+  const again = threadWithPlan(thread, "Tomorrow's plan\nDinner. Tacos", "Who is driving soccer?");
+  assert.deepEqual(again.map((bubble) => bubble.text), thread.map((bubble) => bubble.text));
 });
 
 test("unread stays on the person it was sent to", () => {

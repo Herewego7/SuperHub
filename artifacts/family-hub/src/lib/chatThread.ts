@@ -107,11 +107,14 @@ export function clearChatUnread(profileKey: string): void {
 /** The plan is the latest message, so a notification reply sits directly under it. */
 export function threadWithPlan(current: ChatBubble[], plan: string, reply?: string | null): ChatBubble[] {
   const next = [...current];
-  if (!next.some((bubble) => bubble.text === plan)) {
+  if (!next.some((bubble) => bubble.role === "assistant" && bubble.text === plan)) {
     next.push({ id: `evening-plan-${next.length}`, role: "assistant", text: plan });
   }
   const said = reply?.trim();
-  if (said) next.push({ id: `evening-reply-${next.length}`, role: "user", text: said });
+  if (!said) return next;
+  const planAt = next.findIndex((bubble) => bubble.role === "assistant" && bubble.text === plan);
+  const already = next.slice(planAt + 1).some((bubble) => bubble.role === "user" && bubble.text === said);
+  if (!already) next.push({ id: `evening-reply-${next.length}`, role: "user", text: said });
   return next;
 }
 
