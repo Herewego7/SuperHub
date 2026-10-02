@@ -1,0 +1,76 @@
+import { localDate, zonedWallClock } from "../lib/timezone";
+
+/** A dinner written while the household switch is on. Breakfast and lunch stay off the calendar. */
+
+export function dinnerEventInsert(
+  meal: { date: string; slot: string; name: string },
+  familyCalendarId: string | null | undefined,
+  enabled: boolean,
+  timeZone?: string,
+): {
+  title: string;
+  startTime: Date;
+  endTime: Date;
+  profileIds: string[];
+  drivingProfileIds: string[];
+  calendarId: string | null;
+  source: "meal";
+} | null {
+  if (!enabled || meal.slot !== "dinner" || !meal.name.trim()) return null;
+  const start = timeZone ? zonedWallClock(meal.date, 18, 0, timeZone) : new Date(`${meal.date}T18:00:00`);
+  if (Number.isNaN(start.getTime())) return null;
+  const end = timeZone ? zonedWallClock(meal.date, 19, 0, timeZone) : new Date(start);
+  if (!timeZone) end.setHours(19, 0, 0, 0);
+  const calendarId = familyCalendarId?.trim();
+  return {
+    title: meal.name.trim(),
+    startTime: start,
+    endTime: end,
+    profileIds: [],
+    drivingProfileIds: [],
+    calendarId: !calendarId || calendarId === "none" ? null : calendarId,
+    source: "meal",
+  };
+}
+
+/** A dinner leaves the app only when a family calendar was chosen. Otherwise it would be copied onto every account. */
+export function dinnerLeavesTheApp(event: { calendarId?: string | null; source?: string | null } | null | undefined): boolean {
+  if (!event || event.source !== "meal") return false;
+  const id = event.calendarId?.trim();
+  return !!id && id !== "none";
+}
+
+export function dinnerEventDay(start: Date | string, timeZone?: string): string {
+  const at = new Date(start);
+  if (timeZone) return localDate(at, timeZone);
+  return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
+}
+
+type MealSpot = { date: string; slot: string; name: string };
+type MealEvent = { id: string; title: string; source?: string | null; startTime: Date | string };
+
+export function dinnersToCopy<T extends MealSpot>(meals: T[], events: MealEvent[], timeZone?: string): T[] {
+  return meals.filter((meal) => meal.slot === "dinner" && matchingDinnerEvents(meal, events, timeZone).length === 0);
+}
+
+export function matchingDinnerEvents(meal: MealSpot, events: MealEvent[], timeZone?: string): MealEvent[] {
+  return events.filter((event) => event.source === "meal" && event.title === meal.name && dinnerEventDay(event.startTime, timeZone) === meal.date);
+}
+
+/** While the switch is on, the calendar copy follows a rename, a move, or a delete. Off leaves existing copies alone. */
+export function dinnerCalendarChange(
+  previous: MealSpot | null,
+  next: MealSpot | null,
+  events: MealEvent[],
+  familyCalendarId: string | null | undefined,
+  enabled: boolean,
+  timeZone?: string,
+): { updateId: string | null; deleteIds: string[]; create: ReturnType<typeof dinnerEventInsert> } {
+  const none = { updateId: null, deleteIds: [] as string[], create: null };
+  if (!enabled) return none;
+  const matches = previous && previous.slot === "dinner" ? matchingDinnerEvents(previous, events, timeZone) : [];
+  if (!next || next.slot !== "dinner") return { updateId: null, deleteIds: matches.map((event) => event.id), create: null };
+  const event = dinnerEventInsert(next, familyCalendarId, true, timeZone);
+  if (matches.length === 0) return { updateId: null, deleteIds: [], create: event };
+  return { updateId: matches[0].id, deleteIds: matches.slice(1).map((row) => row.id), create: event };
+}

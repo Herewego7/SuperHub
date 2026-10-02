@@ -82,16 +82,87 @@ export interface InboundMessage {
   subject: string;
   fromAddress?: string;
   snippet: string;
+  body?: string;
   accountId: string;
+}
+
+export function decodeBody(part: GmailPart): string {
+  const data = part.body?.data;
+  if (!data) return "";
+  return Buffer.from(data, "base64url").toString("utf8");
+}
+
+export function messageText(payload: GmailPart | undefined): string {
+  const plain: string[] = [];
+  const html: string[] = [];
+  const walk = (part: GmailPart) => {
+    if (part.mimeType === "text/plain") plain.push(decodeBody(part));
+    else if (part.mimeType === "text/html") html.push(decodeBody(part));
+    for (const child of part.parts ?? []) walk(child);
+  };
+  if (payload) walk(payload);
+  const text = plain.join("\n").trim() || (html.length ? htmlToText(html.join("\n")).text : "");
+  return decodeEntities(text).replace(/\s+/g, " ").trim();
+}
+
+export function outlookToInbound(
+  row: {
+    subject?: string | null;
+    bodyPreview?: string | null;
+    body?: { content?: string | null; contentType?: string | null } | null;
+    from?: { emailAddress?: { address?: string | null } | null } | null;
+  },
+  accountId: string,
+): InboundMessage {
+  const address = row.from?.emailAddress?.address?.trim();
+  const raw = row.body?.content?.trim() ?? "";
+  const text = !raw ? "" : row.body?.contentType === "text" ? raw : htmlToText(raw).text;
+  const body = decodeEntities(text).replace(/\s+/g, " ").trim().slice(0, 4000);
+  const snippet = decodeEntities(row.bodyPreview ?? "").trim() || body.slice(0, 240);
+  return {
+    accountId,
+    subject: row.subject?.trim() ?? "",
+    snippet,
+    ...(body ? { body } : {}),
+    ...(address ? { fromAddress: normalizeAddress(address) } : {}),
+  };
+}
+
+export const INBOX_SCAN_LIMIT = 100;
+
+/** Keep the body parts Gmail returns. The scan used to pass headers only, so a time in the body was never read. */
+export function gmailPayload(part: {
+  mimeType?: string | null;
+  body?: { data?: string | null } | null;
+  headers?: { name?: string | null; value?: string | null }[] | null;
+  parts?: unknown[] | null;
+} | null | undefined): GmailPart | undefined {
+  if (!part) return undefined;
+  const headers = (part.headers ?? []).flatMap((header) =>
+    header.name && header.value ? [{ name: header.name, value: header.value }] : [],
+  );
+  const parts = (part.parts ?? []).flatMap((child) => {
+    const mapped = gmailPayload(child as Parameters<typeof gmailPayload>[0]);
+    return mapped ? [mapped] : [];
+  });
+  return {
+    mimeType: part.mimeType ?? "text/plain",
+    ...(headers.length ? { headers } : {}),
+    ...(part.body?.data ? { body: { data: part.body.data } } : {}),
+    ...(parts.length ? { parts } : {}),
+  };
 }
 
 export function toInbound(msg: GmailMessage, accountId: string): InboundMessage {
   const from = parseAddress(header(msg, "From"));
+  const body = messageText(msg.payload).slice(0, 4000);
+  const snippet = decodeEntities(msg.snippet ?? "").trim() || body.slice(0, 240);
   return {
     accountId,
     ...(from ? { fromAddress: from.address } : {}),
     subject: header(msg, "Subject") ?? "",
-    snippet: decodeEntities(msg.snippet ?? ""),
+    snippet,
+    ...(body ? { body } : {}),
   };
 }
 

@@ -1,6 +1,8 @@
 import { and, eq, gte, lte } from "drizzle-orm";
 import { db } from "../db";
 import { chores, choreCompletions, choreSkips, type Chore } from "@workspace/db";
+import { withoutDismissedChores } from "../ingest/process";
+import { storage } from "../storage";
 import { localDate } from "./timezone";
 
 /**
@@ -135,7 +137,10 @@ export async function getTodayChoresForProfile(
   const wideEnd = new Date(`${today}T23:59:59Z`);
   wideEnd.setUTCDate(wideEnd.getUTCDate() + 1);
 
-  const allChores = await db.select().from(chores).where(eq(chores.userId, userId));
+  const allChores = withoutDismissedChores(
+    await db.select().from(chores).where(eq(chores.userId, userId)),
+    (await storage.getCalendarSettingsByUser(userId))?.dismissedSlipKeys ?? [],
+  );
 
   // "Not today" skips: a parent can drop one chore off one person for one day
   // without unassigning it. A skipped chore isn't shown in the app's own list

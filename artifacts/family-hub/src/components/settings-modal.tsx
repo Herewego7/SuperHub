@@ -25,9 +25,12 @@ import { apiRequest } from "@/lib/queryClient";
 import { confirmDialog } from "@/lib/confirmDialog";
 import { Profile, InsertProfile, LocationSettings, insertLocationSettingsSchema, CustomProfileGroup, RewardSettings } from "@workspace/shared-types";
 import { regionToTimezone, deviceTimezone, guessCountry, countryFromName, regionLabel, COUNTRIES, type CountryCode } from "@/lib/regions";
+import { familyCalendarSelectValue, parseFamilyCalendarOption, familyCalendarOptionValue } from "@/lib/familyCalendarChoice";
+import { personRecordLines, savedFacts, savedSchool } from "@/lib/slipMail";
+import { FEEDBACK_KEY, feedbackList, feedbackNotesFrom, type SavedFeedback } from "@/lib/chatTools";
 import { ObjectUploader } from "./ObjectUploader";
 import { motion, AnimatePresence } from "framer-motion";
-import { Settings, Plus, Edit, X, Upload, User, Users, UserPlus, MapPin, Calendar, ChevronDown, ChevronUp, Lock, LogOut, Trash2, AlertTriangle, Bell, LayoutDashboard, GripVertical, Gift, ShieldCheck, CheckCircle, XCircle, Sun, Moon, Monitor, Camera, Save, Compass, Search, Share2, KeyRound, Star, HelpCircle, Link2, Bug, Sparkles, Home, ListTodo, CheckSquare, UtensilsCrossed } from "lucide-react";
+import { Settings, Plus, Edit, X, Upload, User, Users, UserPlus, MapPin, Calendar, ChevronDown, ChevronUp, Lock, LogOut, Trash2, AlertTriangle, Bell, LayoutDashboard, GripVertical, Gift, ShieldCheck, CheckCircle, XCircle, Sun, Moon, Monitor, Camera, Save, Compass, Search, Share2, KeyRound, Star, HelpCircle, Link2, Bug, Sparkles, Home, ListTodo, UtensilsCrossed, MessageCircle } from "lucide-react";
 import { useTheme, type ThemeMode } from "@/hooks/use-theme";
 import { isScreensaverEnabled, setScreensaverEnabled, SCREENSAVER_IDLE_MS } from "@/lib/screensaver";
 import { EmojiPicker } from "./EmojiPicker";
@@ -42,6 +45,21 @@ import { KbPanel } from "./kb/kb-panel";
 import { ADULT_ROLE_EXPLAINER, KID_ROLE_EXPLAINER, KID_NEEDS_PIN_NUDGE } from "@/lib/copy";
 import { LocationWeatherChip } from "@/components/location-weather-chip";
 
+function DeviceFeedback() {
+  const local = feedbackNotesFrom(localStorage.getItem(FEEDBACK_KEY));
+  const { data } = useQuery<SavedFeedback[]>({ queryKey: ["/api/feedback"], retry: false });
+  const notes = feedbackList(local, Array.isArray(data) ? data : []);
+  if (notes.length === 0) return null;
+  return (
+    <div className="space-y-1" data-testid="settings-feedback">
+      <p className="text-xs font-medium">Feedback</p>
+      {notes.map((note) => (
+        <p key={`${note.at}-${note.text}`} className="text-xs text-muted-foreground break-words">{note.text}</p>
+      ))}
+    </div>
+  );
+}
+
 // All tabs in canonical order — used for Default Tab select + sortable reorder list.
 // "behaviour" deliberately omitted — the Behavior Board tab is hidden from
 // Settings entirely for now (still fully functional, just not discoverable
@@ -54,11 +72,12 @@ const ALL_TABS: {
   icon: React.ComponentType<{ className?: string }>; shortLabel?: string;
 }[] = [
   { id: "home",      label: "Home",        alwaysVisible: true,  icon: Home },
-  { id: "calendar", label: "Calendar",    alwaysVisible: false, icon: Calendar, shortLabel: "Cal" },
-  { id: "chores",    label: "Chores",      alwaysVisible: false, icon: ListTodo },
-  { id: "todos",     label: "To-Dos",      alwaysVisible: false, icon: CheckSquare },
-  { id: "meals",     label: "Meals",       alwaysVisible: false, icon: UtensilsCrossed },
+  { id: "calendar", label: "Calendar",    alwaysVisible: true, icon: Calendar, shortLabel: "Cal" },
+  { id: "chores",    label: "Chores",      alwaysVisible: true, icon: ListTodo },
+  { id: "meals",     label: "Meals",       alwaysVisible: true, icon: UtensilsCrossed },
+  { id: "chat",      label: "Chat",        alwaysVisible: true, icon: MessageCircle },
 ];
+const FIXED_NAV_IDS = ["home", "calendar", "chores", "meals", "chat"];
 
 function formatStarsPerDollar(centsPerPoint: number): string {
   const perDollar = 100 / centsPerPoint;
@@ -898,12 +917,7 @@ function deriveInitials(name: string): string {
 }
 
 // "behaviour" deliberately omitted — see the matching note on ALL_TABS above.
-const TOGGLEABLE_TABS: { id: string; label: string }[] = [
-  { id: "calendar",    label: "Calendar"      },
-  { id: "chores",       label: "Chores"        },
-  { id: "todos",        label: "To-Dos"        },
-  { id: "meals",        label: "Meals"         },
-];
+const TOGGLEABLE_TABS: { id: string; label: string }[] = [];
 
 // Keyword index for the Settings search box — each section's list is a
 // superset of its title plus the individual features/fields it contains, so
@@ -1428,6 +1442,8 @@ export function CalendarConnectionsSection({
   const { data: calendarSettingsData } = useQuery<{
     twoWaySyncEnabled?: boolean | null;
     familyCalendarId?: string | null;
+    familyCalendarProfileId?: string | null;
+    familyCalendarProvider?: string | null;
     scanInbox?: boolean | null;
     shareOriginals?: boolean | null;
   }>({
@@ -1500,15 +1516,43 @@ export function CalendarConnectionsSection({
       queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
     },
   });
+  const [scanNote, setScanNote] = useState<string | null>(null);
+  const scanNow = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/ingest/scan");
+      return res.json() as Promise<{ todos: unknown[]; needsReconnect?: boolean; connected?: number; scanOff?: boolean }>;
+    },
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      if (data.scanOff) setScanNote("Scan is off.");
+      else if (data.needsReconnect) setScanNote("Reconnect the account to read mail.");
+      else if (!data.connected) setScanNote("Connect an account first.");
+      else setScanNote(data.todos.length ? `Added ${data.todos.length}.` : "No new school mail.");
+    },
+  });
 
+  const familyCalendars = [
+    ...allGoogleCalendars.map((calendar) => ({ provider: "google" as const, profileId: String(calendar.profileId), calendarId: String(calendar.id), name: String(calendar.name ?? calendar.id) })),
+    ...allOutlookCalendars.map((calendar) => ({ provider: "outlook" as const, profileId: String(calendar.profileId), calendarId: String(calendar.id), name: String(calendar.name ?? calendar.id) })),
+  ];
+  const rememberedFamilyCalendar = useRef<string | null>(null);
   const familyCalendarMutation = useMutation({
-    mutationFn: async (calendarId: string | null) => {
-      await apiRequest("PATCH", "/api/calendar-settings/family-calendar", { calendarId });
+    mutationFn: async (choice: { calendarId: string; profileId: string; provider: "google" | "outlook" } | null) => {
+      await apiRequest("PATCH", "/api/calendar-settings/family-calendar", choice ?? { calendarId: null, profileId: null, provider: null });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
     },
   });
+  useEffect(() => {
+    const id = calendarSettingsData?.familyCalendarId;
+    if (!id || calendarSettingsData?.familyCalendarProfileId) return;
+    const matches = familyCalendars.filter((calendar) => calendar.calendarId === id);
+    if (matches.length !== 1 || rememberedFamilyCalendar.current === id) return;
+    rememberedFamilyCalendar.current = id;
+    familyCalendarMutation.mutate({ calendarId: id, profileId: matches[0].profileId, provider: matches[0].provider });
+  }, [calendarSettingsData?.familyCalendarId, calendarSettingsData?.familyCalendarProfileId, familyCalendars, familyCalendarMutation]);
 
   // Google Calendar disconnect mutation
   const disconnectGoogleCalendarMutation = useMutation({
@@ -1868,12 +1912,27 @@ export function CalendarConnectionsSection({
                   />
                 </div>
                 <div className="flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-md bg-muted/50 mb-2">
-                  <p className="text-xs text-foreground">Scan inbox</p>
+                  <p className="text-xs text-foreground">
+                    Scan inbox
+                    <span className="ml-2 text-muted-foreground" data-testid="scan-inbox-state">{scanInbox ? "On" : "Scan off"}</span>
+                  </p>
                   <Switch
                     checked={scanInbox}
                     onCheckedChange={(checked) => inboxMutation.mutate({ scanInbox: !!checked })}
                     data-testid="toggle-scan-inbox"
                   />
+                </div>
+                <div className="flex items-center justify-between gap-3 px-2.5 py-1.5 mb-2">
+                  <button
+                    type="button"
+                    className="text-xs underline"
+                    data-testid="scan-inbox-now"
+                    disabled={scanNow.isPending}
+                    onClick={() => scanNow.mutate()}
+                  >
+                    Scan now
+                  </button>
+                  {scanNote && <span className="text-xs text-muted-foreground" data-testid="scan-inbox-note">{scanNote}</span>}
                 </div>
                 <div className="flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-md bg-muted/50 mb-3">
                   <p className="text-xs text-foreground">Share originals with other adults</p>
@@ -1886,16 +1945,26 @@ export function CalendarConnectionsSection({
                 <div className="mb-3">
                   <p className="text-xs font-medium mb-1">Family calendar</p>
                   <Select
-                    value={calendarSettingsData?.familyCalendarId || "none"}
-                    onValueChange={(value) => familyCalendarMutation.mutate(value === "none" ? null : value)}
+                    value={familyCalendars.length === 0 ? (calendarSettingsData?.familyCalendarId || "none") : familyCalendarSelectValue(calendarSettingsData?.familyCalendarId, calendarSettingsData?.familyCalendarProfileId, familyCalendars)}
+                    onValueChange={(value) => {
+                      if (value === "none") {
+                        familyCalendarMutation.mutate(null);
+                        return;
+                      }
+                      const choice = parseFamilyCalendarOption(value);
+                      if (choice) familyCalendarMutation.mutate(choice);
+                    }}
                   >
                     <SelectTrigger className="h-8 text-xs" data-testid="select-family-calendar">
                       <SelectValue placeholder="Where new events are written" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Not chosen yet</SelectItem>
-                      {[...allGoogleCalendars, ...allOutlookCalendars].map((calendar: any) => (
-                        <SelectItem key={calendar.id} value={calendar.id}>{calendar.name}</SelectItem>
+                      {familyCalendars.length === 0 && calendarSettingsData?.familyCalendarId && (
+                        <SelectItem value={calendarSettingsData.familyCalendarId}>{calendarSettingsData.familyCalendarId}</SelectItem>
+                      )}
+                      {familyCalendars.map((calendar) => (
+                        <SelectItem key={familyCalendarOptionValue(calendar)} value={familyCalendarOptionValue(calendar)}>{calendar.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -2404,6 +2473,8 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
     photoUrl: null as string | null,
     role: "adult" as "adult" | "child",
     isChild: false,
+    school: "",
+    facts: "",
   });
   // For the kid-restrictions "you need a Parent PIN" nudge in the profile form.
   const { data: profileFormRewardSettings } = useQuery<RewardSettings>({ queryKey: ["/api/reward-settings"] });
@@ -2559,7 +2630,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
       toast({ title: "Profile created successfully!" });
       setIsAddingProfile(false);
       const nextColor = getNextColor();
-      setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false });
+      setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "", facts: "" });
     },
     onError: (err: any) => {
       toast({ title: err?.message || "Failed to create profile", variant: "destructive" });
@@ -2593,7 +2664,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
       }
       setEditingProfile(null);
       const nextColor = getNextColor();
-      setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false });
+      setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "", facts: "" });
     },
     onError: (err: any) => {
       toast({ title: err?.message || "Failed to update profile", variant: "destructive" });
@@ -2782,6 +2853,8 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
           role: formData.role,
           // isChild (COPPA under-13) only applies to kids; force false for adults.
           isChild: formData.role === "child" ? formData.isChild : false,
+          school: savedSchool(formData.school),
+          facts: savedFacts(formData.facts),
         },
       });
       if (grantConsent) await grantConsentMutation.mutateAsync(editingProfile.id);
@@ -2874,6 +2947,8 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
       // A legacy under-13 (isChild) profile with no explicit role is a Kid.
       role: (profile.role === "child" || profile.isChild) ? "child" : "adult",
       isChild: !!profile.isChild,
+      school: profile.school ?? "",
+      facts: (profile.facts ?? []).join("\n"),
     });
     setIsAddingProfile(false);
   };
@@ -2889,7 +2964,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
     setEditingProfile(null);
     setInitialsTouched(false);
     const nextColor = getNextColor();
-    setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false });
+    setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "", facts: "" });
   };
 
   const cancelEdit = () => {
@@ -2897,7 +2972,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
     setIsAddingProfile(false);
     setInitialsTouched(false);
     const nextColor = getNextColor();
-    setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false });
+    setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "", facts: "" });
   };
 
   const handleImageUploadComplete = (result: { objectPath: string }) => {
@@ -3630,6 +3705,9 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                       {profile.email && (
                         <p className="text-xs text-muted-foreground truncate">{profile.email}</p>
                       )}
+                      {personRecordLines(profile).map((line, index) => (
+                        <p key={`${profile.id}-${index}`} data-testid="profile-memory" className="text-xs text-muted-foreground truncate">{line}</p>
+                      ))}
                     </div>
                     <div className="flex gap-1">
                       <Button
@@ -3669,6 +3747,18 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                             <Label htmlFor="edit-email" className="text-sm">Email (Optional)</Label>
                             <Input id="edit-email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="example@email.com" className="h-8" data-testid="profile-email-input" />
                           </div>
+                          {!editingProfile?.isAllFamilyProfile && (
+                            <>
+                              <div>
+                                <Label htmlFor="edit-school" className="text-sm">School</Label>
+                                <Input id="edit-school" value={formData.school} onChange={(e) => setFormData({ ...formData, school: e.target.value })} placeholder="Lincoln Elementary" className="h-8" data-testid="profile-school-input" />
+                              </div>
+                              <div>
+                                <Label htmlFor="edit-facts" className="text-sm">Remembered</Label>
+                                <textarea id="edit-facts" value={formData.facts} onChange={(e) => setFormData({ ...formData, facts: e.target.value })} placeholder="One thing per line" rows={3} className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm" data-testid="profile-facts-input" />
+                              </div>
+                            </>
+                          )}
 
                                                     <div className="flex items-start gap-3">
 <div className="flex justify-center shrink-0">
@@ -4133,7 +4223,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
 
               {/* Visible Tabs + Default Tab */}
               <div>
-                <p className="text-sm font-medium text-foreground mb-2">Tab Order & Visibility</p>
+                <p className="text-sm font-medium text-foreground mb-2">Tabs</p>
                 {/* The nav bar as it will actually look, updating as the list
                     below is reordered, unchecked, or switched to icons-only.
                     It replaces two sentences that narrated those controls —
@@ -4148,7 +4238,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                   className="flex items-center justify-center gap-0.5 flex-nowrap overflow-hidden mb-3 px-1.5 py-2 rounded-lg bg-background/60 border border-border"
                   data-testid="nav-preview"
                 >
-                  {localTabOrder.map(tabId => {
+                  {FIXED_NAV_IDS.map(tabId => {
                     const tab = ALL_TABS.find(t => t.id === tabId);
                     if (!tab) return null;
                     if (!tab.alwaysVisible && hiddenTabs.includes(tabId)) return null;
@@ -4168,7 +4258,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                   })}
                 </div>
                 <div ref={tabListRef}>
-                {localTabOrder.map(tabId => {
+                {FIXED_NAV_IDS.map(tabId => {
                   const tab = ALL_TABS.find(t => t.id === tabId);
                   if (!tab) return null;
                   const isVisible = tab.alwaysVisible || !hiddenTabs.includes(tabId);
@@ -4186,14 +4276,6 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                             : 'bg-background/60 hover:bg-background'
                       }`}
                     >
-                      <span
-                        className="flex items-center justify-center -my-1 -ml-1 p-2 flex-shrink-0 cursor-grab active:cursor-grabbing touch-none select-none"
-                        style={{ touchAction: 'none' }}
-                        onPointerDown={(e) => handleGripPointerDown(e, tabId)}
-                        data-testid={`tab-drag-handle-${tabId}`}
-                      >
-                        <GripVertical className="w-5 h-5 text-muted-foreground" />
-                      </span>
                       <Checkbox
                         id={`tab-${tabId}`}
                         checked={isVisible}
@@ -4356,6 +4438,8 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
             <Button variant="default" className="w-full h-auto py-2.5 whitespace-nowrap text-sm font-semibold" onClick={() => setSignOutStep(1)} data-testid="settings-sign-out-button">
               <LogOut className="w-5 h-5 mr-2" /> Sign out
             </Button>
+
+            <DeviceFeedback />
 
             <div className="flex gap-3 text-xs text-muted-foreground pt-1">
               <a href="/privacy" className="hover:underline">Privacy Policy</a>

@@ -1,4 +1,5 @@
-import { outlookEventProfileIds } from "@/lib/outlookAttribution";
+import { assignmentProfileIds, outlookEventProfileIds, withoutUnwatched } from "@/lib/outlookAttribution";
+import { recurringIdFromIcal, recurringIdFromOutlook } from "@/lib/upcoming";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { ChoreIcon } from "@/components/customChoreIcons";
 import { objectUrl } from "@/lib/apiBase";
@@ -867,10 +868,11 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
             a.calendarId === googleCalendarId && a.calendarType === 'google'
           );
           if (assignment) {
-            const assignedProfile = profiles.find(p => p.id === assignment.profileId);
-            if (assignedProfile) {
-              assignedProfileIds = [assignment.profileId];
-              displayName = assignedProfile.name;
+            const people = assignmentProfileIds(assignment).filter((id) => profiles.some((profile) => profile.id === id));
+            if (people.length > 0) {
+              assignedProfileIds = people;
+              const assignedProfile = profiles.find(p => p.id === people[0]);
+              if (assignedProfile) displayName = assignedProfile.name;
             }
           }
         }
@@ -927,6 +929,8 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           profileIds: oPids,
           calendarId: oe.calendar?.name || 'Outlook Calendar',
           calendarName: oe.calendar?.name || 'Outlook Calendar',
+          outlookCalendarId: oe.calendar?.id ?? null,
+          recurringEventId: recurringIdFromOutlook(oe),
           createdAt: new Date(),
           updatedAt: new Date(),
         } as any);
@@ -952,13 +956,14 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           profileIds: [profileId],
           calendarId: ie.calendarColor ? 'Subscribed Calendar' : 'Subscribed Calendar',
           calendarName: 'Subscribed Calendar',
+          recurringEventId: recurringIdFromIcal(ie),
           createdAt: new Date(),
           updatedAt: new Date(),
         } as any);
       }
     });
 
-    return [...events, ...googleCalendarEvents, ...outlookCalendarEvents, ...icalEvents];
+    return withoutUnwatched([...events, ...googleCalendarEvents, ...outlookCalendarEvents, ...icalEvents], calendarAssignments);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleDataSig, outlookCalendarQueries, icalQueries, events, profiles, googleAccountEmailMap, calendarAssignments]);
 
@@ -2356,6 +2361,24 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
         selectedIds={selectedProfiles}
         familyIds={profiles.filter(p => !p.isAllFamilyProfile).map(p => p.id)}
         day={selectedDate}
+        kidName={(() => {
+          const picked = profiles.filter((p) => !p.isAllFamilyProfile && selectedProfiles.includes(p.id));
+          if (picked.length !== 1) return null;
+          const person = picked[0];
+          return person.role === "child" || person.isChild ? person.name : null;
+        })()}
+        personId={(() => {
+          const picked = profiles.filter((p) => !p.isAllFamilyProfile && selectedProfiles.includes(p.id));
+          return picked.length === 1 ? picked[0].id : null;
+        })()}
+        people={profiles.filter((p) => !p.isAllFamilyProfile).map((p) => ({
+          id: p.id,
+          name: p.name,
+          school: p.school ?? null,
+          isChild: p.isChild,
+          role: p.role,
+          connected: !!(p.googleCalendarConnected || p.outlookCalendarConnected),
+        }))}
         onOpenChores={() => setActiveTab("chores")}
       />
 

@@ -1,8 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, RESET_CATEGORIES, type ResetCategory, type DbOrTx } from "../storage";
-import { insertProfileSchema, insertEventSchema, insertChoreSchema, insertChoreCompletionSchema, insertCalendarSettingsSchema, insertLocationSettingsSchema, insertDailyContentSchema, insertDailyContentAssignmentSchema, insertDailyContentCompletionSchema, insertGoogleCalendarTokensSchema, insertOutlookCalendarTokensSchema, insertCalendarAssignmentSchema, insertRewardSchema, insertRewardRedemptionSchema, insertMealSchema, insertMealIngredientSchema, insertGroceryItemSchema, insertGroceryStapleSchema, insertSavedMealSchema, insertCelebrationSchema, insertCelebrationGiftIdeaSchema, insertCelebrationPhotoSchema, insertWishlistItemSchema, db, chores as choresTbl, choreCompletions as choreCompletionsTbl, activityLog as activityLogTbl, profiles as profilesTbl, rewardRedemptions as rewardRedemptionsTbl, rewards as rewardsTbl, shoutouts as shoutoutsTbl, pointAdjustments as pointAdjustmentsTbl, meals as mealsTbl, walletTransactions as walletTransactionsTbl, dailyContent as dailyContentTbl, dailyContentAssignments as dailyContentAssignmentsTbl } from "@workspace/db";
-import { eq, and, gte, lt, or, inArray } from "drizzle-orm";
+import { insertProfileSchema, insertEventSchema, insertChoreSchema, insertChoreCompletionSchema, insertCalendarSettingsSchema, insertLocationSettingsSchema, insertDailyContentSchema, insertDailyContentAssignmentSchema, insertDailyContentCompletionSchema, insertGoogleCalendarTokensSchema, insertOutlookCalendarTokensSchema, insertCalendarAssignmentSchema, insertRewardSchema, insertRewardRedemptionSchema, insertMealSchema, insertMealIngredientSchema, insertGroceryItemSchema, insertGroceryStapleSchema, insertSavedMealSchema, insertCelebrationSchema, insertCelebrationGiftIdeaSchema, insertCelebrationPhotoSchema, insertWishlistItemSchema, db, chores as choresTbl, choreCompletions as choreCompletionsTbl, activityLog as activityLogTbl, profiles as profilesTbl, rewardRedemptions as rewardRedemptionsTbl, rewards as rewardsTbl, shoutouts as shoutoutsTbl, pointAdjustments as pointAdjustmentsTbl, meals as mealsTbl, events as eventsTbl, walletTransactions as walletTransactionsTbl, dailyContent as dailyContentTbl, dailyContentAssignments as dailyContentAssignmentsTbl } from "@workspace/db";
+import { eq, and, gte, lt, or, inArray, desc } from "drizzle-orm";
+import { feedbackNotes } from "@workspace/db/schema";
 import { GoogleCalendarService } from "../googleCalendar";
 import { OutlookCalendarService } from "../outlookCalendar";
 import { ObjectStorageService, ObjectNotFoundError, cleanupReplacedPhoto } from "../objectStorage";
@@ -25,8 +26,13 @@ import { geocodeCity } from "../lib/geocode";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
-import { dismissSlip, ingestMessages, muteSender } from "../ingest/process";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, holdSchoolEvent, muteSender, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
+import { applyIngestedMail } from "../ingest/saveMail";
+import { scanConnectedInboxes } from "../ingest/scanHousehold";
+import { markSchedulerWorkDirty } from "../lib/workGate";
+import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp, dinnersToCopy } from "../meals/dinnerEvent";
 import { slipKey } from "../ingest/parse";
+import { moveClock } from "../scheduler/eveningPlan";
 import { expandRecurringEvents, resolveSeriesEventId } from "../lib/eventRecurrence";
 import { planRecurringEdit, planRecurringDelete, type EditScope } from "../lib/recurringEdit";
 import { alignStartToWeeklyDays } from "../lib/recurrenceRule";
@@ -291,6 +297,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         color: z.string().optional(),
         initials: z.string().optional(),
         email: z.string().nullable().optional(),
+        school: z.string().nullable().optional(),
+        facts: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
         photoUrl: z.string().nullable().optional(),
         isActive: z.boolean().optional(),
         isAllFamilyProfile: z.boolean().optional(),
@@ -298,6 +306,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         outlookCalendarConnected: z.boolean().optional(),
         bedtimeCutoff: hhmm,
         dailyBriefTime: hhmm,
+        eveningPlanTime: hhmm,
+        eveningPlanTiming: z.enum(["eveningBefore", "morningOf"]).optional(),
         dailyBriefSections: z.object({
           events: z.boolean().optional(),
           chores: z.boolean().optional(),
@@ -402,7 +412,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const events = await storage.getEventsByUser(userId);
-      res.json(expandRecurringEvents(events));
+      const settings = await storage.getCalendarSettingsByUser(userId);
+      res.json(expandRecurringEvents(withoutDismissedSlips(events, settings?.dismissedSlipKeys ?? [])));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch events" });
     }
@@ -497,6 +508,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (processedData.endTime) {
         processedData.endTime = new Date(processedData.endTime);
+      }
+      if (processedData.startTime instanceof Date) {
+        const [existing] = await db.select({ startTime: eventsTbl.startTime, isAllDay: eventsTbl.isAllDay }).from(eventsTbl).where(eq(eventsTbl.id, seriesId)).limit(1);
+        const allDay = processedData.isAllDay !== undefined ? processedData.isAllDay === true : existing?.isAllDay === true;
+        if (!allDay) {
+          const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
+          const label = moveClock(existing?.startTime, processedData.startTime, timeZone);
+          if (label) processedData.movedFrom = `${label}\n${new Date().toISOString()}`;
+        }
       }
       
 
@@ -624,9 +644,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (e) {
         console.warn("Could not load event sync links (continuing with delete):", e instanceof Error ? e.message : e);
       }
+      const removing = (await storage.getEventsByUser(userId)).find((event) => event.id === id);
       const success = await storage.deleteEvent(id, userId);
       if (!success) {
         return res.status(404).json({ message: "Event not found" });
+      }
+      if (removing?.source === "school") {
+        const key = removing.externalId || slipKey(removing.title);
+        if (key) {
+          try {
+            const settings = await storage.getCalendarSettingsByUser(userId);
+            const keys = holdSchoolEvent(settings?.dismissedSlipKeys ?? [], key);
+            if (keys.length !== (settings?.dismissedSlipKeys ?? []).length) {
+              await storage.updateCalendarSettings({ dismissedSlipKeys: keys, userId });
+            }
+          } catch (err) {
+            console.warn("Could not remember a removed school event:", err instanceof Error ? err.message : err);
+          }
+        }
       }
       // Not awaited — see the note on the create route above. The local row is
       // already gone, which is all GET /api/events reads; removing the external
@@ -817,7 +852,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // The completed-to-dos history drawer asks for everything; every other
       // caller gets the working set.
       const includeArchived = req.query.includeArchived === "1";
-      const chores = includeArchived ? all : all.filter((c) => !(c as any).archivedAt);
+      const settings = await storage.getCalendarSettingsByUser(userId);
+      const chores = withoutDismissedChores(
+        includeArchived ? all : all.filter((c) => !(c as any).archivedAt),
+        settings?.dismissedSlipKeys ?? [],
+      );
       res.json(chores);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch chores" });
@@ -3131,8 +3170,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         weekStartsOn: 0,
         twoWaySyncEnabled: true,
         familyCalendarId: null,
+        familyCalendarProfileId: null,
+        familyCalendarProvider: null,
         scanInbox: true,
         shareOriginals: false,
+        mealsOnCalendar: false,
         mutedSenders: [],
         dismissedSlipKeys: [],
       };
@@ -3197,14 +3239,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req);
       const calendarId = req.body.calendarId;
+      const profileId = req.body.profileId;
+      const provider = req.body.provider;
       if (calendarId !== null && typeof calendarId !== "string") {
         return res.status(400).json({ error: "calendarId must be a string or null" });
       }
-      const settings = await storage.updateCalendarSettings({ familyCalendarId: calendarId, userId });
+      if (profileId != null && typeof profileId !== "string") {
+        return res.status(400).json({ error: "profileId must be a string or null" });
+      }
+      if (provider != null && provider !== "google" && provider !== "outlook") {
+        return res.status(400).json({ error: "provider must be google or outlook" });
+      }
+      const settings = await storage.updateCalendarSettings({
+        familyCalendarId: calendarId,
+        familyCalendarProfileId: calendarId ? (typeof profileId === "string" ? profileId : null) : null,
+        familyCalendarProvider: calendarId ? (provider === "google" || provider === "outlook" ? provider : null) : null,
+        userId,
+      });
       res.json(settings);
     } catch (error) {
       console.error("Error updating family calendar:", error);
       res.status(500).json({ error: "Failed to update family calendar" });
+    }
+  });
+
+  app.patch("/api/calendar-settings/meals-on-calendar", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      if (typeof req.body.enabled !== "boolean") {
+        return res.status(400).json({ error: "enabled must be a boolean" });
+      }
+      const settings = await storage.updateCalendarSettings({ mealsOnCalendar: req.body.enabled, userId });
+      res.json(settings);
+    } catch (error) {
+      console.error("Error updating meals on calendar:", error);
+      res.status(500).json({ error: "Failed to update meals on calendar" });
+    }
+  });
+
+  app.post("/api/calendar-settings/meals-on-calendar/copy", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const settings = await storage.getCalendarSettingsByUser(userId);
+      if (settings?.mealsOnCalendar !== true || typeof req.body.start !== "string" || typeof req.body.end !== "string") {
+        return res.json({ copied: 0 });
+      }
+      const meals = await storage.getMealsByUserAndDateRange(userId, req.body.start, req.body.end);
+      const events = await storage.getEventsByUser(userId);
+      const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
+      let copied = 0;
+      for (const meal of dinnersToCopy(meals, events, timeZone)) {
+        const event = dinnerEventInsert(meal, settings.familyCalendarId, true, timeZone);
+        if (!event) continue;
+        const created = await storage.createEvent({ ...event, userId });
+        if (created && dinnerLeavesTheApp(created)) {
+          void syncEventCreate(created).catch((err) => console.warn("Dinner calendar copy failed:", err instanceof Error ? err.message : err));
+        }
+        copied += 1;
+      }
+      res.json({ copied });
+    } catch (error) {
+      console.error("Error copying dinners onto the calendar:", error);
+      res.status(500).json({ error: "Failed to copy dinners" });
     }
   });
 
@@ -3218,6 +3314,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "scanInbox or shareOriginals must be a boolean" });
       }
       const settings = await storage.updateCalendarSettings(patch);
+      if (patch.scanInbox === true) markSchedulerWorkDirty("inboxScan");
       res.json(settings);
     } catch (error) {
       console.error("Error updating inbox settings:", error);
@@ -3228,62 +3325,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ingest/mail", isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
-      const settings = await storage.getCalendarSettingsByUser(userId);
-      if (settings?.scanInbox === false) return res.json({ todos: [], events: [] });
       const profileIds = Array.isArray(req.body.profileIds) ? req.body.profileIds.filter((id: unknown) => typeof id === "string") : [];
       for (const profileId of profileIds) {
         const isOwner = await validateProfileOwnership(profileId, userId);
         if (!isOwner) return res.status(403).json({ error: "Forbidden" });
       }
       const messages = Array.isArray(req.body.messages) ? req.body.messages : [];
-      const chores = await storage.getChoresByUser(userId);
-      const existingKeys = chores.filter((chore) => chore.category === "school_email").map((chore) => slipKey(chore.title));
-      const planned = ingestMessages(
-        messages,
-        { mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] },
-        existingKeys,
-        profileIds,
-      );
-      const todos = [];
-      for (const todo of planned.todos) {
-        const { slipKey: _slipKey, ...row } = todo;
-        todos.push(await storage.createChore({ ...row, userId }));
-      }
-      const events = [];
-      for (const event of planned.events) {
-        const start = new Date();
-        start.setDate(start.getDate() + 1);
-        start.setHours(9, 0, 0, 0);
-        const end = new Date(start);
-        end.setHours(10, 0, 0, 0);
-        events.push(await storage.createEvent({
-          userId,
-          title: event.title,
-          description: event.description,
-          startTime: start,
-          endTime: end,
-          profileIds: event.profileIds,
-          source: event.source,
-          externalId: event.externalId,
-        }));
-      }
-      res.status(201).json({ todos, events });
+      const saved = await applyIngestedMail(userId, messages, profileIds);
+      res.status(saved.scanOff ? 200 : 201).json(saved);
     } catch (error) {
       console.error("Error ingesting mail:", error);
       res.status(500).json({ error: "Failed to ingest mail" });
     }
   });
 
+  app.post("/api/ingest/scan", isAuthenticated, async (req: any, res) => {
+    try {
+      const saved = await scanConnectedInboxes(getUserId(req));
+      res.json(saved);
+    } catch (error) {
+      console.error("Error scanning inbox:", error);
+      res.status(500).json({ error: "Failed to scan inbox" });
+    }
+  });
+
   app.post("/api/ingest/not-relevant", isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
-      const key = typeof req.body.slipKey === "string" ? req.body.slipKey : "";
+      const key = typeof req.body.slipKey === "string" && req.body.slipKey
+        ? req.body.slipKey
+        : typeof req.body.title === "string" ? slipKey(req.body.title) : "";
       if (!key) return res.status(400).json({ error: "slipKey is required" });
       const settings = await storage.getCalendarSettingsByUser(userId);
       const next = dismissSlip(
         { mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] },
         key,
       );
+      const chores = await storage.getChoresByUser(userId);
+      for (const id of choresDismissedBySlip(chores, key)) {
+        await storage.deleteChore(id, userId);
+      }
+      const events = await storage.getEventsByUser(userId);
+      for (const id of eventsDismissedBySlip(events, key)) {
+        let syncLinks: Awaited<ReturnType<typeof storage.getEventCalendarSyncs>> = [];
+        try {
+          syncLinks = await storage.getEventCalendarSyncs(id);
+        } catch (e) {
+          console.warn("Could not load event sync links (continuing with delete):", e instanceof Error ? e.message : e);
+        }
+        await storage.deleteEvent(id, userId);
+        void syncEventDelete(syncLinks).catch((err) =>
+          console.warn("syncEventDelete (not relevant) failed:", err instanceof Error ? err.message : err),
+        );
+      }
       const saved = await storage.updateCalendarSettings({ dismissedSlipKeys: next.dismissedSlipKeys, userId });
       res.json(saved);
     } catch (error) {
@@ -3307,6 +3401,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error muting a sender:", error);
       res.status(500).json({ error: "Failed to mute sender" });
+    }
+  });
+
+  app.post("/api/ingest/school", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const profileId = typeof req.body.profileId === "string" ? req.body.profileId : "";
+      const suggestion = typeof req.body.school === "string" ? req.body.school : "";
+      if (!profileId || !suggestion.trim()) return res.status(400).json({ error: "profileId and school are required" });
+      const existing = await storage.getProfile(profileId);
+      if (!existing || existing.userId !== userId) return res.status(404).json({ message: "Profile not found" });
+      const school = acceptSchool(existing.school, suggestion);
+      if (school === (existing.school?.trim() || null)) return res.json(existing);
+      const profile = await storage.updateProfile(profileId, { school }, userId);
+      res.json(profile);
+    } catch (error) {
+      console.error("Error saving a school:", error);
+      res.status(500).json({ error: "Failed to save school" });
     }
   });
 
@@ -4646,6 +4758,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/outlook-calendar/events/:profileId", isAuthenticated, async (req: any, res) => {
+    try {
+      const { profileId } = req.params;
+      const userId = getUserId(req);
+      const isOwner = await validateProfileOwnership(profileId, userId);
+      if (!isOwner) return res.status(403).json({ error: "Forbidden" });
+      const eventId = req.body?.eventId;
+      if (typeof eventId !== "string" || !eventId) return res.status(400).json({ error: "Missing event" });
+      const accessToken = await getFreshOutlookAccessToken(profileId);
+      if (!accessToken) return res.status(404).json({ error: "No Outlook Calendar connection found" });
+      const { title, location, start, end, isAllDay } = req.body ?? {};
+      await outlookCalendarService.updateEvent(accessToken, eventId, {
+        ...(title !== undefined ? { title } : {}),
+        ...(location !== undefined ? { location } : {}),
+        ...(start && end ? { start: new Date(start), end: new Date(end), isAllDay: !!isAllDay } : {}),
+      });
+      outlookEventsCache.delete(profileId);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error updating Outlook Calendar event:", error);
+      res.status(500).json({ error: "Failed to update calendar event" });
+    }
+  });
+
+  app.delete("/api/outlook-calendar/events/:profileId", isAuthenticated, async (req: any, res) => {
+    try {
+      const { profileId } = req.params;
+      const userId = getUserId(req);
+      const isOwner = await validateProfileOwnership(profileId, userId);
+      if (!isOwner) return res.status(403).json({ error: "Forbidden" });
+      const eventId = req.query.eventId;
+      if (typeof eventId !== "string" || !eventId) return res.status(400).json({ error: "Missing event" });
+      const accessToken = await getFreshOutlookAccessToken(profileId);
+      if (!accessToken) return res.status(404).json({ error: "No Outlook Calendar connection found" });
+      await outlookCalendarService.deleteEvent(accessToken, eventId);
+      outlookEventsCache.delete(profileId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting Outlook Calendar event:", error);
+      res.status(500).json({ error: "Failed to delete calendar event" });
+    }
+  });
+
   app.delete("/api/outlook-calendar/disconnect/:profileId", isAuthenticated, async (req: any, res) => {
     try {
       const { profileId } = req.params;
@@ -5297,6 +5452,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     displayOrder: z.number().optional(),
   })).optional();
 
+  async function syncDinnerCalendar(
+    userId: string,
+    previous: { date: string; slot: string; name: string } | null,
+    next: { date: string; slot: string; name: string } | null,
+  ) {
+    try {
+      const settings = await storage.getCalendarSettingsByUser(userId);
+      const events = await storage.getEventsByUser(userId);
+      const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
+      const change = dinnerCalendarChange(previous, next, events, settings?.familyCalendarId, settings?.mealsOnCalendar === true, timeZone);
+      if (change.updateId && change.create) {
+        const updated = await storage.updateEvent(change.updateId, change.create, userId);
+        if (updated && dinnerLeavesTheApp(updated)) {
+          void syncEventUpdate(updated).catch((err) => console.warn("Dinner calendar update failed:", err instanceof Error ? err.message : err));
+        }
+      }
+      for (const id of change.deleteIds) {
+        const links = await storage.getEventCalendarSyncs(id).catch(() => []);
+        await storage.deleteEvent(id, userId);
+        void syncEventDelete(links).catch((err) => console.warn("Dinner calendar delete failed:", err instanceof Error ? err.message : err));
+      }
+      if (!change.updateId && change.create) {
+        const created = await storage.createEvent({ ...change.create, userId });
+        if (dinnerLeavesTheApp(created)) {
+          void syncEventCreate(created).catch((err) => console.warn("Dinner calendar create failed:", err instanceof Error ? err.message : err));
+        }
+      }
+    } catch (err) {
+      console.error("Dinner calendar sync failed:", err);
+    }
+  }
+
   app.post("/api/meals", isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
@@ -5305,6 +5492,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ingredients = mealIngredientPayloadSchema.parse(ingredientsRaw) || [];
       const created = await storage.createMeal(mealData);
       const savedIngredients = await storage.replaceMealIngredients(created.id, ingredients);
+      const settings = await storage.getCalendarSettingsByUser(userId);
+      const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
+      const dinnerEvent = dinnerEventInsert(created, settings?.familyCalendarId, settings?.mealsOnCalendar === true, timeZone);
+      if (dinnerEvent) {
+        try {
+          const created = await storage.createEvent({ ...dinnerEvent, userId });
+          if (dinnerLeavesTheApp(created)) {
+            void syncEventCreate(created).catch((err) => console.warn("Dinner calendar create failed:", err instanceof Error ? err.message : err));
+          }
+        } catch (err) {
+          console.error("Dinner calendar write failed:", err);
+        }
+      }
       res.status(201).json({ ...created, ingredients: savedIngredients });
     } catch (error) {
       console.error("Meal creation error:", error);
@@ -5318,8 +5518,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { ingredients: ingredientsRaw, ...rest } = req.body || {};
       const updates = insertMealSchema.partial().omit({ userId: true }).parse(rest);
+      const previous = await storage.getMeal(id, userId);
       const meal = await storage.updateMeal(id, updates, userId);
       if (!meal) return res.status(404).json({ message: "Meal not found" });
+      await syncDinnerCalendar(userId, previous ?? null, meal);
       let savedIngredients;
       if (Array.isArray(ingredientsRaw)) {
         const ingredients = mealIngredientPayloadSchema.parse(ingredientsRaw) || [];
@@ -5336,8 +5538,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/meals/:id", isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
+      const previous = await storage.getMeal(req.params.id, userId);
       const success = await storage.deleteMeal(req.params.id, userId);
       if (!success) return res.status(404).json({ message: "Meal not found" });
+      await syncDinnerCalendar(userId, previous ?? null, null);
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete meal" });
@@ -5448,12 +5652,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userMeals = await storage.getMealsByUserAndDateRange(userId, String(start), String(end));
       const ingredients = await storage.getIngredientsByMealIds(userMeals.map(m => m.id));
       const aggregated = aggregateIngredients(ingredients);
-      const items = aggregated.map(a => ({
-        name: a.name,
-        quantity: a.quantity,
-        isChecked: false,
-        sourceMealIds: a.sourceMealIds,
-      }));
+      const existing = await storage.getGroceryItemsByUser(userId);
+      const kept = existing.filter((item) => item.alreadyHave);
+      const keptNames = new Set(kept.map((item) => item.name.trim().toLowerCase()));
+      const items = [
+        ...aggregated
+          .filter((a) => !keptNames.has(a.name.trim().toLowerCase()))
+          .map((a) => ({
+            name: a.name,
+            quantity: a.quantity,
+            isChecked: false,
+            alreadyHave: false,
+            sourceMealIds: a.sourceMealIds,
+          })),
+        ...kept.map((item) => ({
+          name: item.name,
+          quantity: item.quantity,
+          isChecked: false,
+          alreadyHave: true,
+          sourceMealIds: item.sourceMealIds ?? [],
+        })),
+      ];
       const created = await storage.replaceGroceryItemsForUser(userId, items);
       res.status(201).json(created);
     } catch (error) {
@@ -6562,6 +6781,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       req.log.error({ error }, "Failed to fetch activity log");
       return res.status(500).json({ message: "Failed to fetch activity log" });
+    }
+  });
+
+  app.get("/api/feedback", isAuthenticated, async (req: any, res) => {
+    try {
+      const rows = await db.select({ text: feedbackNotes.text, createdAt: feedbackNotes.createdAt })
+        .from(feedbackNotes)
+        .where(eq(feedbackNotes.userId, getUserId(req)))
+        .orderBy(desc(feedbackNotes.createdAt))
+        .limit(50);
+      res.json(rows.flatMap((row) => row.createdAt ? [{ text: row.text, at: row.createdAt.toISOString() }] : []));
+    } catch (error) {
+      req.log?.error({ error }, "Failed to read feedback");
+      res.status(503).json({ message: "Feedback is not available yet." });
+    }
+  });
+
+  app.post("/api/feedback", isAuthenticated, async (req: any, res) => {
+    try {
+      const text = typeof req.body?.text === "string" ? req.body.text.trim().slice(0, 2000) : "";
+      if (!text) return res.status(400).json({ message: "Feedback needs text." });
+      const [row] = await db.insert(feedbackNotes).values({ userId: getUserId(req), text }).returning();
+      res.status(201).json({ text: row.text, at: row.createdAt?.toISOString() ?? new Date().toISOString() });
+    } catch (error) {
+      req.log?.error({ error }, "Failed to save feedback");
+      res.status(503).json({ message: "Feedback is not available yet." });
     }
   });
 

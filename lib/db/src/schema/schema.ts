@@ -86,6 +86,8 @@ export const profiles = pgTable("profiles", {
   color: text("color").notNull(),
   photoUrl: text("photo_url"),
   email: text("email"),
+  school: text("school"),
+  facts: text("facts").array().notNull().default(sql`'{}'::text[]`),
   initials: text("initials").notNull(),
   isActive: boolean("is_active").default(true),
   isAllFamilyProfile: boolean("is_all_family_profile").default(false),
@@ -161,6 +163,7 @@ export const events = pgTable("events", {
   calendarName: text("calendar_name"), // Display name of the calendar
   isAllDay: boolean("is_all_day").default(false),
   source: text("source"), // e.g. "school", "ics", "pdf" - tag for imported events
+  movedFrom: text("moved_from"),
   externalId: text("external_id"), // External UID for dedup on re-import
   createdAt: timestamp("created_at").defaultNow(),
   // Recurrence — the row itself is always the FIRST occurrence; further
@@ -347,8 +350,12 @@ export const calendarSettings = pgTable("calendar_settings", {
   twoWaySyncEnabled: boolean("two_way_sync_enabled").default(true),
   // One household calendar receives events the app creates. Null until an adult picks one.
   familyCalendarId: text("family_calendar_id"),
+  // The adult whose Google or Outlook account listed that calendar. "Who it's for" can be a child.
+  familyCalendarProfileId: text("family_calendar_profile_id"),
+  familyCalendarProvider: text("family_calendar_provider"),
   scanInbox: boolean("scan_inbox").notNull().default(true),
   shareOriginals: boolean("share_originals").notNull().default(false),
+  mealsOnCalendar: boolean("meals_on_calendar").notNull().default(false),
   mutedSenders: jsonb("muted_senders").$type<string[]>().notNull().default([]),
   dismissedSlipKeys: jsonb("dismissed_slip_keys").$type<string[]>().notNull().default([]),
   planSentKeys: jsonb("plan_sent_keys").$type<string[]>().notNull().default([]),
@@ -851,6 +858,7 @@ export const groceryItems = pgTable("grocery_items", {
   name: text("name").notNull(),
   quantity: text("quantity"),
   isChecked: boolean("is_checked").default(false),
+  alreadyHave: boolean("already_have").default(false),
   sourceMealIds: jsonb("source_meal_ids").$type<string[]>().default([]),
   createdAt: timestamp("created_at").defaultNow(),
   // Manual aisle override — null means "use the client's keyword-based guess."
@@ -1530,6 +1538,14 @@ export const insertActivityLogSchema = createInsertSchema(activityLog).omit({
   createdAt: true,
 });
 export type ActivityLog = typeof activityLog.$inferSelect;
+
+// Notes from Chat, shared by the household so another device can read them.
+export const feedbackNotes = pgTable("feedback_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  text: text("text").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 
 // ── Onboarding walkthrough progress ─────────────────────────────────────────
 // Tracks the skippable steps (profile/location/rewards/invite) of the

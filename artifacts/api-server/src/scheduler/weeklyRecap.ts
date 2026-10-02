@@ -2,27 +2,16 @@ import { eq, isNotNull } from "drizzle-orm";
 import { db } from "../db";
 import { profiles, locationSettings } from "@workspace/db";
 import { sendPushToUser } from "../lib/push";
+import { pushReachedSomeone } from "../lib/pushDelivery";
 import { buildWeeklyRecap } from "../lib/weeklyRecap";
 import { localDate, localHHMM, localDayOfWeek } from "../lib/choreToday";
 import { logger } from "../lib/logger";
+import { loadProfiles } from "../lib/profileRows";
 import { createWorkGate } from "../lib/workGate";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
+import { storage } from "../storage";
 
-// dedupKey = `${profileId}:${weekKey}` — set only after a successful send.
-// weekKey is the local date, so this naturally fires at most once per profile
-// per calendar day, and the day-of-week gate below limits that to once a week.
-const sentForWeek = new Map<string, true>();
 const CATCH_UP_MINUTES = 30;
-
-function pruneSent(now: Date) {
-  const cutoff = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
-  for (const k of sentForWeek.keys()) {
-    const date = k.split(":")[1] ?? "";
-    if (date < cutoff) sentForWeek.delete(k);
-  }
-}
 
 function minutesSince(scheduled: string, currentHHMM: string): number {
   const [sh, sm] = scheduled.split(":").map(Number);
@@ -33,12 +22,7 @@ function minutesSince(scheduled: string, currentHHMM: string): number {
 
 /** @returns whether anyone is set up for this — see lib/workGate.ts. */
 export async function runWeeklyRecapTick(now: Date = new Date()): Promise<boolean> {
-  pruneSent(now);
-
-  const candidates = await db
-    .select()
-    .from(profiles)
-    .where(isNotNull(profiles.weeklyRecapTime));
+  const candidates = await loadProfiles(isNotNull(profiles.weeklyRecapTime));
   if (candidates.length === 0) return false;
 
   const tzCache = new Map<string, string>();
@@ -61,11 +45,18 @@ export async function runWeeklyRecapTick(now: Date = new Date()): Promise<boolea
     if (localDayOfWeek(now, tz) !== (p.weeklyRecapDay ?? 0)) continue;
 
     const today = localDate(now, tz);
-    const dedupKey = `${p.id}:${today}`;
-    if (sentForWeek.has(dedupKey)) continue;
-
     const elapsed = minutesSince(p.weeklyRecapTime, localHHMM(now, tz));
     if (elapsed < 0 || elapsed > CATCH_UP_MINUTES) continue;
+
+    const claimKey = `${p.id}:${today}:recap`;
+    let claimed = false;
+    try {
+      claimed = await storage.claimPlanKey(p.userId, claimKey, today);
+    } catch (err) {
+      logger.warn({ err, profileId: p.id }, "Weekly recap claim failed");
+      continue;
+    }
+    if (!claimed) continue;
 
     try {
       const recap = await buildWeeklyRecap(p.userId, now);
@@ -83,11 +74,11 @@ export async function runWeeklyRecapTick(now: Date = new Date()): Promise<boolea
         },
         "weeklyRecap",
       );
-      sentForWeek.set(dedupKey, true);
+      if (!pushReachedSomeone(result)) throw new Error("Weekly recap reached nobody");
       logger.info({ profileId: p.id, ...result, headline }, "Weekly recap dispatched");
     } catch (err) {
+      await storage.releasePlanKey(p.userId, claimKey);
       logger.warn({ err, profileId: p.id }, "Weekly recap failed");
-      // do not mark sent; will retry on the next tick within the window
     }
   }
   // Somebody is set up for this, whether or not anything fired just now.

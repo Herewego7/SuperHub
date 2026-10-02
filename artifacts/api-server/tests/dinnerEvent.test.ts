@@ -1,0 +1,71 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp, dinnersToCopy } from "../src/meals/dinnerEvent";
+
+test("a dinner saved while the switch is on is offered to the family calendar", () => {
+  const event = dinnerEventInsert({ date: "2026-10-01", slot: "dinner", name: "Tacos" }, "family", true);
+  assert.equal(event?.title, "Tacos");
+  assert.equal(event?.calendarId, "family");
+  assert.equal(event?.source, "meal");
+});
+
+test("renaming a dinner updates the calendar copy and a delete removes it", () => {
+  const existing = [{ id: "e1", title: "Tacos", source: "meal", startTime: new Date(2026, 9, 1, 18, 0) }];
+  const renamed = dinnerCalendarChange(
+    { date: "2026-10-01", slot: "dinner", name: "Tacos" },
+    { date: "2026-10-01", slot: "dinner", name: "Soup" },
+    existing,
+    "family",
+    true,
+  );
+  assert.equal(renamed.updateId, "e1");
+  const removed = dinnerCalendarChange(
+    { date: "2026-10-01", slot: "dinner", name: "Tacos" },
+    null,
+    existing,
+    "family",
+    true,
+  );
+  assert.deepEqual(removed.deleteIds, ["e1"]);
+  const left = dinnerCalendarChange(
+    { date: "2026-10-01", slot: "dinner", name: "Tacos" },
+    null,
+    existing,
+    "family",
+    false,
+  );
+  assert.deepEqual(left.deleteIds, []);
+});
+
+test("turning the switch on copies only dinners that are not already on the calendar", () => {
+  const meals = [
+    { date: "2026-10-01", slot: "dinner", name: "Tacos" },
+    { date: "2026-10-02", slot: "dinner", name: "Soup" },
+    { date: "2026-10-01", slot: "breakfast", name: "Oatmeal" },
+  ];
+  const copied = dinnersToCopy(meals, [{ id: "e1", title: "Tacos", source: "meal", startTime: new Date(2026, 9, 1, 18, 0) }]);
+  assert.deepEqual(copied.map((meal) => meal.name), ["Soup"]);
+});
+
+test("a dinner is 6pm in the family timezone", () => {
+  const summer = dinnerEventInsert({ date: "2026-10-02", slot: "dinner", name: "Tacos" }, "family", true, "America/Chicago");
+  assert.equal(summer?.startTime.toISOString(), "2026-10-02T23:00:00.000Z");
+  assert.equal(summer?.endTime.toISOString(), "2026-10-03T00:00:00.000Z");
+  const winter = dinnerEventInsert({ date: "2026-01-15", slot: "dinner", name: "Soup" }, "family", true, "America/Chicago");
+  assert.equal(winter?.startTime.toISOString(), "2026-01-16T00:00:00.000Z");
+  const copied = dinnersToCopy(
+    [{ date: "2026-10-02", slot: "dinner", name: "Tacos" }],
+    [{ id: "e1", title: "Tacos", source: "meal", startTime: summer!.startTime }],
+    "America/Chicago",
+  );
+  assert.deepEqual(copied, []);
+});
+
+test("the switch off leaves a new dinner off the calendar", () => {
+  assert.equal(dinnerEventInsert({ date: "2026-10-01", slot: "dinner", name: "Tacos" }, "family", false), null);
+  assert.equal(dinnerEventInsert({ date: "2026-10-01", slot: "breakfast", name: "Oatmeal" }, "family", true), null);
+  const onCalendar = dinnerEventInsert({ date: "2026-10-01", slot: "dinner", name: "Tacos" }, "family", true);
+  assert.equal(dinnerLeavesTheApp(onCalendar), true);
+  assert.equal(dinnerLeavesTheApp(dinnerEventInsert({ date: "2026-10-01", slot: "dinner", name: "Tacos" }, null, true)), false);
+  assert.equal(dinnerLeavesTheApp({ source: "app", calendarId: "family" }), false);
+});

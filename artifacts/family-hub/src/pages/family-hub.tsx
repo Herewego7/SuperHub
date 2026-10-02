@@ -7,8 +7,11 @@ import { Profile, CustomProfileGroup, ChoreCompletion, ActivityLogEntryType, Cho
 import { ChoreManagementDrawer } from "@/components/chore-management-drawer";
 import { EventModal, type EventFormData } from "@/components/event-modal";
 import { TabType, ChoresSubTabType } from "@/lib/types";
-import { ChatView } from "@/components/chat-view";
-import { appendUserMessage } from "@/lib/chatThread";
+import { BOTTOM_NAV_IDS } from "@/lib/bottomNav";
+import { ChatView, stagePendingChat } from "@/components/chat-view";
+import { appendUserMessage, clearChatUnread, unreadFor } from "@/lib/chatThread";
+import { stageEveningPlan } from "@/components/chat-view";
+import { devicePersonIds, readDevicePerson, writeDevicePerson } from "@/lib/devicePerson";
 import { consumeTabDeepLinkFromUrl, onTabDeepLink, consumeCelebrationDeepLinkFromUrl, onCelebrationDeepLink } from "@/lib/pushDeepLink";
 import { ProfileCircle } from "@/components/profile-circle";
 import { SettingsModal } from "@/components/settings-modal";
@@ -198,7 +201,7 @@ export default function FamilyHub() {
     if (!saved || saved === "todos" || saved === "people") return "home";
     return saved;
   });
-  const [chatUnread, setChatUnread] = useState(0);
+  const [chatUnread, setChatUnread] = useState(() => unreadFor(typeof localStorage === "undefined" ? null : localStorage.getItem("superhub_chat_unread"), "*"));
   const [chatDraft, setChatDraft] = useState("");
   const [chatRevision, setChatRevision] = useState(0);
   const [plusOpen, setPlusOpen] = useState(false);
@@ -329,18 +332,6 @@ export default function FamilyHub() {
     setChoresSubTab(subTab);
   };
 
-  const chatProfileKey = [...selectedProfiles].sort().join(",") || "family";
-  const chatIsChild = profiles.filter((p) => selectedProfiles.includes(p.id) && !p.isAllFamilyProfile).every((p) => p.role === "child" || p.isChild) &&
-    profiles.some((p) => selectedProfiles.includes(p.id) && !p.isAllFamilyProfile);
-  const sendChatFromMenu = () => {
-    const next = appendUserMessage(chatProfileKey, chatDraft);
-    if (!next) return;
-    setChatDraft("");
-    setPlusOpen(false);
-    setChatRevision((n) => n + 1);
-    navigateTo("chat");
-  };
-
   const goBack = () => {
     setNavHistory(h => {
       if (h.length === 0) return h;
@@ -403,9 +394,17 @@ export default function FamilyHub() {
   // pattern as ?openSettings above); native has no URL at all, so
   // nativeNotifications.ts fires the same custom event pushDeepLink.ts's
   // celebration deep link already uses.
-  const VALID_DEEP_LINK_TABS: TabType[] = ["home", "calendar", "chores", "todos", "meals", "behaviour"];
+  const VALID_DEEP_LINK_TABS: TabType[] = ["home", "calendar", "chores", "todos", "meals", "behaviour", "chat"];
   const VALID_DEEP_LINK_SUBTABS: ChoresSubTabType[] = ["chores", "rewards", "trophies", "bonus"];
-  const handleTabDeepLink = (link: { tab: string; subTab?: string; action?: string; profileId?: string }) => {
+  const handleTabDeepLink = (link: { tab: string; subTab?: string; action?: string; profileId?: string; plan?: string; reply?: string }) => {
+    if (link.plan && link.profileId) {
+      writeDevicePerson(link.profileId);
+      setSelectedProfiles([link.profileId]);
+    }
+    if (link.plan) {
+      stageEveningPlan(link.plan, link.reply, link.profileId);
+      setChatRevision((n) => n + 1);
+    }
     if (!(VALID_DEEP_LINK_TABS as string[]).includes(link.tab)) return;
     const subTab = link.subTab && (VALID_DEEP_LINK_SUBTABS as string[]).includes(link.subTab)
       ? (link.subTab as ChoresSubTabType)
@@ -426,6 +425,7 @@ export default function FamilyHub() {
       // hardening the spotlight itself could never have fixed it
       // (2026-09-14).
       if (link.profileId) {
+        writeDevicePerson(link.profileId);
         setSelectedProfiles([link.profileId]);
       } else {
         // Pushes sent before the profile was included in the link: fall back
@@ -766,6 +766,17 @@ export default function FamilyHub() {
   const { data: profiles = [], isLoading } = useQuery<Profile[]>({
     queryKey: ["/api/profiles"],
   });
+  const chatProfileKey = [...selectedProfiles].sort().join(",") || "family";
+  const chatIsChild = profiles.filter((p) => selectedProfiles.includes(p.id) && !p.isAllFamilyProfile).every((p) => p.role === "child" || p.isChild) &&
+    profiles.some((p) => selectedProfiles.includes(p.id) && !p.isAllFamilyProfile);
+  const sendChatFromMenu = () => {
+    if (!appendUserMessage(chatProfileKey, chatDraft)) return;
+    stagePendingChat(chatDraft);
+    setChatDraft("");
+    setPlusOpen(false);
+    setChatRevision((n) => n + 1);
+    navigateTo("chat");
+  };
   const { guard: guardParentAction, gateDialog: parentGateDialog } = useParentGate(profiles, selectedProfiles);
 
   // Hands the family's medication reminders to iOS to fire on its own. The
@@ -841,14 +852,14 @@ export default function FamilyHub() {
   // Initialize selected profiles when profiles load (only once)
   useEffect(() => {
     if (profiles.length > 0 && !hasInitialized) {
-      const regularProfiles = profiles.filter(p => !p.isAllFamilyProfile);
-      setSelectedProfiles(regularProfiles.map(p => p.id));
+      setSelectedProfiles(devicePersonIds(readDevicePerson(), profiles));
       setHasInitialized(true);
     }
   }, [profiles, hasInitialized]);
 
   const handleProfileToggle = (profileId: string) => {
     // Select only this profile, deselect all others
+    writeDevicePerson(profileId);
     setSelectedProfiles([profileId]);
   };
 
@@ -859,11 +870,13 @@ export default function FamilyHub() {
     // already fully selected simply keeps everyone selected instead of
     // toggling off into that empty state.
     const regularProfiles = profiles.filter(p => !p.isAllFamilyProfile);
+    writeDevicePerson("all");
     setSelectedProfiles(regularProfiles.map(p => p.id));
   };
 
   const handleCustomGroupClick = (group: CustomProfileGroup) => {
     // Select only the profiles in this custom group
+    writeDevicePerson(group.profileIds.join(","));
     setSelectedProfiles(group.profileIds);
   };
 
@@ -890,18 +903,24 @@ export default function FamilyHub() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (activeTab === "chat") {
-      localStorage.setItem("superhub_chat_unread", "0");
-      setChatUnread(0);
-      return;
-    }
-    const raw = Number(localStorage.getItem("superhub_chat_unread") || "0");
-    setChatUnread(Number.isFinite(raw) && raw > 0 ? raw : 0);
-  }, [activeTab]);
+    const sync = () => {
+      if (activeTab === "chat") {
+        clearChatUnread(chatProfileKey);
+        setChatUnread(0);
+        return;
+      }
+      setChatUnread(unreadFor(localStorage.getItem("superhub_chat_unread"), chatProfileKey));
+    };
+    sync();
+    window.addEventListener("superhub-chat-unread", sync);
+    return () => window.removeEventListener("superhub-chat-unread", sync);
+  }, [activeTab, chatProfileKey]);
 
   // Redirect legacy "celebrations" tab (now surfaced inside the Calendar tab).
+  // To-Dos left the bar; those items are on Home.
   useEffect(() => {
     if ((activeTab as string) === "celebrations") setActiveTab("calendar");
+    if ((activeTab as string) === "todos") setActiveTab("home");
   }, [activeTab]);
 
   // Reset all Tasks-tab drawer triggers when leaving the tab so components
@@ -1593,7 +1612,7 @@ export default function FamilyHub() {
                     selectedProfiles={selectedProfiles}
                     profiles={profiles}
                     selectedDate={selectedDate}
-                    onSelectProfile={(id) => setSelectedProfiles([id])}
+                    onSelectProfile={handleProfileToggle}
                     funMode={tasksFunMode}
                     onToggleFunMode={toggleTasksFunMode}
                     taskTypeFilter="non-todos"
@@ -1626,7 +1645,7 @@ export default function FamilyHub() {
                   <p className="text-muted-foreground text-xs">Achievements earned by each family member</p>
                 </CardHeader>
                 <CardContent className="p-4">
-                  <TrophyCaseView embedded selectedProfiles={selectedProfiles} profiles={profiles} onSelectProfile={(id) => setSelectedProfiles([id])} />
+                  <TrophyCaseView embedded selectedProfiles={selectedProfiles} profiles={profiles} onSelectProfile={handleProfileToggle} />
                 </CardContent>
               </Card>
             </motion.section>
@@ -1790,6 +1809,7 @@ export default function FamilyHub() {
             profileKey={chatProfileKey}
             isChild={chatIsChild}
             revision={chatRevision}
+            profileReady={hasInitialized}
             onSent={() => setChatRevision((n) => n + 1)}
           />
         )}
@@ -2160,7 +2180,7 @@ export default function FamilyHub() {
         initialKind={createTask.kind}
         editChore={createTask.editChore}
         onGoToKind={(k) => {
-          navigateTo(k === "todo" ? "todos" : "chores");
+          navigateTo(k === "todo" ? "home" : "chores");
           setTimeout(() => robustScrollToTop(), 100);
         }}
       />

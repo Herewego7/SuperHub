@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import UserNotifications
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -7,6 +8,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        let reply = UNTextInputNotificationAction(
+            identifier: "reply",
+            title: "Reply",
+            options: [.foreground],
+            textInputButtonTitle: "Send",
+            textInputPlaceholder: "Reply to the plan"
+        )
+        let plan = UNNotificationCategory(identifier: "EVENING_PLAN", actions: [reply], intentIdentifiers: [], options: [])
+        UNUserNotificationCenter.current().setNotificationCategories([plan])
         return true
     }
 

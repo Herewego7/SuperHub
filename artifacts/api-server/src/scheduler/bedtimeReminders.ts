@@ -2,6 +2,7 @@ import { eq, isNotNull } from "drizzle-orm";
 import { db } from "../db";
 import { profiles, locationSettings } from "@workspace/db";
 import { sendPushToUser } from "../lib/push";
+import { pushReachedSomeone } from "../lib/pushDelivery";
 import {
   getTodayChoresForProfile,
   localDate,
@@ -10,22 +11,14 @@ import {
   describeRemaining,
 } from "../lib/choreToday";
 import { isKidProfile } from "../lib/profileRole";
+import { choresNamedForKid } from "../lib/dailyBrief";
 import { logger } from "../lib/logger";
+import { loadProfiles } from "../lib/profileRows";
 import { createWorkGate } from "../lib/workGate";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
+import { storage } from "../storage";
 
-const sentForDay = new Map<string, true>(); // `${profileId}:${localDate}`
 const CATCH_UP_MINUTES = 30;
-
-function pruneSent(now: Date) {
-  const cutoff = new Date(now.getTime() - 25 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
-  for (const k of sentForDay.keys()) {
-    const date = k.split(":")[1] ?? "";
-    if (date < cutoff) sentForDay.delete(k);
-  }
-}
 
 function minutesSince(scheduled: string, currentHHMM: string): number {
   const [sh, sm] = scheduled.split(":").map(Number);
@@ -36,12 +29,8 @@ function minutesSince(scheduled: string, currentHHMM: string): number {
 
 /** @returns whether anyone is set up for this — see lib/workGate.ts. */
 export async function runBedtimeRemindersTick(now: Date = new Date()): Promise<boolean> {
-  pruneSent(now);
 
-  const candidates = await db
-    .select()
-    .from(profiles)
-    .where(isNotNull(profiles.bedtimeCutoff));
+  const candidates = await loadProfiles(isNotNull(profiles.bedtimeCutoff));
   if (candidates.length === 0) return false;
 
   const tzCache = new Map<string, string>();
@@ -60,11 +49,20 @@ export async function runBedtimeRemindersTick(now: Date = new Date()): Promise<b
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.bedtimeCutoff)) continue;
     const tz = tzCache.get(p.userId) ?? DEFAULT_TIMEZONE;
     const today = localDate(now, tz);
-    const dedupKey = `${p.id}:${today}`;
-    if (sentForDay.has(dedupKey)) continue;
-
     const elapsed = minutesSince(p.bedtimeCutoff, localHHMM(now, tz));
     if (elapsed < 0 || elapsed > CATCH_UP_MINUTES) continue;
+
+    const claimKey = `${p.id}:${today}:bedtime`;
+    let claimed = false;
+    try {
+      claimed = await storage.claimPlanKey(p.userId, claimKey, today);
+    } catch (err) {
+      logger.warn({ err, profileId: p.id }, "Bedtime reminder claim failed");
+      continue;
+    }
+    if (!claimed) continue;
+
+    try {
 
     // A parent's OWN chore list is usually empty — what a parent actually
     // wants from a bedtime nudge is who in the family still has chores left,
@@ -84,12 +82,13 @@ export async function runBedtimeRemindersTick(now: Date = new Date()): Promise<b
         now,
         tz,
       );
-      const { regular, target, inspiration } = splitRemaining(due, completedIds);
+      const visible = choresNamedForKid(due, p.name);
+      const { regular, target, inspiration } = splitRemaining(visible, completedIds);
       remaining = regular + target + inspiration;
       body = `Chores remaining: ${describeRemaining(regular, target, inspiration)}`;
     } else {
       const familyProfiles = (
-        await db.select().from(profiles).where(eq(profiles.userId, p.userId))
+        await loadProfiles(eq(profiles.userId, p.userId))
       ).filter((fp) => !fp.isAllFamilyProfile);
       const byPerson: { name: string; regular: number; target: number; inspiration: number }[] = [];
       let total = 0;
@@ -104,14 +103,8 @@ export async function runBedtimeRemindersTick(now: Date = new Date()): Promise<b
         ? `Chores remaining: ${byPerson.map((x) => `${x.name} — ${describeRemaining(x.regular, x.target, x.inspiration)}`).join(", ")}`
         : "";
     }
-    if (remaining <= 0) {
-      // Nothing to remind about — still mark sent so we don't re-check all
-      // day, since the count won't change retroactively.
-      sentForDay.set(dedupKey, true);
-      continue;
-    }
+    if (remaining <= 0) continue;
 
-    try {
       const result = await sendPushToUser(
         { userId: p.userId, profileId: p.id },
         {
@@ -127,12 +120,13 @@ export async function runBedtimeRemindersTick(now: Date = new Date()): Promise<b
           data: { kind: "bedtime-reminder", profileId: p.id, remaining },
         },
       );
-      sentForDay.set(dedupKey, true);
+      if (!pushReachedSomeone(result)) throw new Error("Bedtime reminder reached nobody");
       logger.info(
         { profileId: p.id, remaining, ...result },
         "Bedtime reminder dispatched",
       );
     } catch (err) {
+      await storage.releasePlanKey(p.userId, claimKey);
       logger.warn({ err, profileId: p.id }, "Bedtime reminder failed");
     }
   }

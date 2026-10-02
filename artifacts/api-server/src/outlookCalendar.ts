@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { outlookInstancesToDelete } from "./lib/recurrenceRule";
+import { INBOX_SCAN_LIMIT, outlookToInbound, type InboundMessage } from "./ingest/parse";
+import { graphNextLink, inboxListStopped } from "./ingest/process";
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
 
@@ -131,7 +133,7 @@ export class OutlookCalendarService {
             });
             allEvents.push(...calendarEvents);
 
-            url = response.data['@odata.nextLink'] || null;
+            url = graphNextLink(response.data['@odata.nextLink']);
             pages += 1;
           }
           console.log(`Fetched events from Outlook calendar: ${calendar.name} (${pages} page(s))`);
@@ -178,10 +180,50 @@ export class OutlookCalendarService {
     }
   }
 
+  async listInbox(accessToken: string, accountId: string): Promise<InboundMessage[]> {
+    const since = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const out: InboundMessage[] = [];
+    let url: string | null = `${GRAPH_API_BASE}/me/mailFolders/inbox/messages`;
+    let params: Record<string, string | number> | undefined = {
+      $top: Math.min(50, INBOX_SCAN_LIMIT),
+      $select: "subject,from,bodyPreview,body,receivedDateTime",
+      $orderby: "receivedDateTime desc",
+    };
+    while (url && out.length < INBOX_SCAN_LIMIT) {
+      let response;
+      try {
+        response = await graph.get(url, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          params,
+        });
+      } catch (err) {
+        if (!inboxListStopped(err, out.length)) throw err;
+        console.warn("Outlook inbox list stopped early:", err instanceof Error ? err.message : err);
+        break;
+      }
+      params = undefined;
+      const rows = Array.isArray(response.data?.value) ? response.data.value : [];
+      if (rows.length === 0) break;
+      let older = false;
+      for (const row of rows) {
+        const when = typeof row?.receivedDateTime === "string" ? row.receivedDateTime : "";
+        if (when && when < since) {
+          older = true;
+          continue;
+        }
+        out.push(outlookToInbound(row, accountId));
+        if (out.length >= INBOX_SCAN_LIMIT) break;
+      }
+      if (older || out.length >= INBOX_SCAN_LIMIT) break;
+      url = graphNextLink(response.data?.["@odata.nextLink"]);
+    }
+    return out;
+  }
+
   // Generate OAuth URL for Microsoft Graph.
   // Calendars.ReadWrite (write access) + offline_access (refresh tokens) are
   // required for two-way sync. Adding these forces existing users to re-consent.
-  generateAuthUrl(clientId: string, redirectUri: string, state?: string, scopes: string[] = ['https://graph.microsoft.com/Calendars.ReadWrite', 'https://graph.microsoft.com/User.Read', 'offline_access']): string {
+  generateAuthUrl(clientId: string, redirectUri: string, state?: string, scopes: string[] = ['https://graph.microsoft.com/Calendars.ReadWrite', 'https://graph.microsoft.com/Mail.Read', 'https://graph.microsoft.com/User.Read', 'offline_access']): string {
     const baseUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
     const params = new URLSearchParams({
       client_id: clientId,
@@ -197,7 +239,7 @@ export class OutlookCalendarService {
 
   // Exchange a refresh token for a fresh access token. Outlook access tokens
   // expire (~1h); writes must refresh first when the stored token is stale.
-  async refreshAccessToken(clientId: string, clientSecret: string, refreshToken: string) {
+  async refreshAccessToken(clientId: string, clientSecret: string, refreshToken: string, scope = 'https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/User.Read offline_access') {
     try {
       const response = await graph.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
         new URLSearchParams({
@@ -205,7 +247,7 @@ export class OutlookCalendarService {
           client_secret: clientSecret,
           refresh_token: refreshToken,
           grant_type: 'refresh_token',
-          scope: 'https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/User.Read offline_access',
+          scope,
         }),
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
       );

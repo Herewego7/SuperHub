@@ -34,6 +34,8 @@ export interface ApnsPayload {
   badge?: number;
   /** Free-form data merged into the APNs payload alongside `aps`. */
   data?: Record<string, unknown>;
+  /** Matches a category registered on the phone, so a reply field can appear. */
+  category?: string;
 }
 
 interface ApnsConfig {
@@ -281,6 +283,7 @@ export function buildApnsBody(payload: ApnsPayload): string {
     sound: "default",
   };
   if (typeof payload.badge === "number") aps.badge = payload.badge;
+  if (payload.category) aps.category = payload.category;
 
   const body: Record<string, unknown> = { aps };
   if (payload.url) body.url = payload.url;

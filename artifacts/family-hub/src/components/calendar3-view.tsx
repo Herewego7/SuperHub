@@ -1,8 +1,9 @@
-import { outlookEventProfileIds } from "@/lib/outlookAttribution";
-import { UPCOMING_KIND_LABELS, UPCOMING_KINDS, upcomingRows, type UpcomingKind } from "@/lib/upcoming";
+import { driverNamesFor, mailVisibleToKid, openTodos, todosForHome } from "@/lib/homeDay";
+import { assignmentProfileIds, outlookEventProfileIds, withoutUnwatched } from "@/lib/outlookAttribution";
+import { dropSchoolTodoTwins, UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, recurringIdFromIcal, recurringIdFromOutlook, schoolEventKind, timeGridDetail, upcomingClock, upcomingKindForMail, upcomingRows, upcomingTitle, withoutCheckedSchoolEvents, type UpcomingKind } from "@/lib/upcoming";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Profile, Event, InsertEvent, CalendarAssignment } from "@workspace/shared-types";
+import { Profile, Event, InsertEvent, CalendarAssignment, Chore } from "@workspace/shared-types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -77,6 +78,7 @@ interface Cal3Event {
   googleEventId?: string;
   googleProfileId?: string;
   googleCalendarId?: string;
+  outlookCalendarId?: string | null;
   recurringEventId?: string | null;
   // Local recurrence (see api-server/src/lib/eventRecurrence.ts) — a
   // synthetic occurrence's `id` is not a real row; edits/deletes must
@@ -504,8 +506,8 @@ function TimeGridEvent({
         </span>
       </div>
       {height > 3 && (
-        <div className="opacity-80 text-[10px] leading-tight" data-testid={`event-time-${ev.id}`}>
-          {format(displayStart, "h:mm a")} – {format(displayEnd, "h:mm a")}
+        <div className="opacity-80 text-[10px] leading-tight truncate" data-testid={`event-time-${ev.id}`}>
+          {timeGridDetail(`${format(displayStart, "h:mm a")} – ${format(displayEnd, "h:mm a")}`, ev.location)}
         </div>
       )}
     </div>
@@ -1406,6 +1408,8 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
 
   // ── Data fetching ───────────────────────────────────────────────────────────
   const { data: localEvents = [] } = useQuery<Event[]>({ queryKey: ["/api/events"] });
+  const { data: chores = [] } = useQuery<Chore[]>({ queryKey: ["/api/chores"] });
+  const { data: completions = [] } = useQuery<{ choreId: string }[]>({ queryKey: ["/api/chore-completions"] });
   const { data: calendarAssignments = [] } = useQuery<CalendarAssignment[]>({
     queryKey: ["/api/calendar-assignments"],
     retry: false,
@@ -1559,7 +1563,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
         const gcalId = ge.extendedProperties?.private?.["google_calendar_id"];
         if (!pIds.length && gcalId) {
           const a = calendarAssignments.find((a: any) => a.calendarId === gcalId && a.calendarType === "google");
-          if (a) pIds = [a.profileId];
+          if (a) pIds = assignmentProfileIds(a);
         }
 
         // Priority 4: fall back to the iterating profile
@@ -1616,6 +1620,8 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
           location: oe.location?.displayName,
           isAllDay: oe.isAllDay ?? false,
           source: "outlook",
+          outlookCalendarId: oe.calendar?.id ?? null,
+          recurringEventId: recurringIdFromOutlook(oe),
           color: getProfileColor(oPids, profiles),
         });
       }
@@ -1637,6 +1643,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
           location: ie.location,
           isAllDay: ie.isAllDay ?? false,
           source: "ical",
+          recurringEventId: recurringIdFromIcal(ie),
           // Prefer the feed's own color if set, else the profile color.
           color: ie.calendarColor || getProfileColor([pid], profiles),
         });
@@ -1695,13 +1702,42 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
   // set via Settings' "Manage" picker) — there's no separate client-side
   // enable/disable filter to apply here anymore.
   const visibleEvents = useMemo(() => {
-    return allEventsWithCelebrations.filter(e => {
+    const pickedPeople = profiles.filter((profile) => !profile.isAllFamilyProfile && selectedProfiles.includes(profile.id));
+    const kidName = pickedPeople.length === 1 && (pickedPeople[0].role === "child" || pickedPeople[0].isChild) ? pickedPeople[0].name : null;
+    const picked = allEventsWithCelebrations.filter(e => {
       if (selectedProfiles.length === 0) return true;
       return e.profileIds.length === 0 ||
         e.profileIds.some(id => selectedProfiles.includes(id)) ||
         e.drivingProfileIds.some(id => selectedProfiles.includes(id));
-    });
-  }, [allEventsWithCelebrations, selectedProfiles]);
+    }).filter((event) => mailVisibleToKid(event, kidName));
+    return withoutUnwatched(picked, calendarAssignments);
+  }, [allEventsWithCelebrations, selectedProfiles, calendarAssignments, profiles]);
+
+  const upcomingItems = useMemo(() => {
+    const familyIds = profiles.filter((profile) => !profile.isAllFamilyProfile).map((profile) => profile.id);
+    const picked = profiles.filter((profile) => !profile.isAllFamilyProfile && selectedProfiles.includes(profile.id));
+    const kidName = picked.length === 1 && (picked[0].role === "child" || picked[0].isChild) ? picked[0].name : null;
+    const checkedSlips = todosForHome(chores, selectedProfiles, familyIds).filter((todo) => todo.category === "school_email" && completions.some((completion) => completion.choreId === todo.id));
+    const events = withoutCheckedSchoolEvents(
+      visibleEvents.filter((event) => mailVisibleToKid(event, kidName)).map((event) => {
+        const kind = schoolEventKind(event);
+        return kind ? { ...event, kind } : event;
+      }),
+      checkedSlips,
+    );
+    const todos = dropSchoolTodoTwins(
+      openTodos(todosForHome(chores, selectedProfiles, familyIds), completions).filter((todo) => mailVisibleToKid(todo, kidName)),
+      events,
+    ).map((todo) => ({
+      id: todo.id,
+      title: todo.title,
+      startTime: currentDate,
+      kind: upcomingKindForMail(todo.category),
+      profileIds: todo.profileIds,
+      source: null,
+    }));
+    return [...events, ...todos];
+  }, [chores, completions, currentDate, profiles, selectedProfiles, visibleEvents]);
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const createEventMutation = useMutation({
@@ -2758,12 +2794,18 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
                   ))}
                 </div>
                 <ul className="flex flex-col">
-                  {upcomingRows(visibleEvents, upcomingKind, currentDate).map((event) => (
+                  {upcomingRows(upcomingItems, upcomingKind, currentDate).map((event) => {
+                    const clock = upcomingClock(event);
+                    return (
                     <li key={event.id} className="border-b border-border px-3 py-2 text-sm">
-                      <div className="text-xs text-muted-foreground">{format(event.startTime, "EEE, MMM d")}</div>
-                      {event.title}
+                      <div className="text-xs text-muted-foreground">{format(event.startTime, "EEE, MMM d")}{clock ? ` · ${clock}` : ""}</div>
+                      <span>{upcomingTitle({ ...event, drivers: driverNamesFor("drivingProfileIds" in event ? event.drivingProfileIds : undefined, profiles) })}</span>
+                      {eventSourceChip(event.source) && (
+                        <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(event.source)}</span>
+                      )}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </div>
             )}

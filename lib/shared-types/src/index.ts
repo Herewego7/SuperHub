@@ -34,6 +34,8 @@ export type Profile = {
   color: string;
   photoUrl: string | null;
   email: string | null;
+  school?: string | null;
+  facts?: string[] | null;
   initials: string;
   isActive: boolean | null;
   isAllFamilyProfile: boolean | null;
@@ -42,6 +44,8 @@ export type Profile = {
   icalConnected: boolean | null;
   bedtimeCutoff: string | null;
   dailyBriefTime: string | null;
+  eveningPlanTime?: string | null;
+  eveningPlanTiming?: string | null;
   streakSkipDays: number[] | null;
   // Per-person override for the per_completion daily-checklist star bonus;
   // null/undefined = use the family-wide reward_settings default.
@@ -142,6 +146,8 @@ export type InsertProfile = {
   icalConnected?: boolean | null;
   bedtimeCutoff?: string | null;
   dailyBriefTime?: string | null;
+  eveningPlanTime?: string | null;
+  eveningPlanTiming?: string | null;
   role?: string | null;
   // COPPA / children's data (parental consent fields are set server-side only)
   isChild?: boolean | null;
@@ -436,6 +442,8 @@ export type CalendarAssignment = {
   calendarColor: string | null;
   emailAddress: string;
   isActive: boolean | null;
+  audienceProfileIds?: string[] | null;
+  watched?: boolean | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 };
@@ -580,6 +588,7 @@ export type GroceryItem = {
   name: string;
   quantity: string | null;
   isChecked: boolean | null;
+  alreadyHave?: boolean | null;
   sourceMealIds: string[] | null;
   createdAt: Date | null;
   category: string | null;
@@ -590,6 +599,7 @@ export type InsertGroceryItem = {
   name: string;
   quantity?: string | null;
   isChecked?: boolean | null;
+  alreadyHave?: boolean | null;
   sourceMealIds?: string[] | null;
   category?: string | null;
 };

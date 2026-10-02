@@ -4,6 +4,14 @@ import {
   assignmentsVisibleToFamily,
   assignmentsToDeactivate,
   assignPeopleToCalendar,
+  calendarIsWritable,
+  writeTargetAllowed,
+  familyCalendarCreates,
+  calendarTokenOwner,
+  familyCalendarAccount,
+  familyCalendarWriter,
+  syncTargetsForEvent,
+  eventsOnWatchedCalendars,
 } from "../src/lib/calendarAssignmentScope.ts";
 
 // Two families, and a calendar both of them have connected — a school
@@ -20,6 +28,60 @@ const all = [
   { profileId: "b-dad", calendarId: "school@group.calendar.google.com", calendarType: "google", isActive: true },
   { profileId: "a-mum", calendarId: "old@group.calendar.google.com", calendarType: "google", isActive: false },
 ];
+
+test("a family calendar is written by the account that connected it", () => {
+  assert.deepEqual(
+    familyCalendarWriter("school@group.calendar.google.com", all),
+    { profileId: "a-mum", provider: "google" },
+  );
+  assert.equal(familyCalendarWriter("none", all), null);
+  assert.equal(familyCalendarWriter("missing", all), null);
+  assert.equal(familyCalendarWriter("old@group.calendar.google.com", all), null);
+  const creates = familyCalendarCreates(
+    [
+      { profileId: "a-mum", provider: "google" },
+      { profileId: "a-mum", provider: "outlook" },
+      { profileId: "a-kid", provider: "google" },
+    ],
+    { profileId: "a-mum", provider: "google" },
+  );
+  assert.deepEqual(creates, [{ profileId: "a-mum", provider: "google" }]);
+  const kidFirst = [{ profileId: "liam", calendarId: "family@group.calendar.google.com", calendarType: "google", isActive: true }];
+  assert.deepEqual(
+    familyCalendarAccount("family@group.calendar.google.com", kidFirst, [
+      { profileId: "chad", provider: "google", calendarIds: null, writeCalendarId: "family@group.calendar.google.com" },
+    ]),
+    { profileId: "chad", provider: "google" },
+  );
+  assert.equal(calendarTokenOwner("family@group.calendar.google.com", "google", [
+    { profileId: "chad", provider: "google", calendarIds: null },
+    { profileId: "alex", provider: "google", calendarIds: null },
+  ], "liam"), "liam");
+  assert.equal(calendarTokenOwner("family@group.calendar.google.com", "google", [
+    { profileId: "chad", provider: "google", calendarIds: ["family@group.calendar.google.com"] },
+  ], "liam"), "chad");
+  assert.equal(calendarTokenOwner("family@group.calendar.google.com", "google", [
+    { profileId: "chad", provider: "google", calendarIds: null },
+  ], "liam"), "chad");
+  assert.deepEqual(
+    familyCalendarAccount("family@group.calendar.google.com", kidFirst, [
+      { profileId: "chad", provider: "google", calendarIds: ["primary"], writeCalendarId: "primary" },
+    ], { profileId: "chad", provider: "google" }),
+    { profileId: "chad", provider: "google" },
+  );
+  assert.deepEqual(
+    familyCalendarAccount("family@group.calendar.google.com", kidFirst, [
+      { profileId: "alex", provider: "google", writeCalendarId: "family@group.calendar.google.com" },
+    ], { profileId: "liam", provider: "google" }),
+    { profileId: "alex", provider: "google" },
+  );
+});
+
+test("a dinner without a family calendar is not copied onto every account", () => {
+  assert.deepEqual(syncTargetsForEvent("meal", null, [], ["mum", "dad"]), []);
+  assert.deepEqual(syncTargetsForEvent("meal", "chad", [], ["mum", "dad"]), ["chad"]);
+  assert.deepEqual(syncTargetsForEvent("app", null, [], ["mum", "dad"]), ["mum", "dad"]);
+});
 
 test("a family sees only its own assignments", () => {
   // The vulnerability: this endpoint returned every family's rows, carrying
@@ -98,6 +160,27 @@ test("an already-inactive row is not re-deactivated", () => {
     calendarType: "google",
   });
   assert.deepEqual(toDeactivate, []);
+});
+
+test("a chosen family calendar stays writable when Watch is off", () => {
+  const rows = [{ calendarId: "family", watched: false, isActive: true }];
+  assert.equal(writeTargetAllowed("family", rows, "family"), true);
+  assert.equal(writeTargetAllowed(undefined, rows, "family"), false);
+});
+
+test("an unwatched calendar is not a write target", () => {
+  const assignments = [{ calendarId: "school", watched: false, isActive: true }];
+  assert.equal(calendarIsWritable(assignments, "school"), false);
+  assert.equal(calendarIsWritable(assignments, "family"), true);
+});
+
+test("an unwatched calendar stays off the plan", () => {
+  const events = [
+    { title: "Practice", googleCalendarId: "school", outlookCalendarId: null },
+    { title: "Dinner", googleCalendarId: null, outlookCalendarId: null },
+  ];
+  const kept = eventsOnWatchedCalendars(events, [{ calendarId: "school", watched: false, isActive: true }]);
+  assert.deepEqual(kept.map((event) => event.title), ["Dinner"]);
 });
 
 test("assigning two people to one calendar stores one calendar id", () => {

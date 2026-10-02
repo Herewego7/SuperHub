@@ -84,6 +84,8 @@ export interface PushPayload {
   tag?: string;
   // Free-form data attached to the notification event
   data?: Record<string, unknown>;
+  // APNs category. The phone must register the same name before a reply field shows.
+  apnsCategory?: string;
 }
 
 export interface PushTarget {
@@ -269,6 +271,7 @@ async function sendNativePush(
       url: payload.url,
       tag: payload.tag,
       data: payload.data,
+      category: payload.apnsCategory,
     },
   );
 

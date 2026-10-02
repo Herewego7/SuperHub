@@ -1,7 +1,8 @@
-import { eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { entitlements } from "@workspace/db";
 import { sendPushToUser } from "../lib/push";
+import { pushReachedSomeone } from "../lib/pushDelivery";
 import { isEnforcementEnabled, decideTrialReminder, TrialReminderKind } from "../lib/subscriptionEntitlement";
 import { logger } from "../lib/logger";
 
@@ -69,6 +70,20 @@ export async function runTrialReminderTick(now: Date = new Date()): Promise<void
     if (!kind) continue;
 
     const field = FIELD_BY_KIND[kind];
+    let claimed = false;
+    try {
+      const rows = await db
+        .update(entitlements)
+        .set({ [field]: now, updatedAt: now })
+        .where(and(eq(entitlements.userId, row.userId), isNull(entitlements[field])))
+        .returning({ userId: entitlements.userId });
+      claimed = rows.length > 0;
+    } catch (err) {
+      logger.warn({ err, userId: row.userId, kind }, "Trial reminder claim failed");
+      continue;
+    }
+    if (!claimed) continue;
+
     try {
       const payload = {
         ...COPY[kind],
@@ -76,15 +91,15 @@ export async function runTrialReminderTick(now: Date = new Date()): Promise<void
         tag: `trial-reminder-${row.userId}-${kind}`,
         data: { kind: "trial-reminder", trialReminderKind: kind },
       };
-      await sendPushToUser({ userId: row.userId }, payload);
-      await db
-        .update(entitlements)
-        .set({ [field]: now, updatedAt: new Date() })
-        .where(eq(entitlements.userId, row.userId));
+      const result = await sendPushToUser({ userId: row.userId }, payload);
+      if (!pushReachedSomeone(result)) throw new Error("Trial reminder reached nobody");
       logger.info({ userId: row.userId, kind }, "Trial reminder dispatched");
     } catch (err) {
+      await db
+        .update(entitlements)
+        .set({ [field]: null, updatedAt: new Date() })
+        .where(and(eq(entitlements.userId, row.userId), eq(entitlements[field], now)));
       logger.warn({ err, userId: row.userId, kind }, "Trial reminder failed");
-      // don't mark sent — retry next tick
     }
   }
 }

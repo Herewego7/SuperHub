@@ -1,4 +1,5 @@
 import { decideProfileIdCleanup } from "./lib/profileCleanup";
+import { insertProfileRow, loadProfiles, updateProfileRow } from "./lib/profileRows";
 import { driverWriteFields, driverIdsOf } from "./lib/eventDrivers";
 import { markSchedulerWorkDirty } from "./lib/workGate";
 import { settingsRowForUser } from "./lib/settingsOwnership";
@@ -250,6 +251,8 @@ export interface IStorage {
   // Calendar Settings
   getCalendarSettingsByUser(userId: string): Promise<CalendarSettings | undefined>;
   updateCalendarSettings(settings: InsertCalendarSettings & { userId: string }): Promise<CalendarSettings>;
+  claimPlanKey(userId: string, key: string, today: string): Promise<boolean>;
+  releasePlanKey(userId: string, key: string): Promise<void>;
 
   // Location Settings
   getLocationSettingsByUser(userId: string): Promise<LocationSettings | undefined>;
@@ -546,6 +549,10 @@ export interface IStorage {
     scheduledAt: Date;
   }): Promise<{ event: HealthReminderEvent; created: boolean }>;
   markHealthReminderEventFired(id: string): Promise<HealthReminderEvent | undefined>;
+  /** Moves a pending or snoozed dose to fired. False when another wake already took it. */
+  claimHealthReminderDispatch(id: string, fromStatus: "pending" | "snoozed"): Promise<boolean>;
+  /** Puts a dose back when every push failed, unless someone already acknowledged it. */
+  releaseHealthReminderDispatch(id: string, fromStatus: "pending" | "snoozed"): Promise<void>;
   acknowledgeHealthReminderEvent(id: string, userId: string, byProfileId: string | null): Promise<HealthReminderEvent | undefined>;
   snoozeHealthReminderEvent(id: string, userId: string, until: Date): Promise<HealthReminderEvent | undefined>;
   markHealthReminderEventMissed(id: string): Promise<HealthReminderEvent | undefined>;
@@ -564,24 +571,20 @@ export type ResetCategory = (typeof RESET_CATEGORIES)[number];
 
 export class DatabaseStorage implements IStorage {
   async getProfiles(): Promise<Profile[]> {
-    return await db.select().from(profiles);
+    return loadProfiles();
   }
 
   async getProfilesByUser(userId: string): Promise<Profile[]> {
-    return await db.select().from(profiles).where(eq(profiles.userId, userId));
+    return loadProfiles(eq(profiles.userId, userId));
   }
 
   async getProfile(id: string): Promise<Profile | undefined> {
-    const [profile] = await db.select().from(profiles).where(eq(profiles.id, id));
+    const [profile] = await loadProfiles(eq(profiles.id, id));
     return profile || undefined;
   }
 
   async createProfile(insertProfile: InsertProfile): Promise<Profile> {
-    const [profile] = await db
-      .insert(profiles)
-      .values(insertProfile)
-      .returning();
-    return profile;
+    return insertProfileRow(insertProfile);
   }
 
   async updateProfile(id: string, insertProfile: Partial<InsertProfile>, userId?: string): Promise<Profile | undefined> {
@@ -591,21 +594,14 @@ export class DatabaseStorage implements IStorage {
     const whereCondition = userId 
       ? and(eq(profiles.id, id), eq(profiles.userId, userId))
       : eq(profiles.id, id);
-    const [profile] = await db
-      .update(profiles)
-      .set(insertProfile)
-      .where(whereCondition)
-      .returning();
-    return profile || undefined;
+    return updateProfileRow(insertProfile, whereCondition);
   }
 
   async deleteProfile(id: string, userId?: string): Promise<boolean> {
     try {
       // If userId is provided, verify ownership first
       if (userId) {
-        const [profile] = await db.select().from(profiles).where(
-          and(eq(profiles.id, id), eq(profiles.userId, userId))
-        );
+        const [profile] = await loadProfiles(and(eq(profiles.id, id), eq(profiles.userId, userId)));
         if (!profile) {
           return false;
         }
@@ -1090,6 +1086,43 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return saved;
+  }
+
+  async claimPlanKey(userId: string, key: string, today: string): Promise<boolean> {
+    const kept = sql`(
+      SELECT COALESCE(jsonb_agg(to_jsonb(elem)), '[]'::jsonb)
+      FROM jsonb_array_elements_text(COALESCE(${calendarSettings.planSentKeys}, '[]'::jsonb)) AS elem
+      WHERE split_part(elem, ':', 2) >= ${today}
+    ) || jsonb_build_array(${key})`;
+    const claimed = await db.update(calendarSettings).set({
+      planSentKeys: kept,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(calendarSettings.userId, userId),
+      sql`NOT (${calendarSettings.planSentKeys} @> jsonb_build_array(${key}))`,
+    )).returning({ userId: calendarSettings.userId });
+    if (claimed.length > 0) return true;
+    const inserted = await db.insert(calendarSettings).values({ userId, planSentKeys: [key] }).onConflictDoNothing().returning({ userId: calendarSettings.userId });
+    if (inserted.length > 0) return true;
+    const again = await db.update(calendarSettings).set({
+      planSentKeys: kept,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(calendarSettings.userId, userId),
+      sql`NOT (${calendarSettings.planSentKeys} @> jsonb_build_array(${key}))`,
+    )).returning({ userId: calendarSettings.userId });
+    return again.length > 0;
+  }
+
+  async releasePlanKey(userId: string, key: string): Promise<void> {
+    await db.update(calendarSettings).set({
+      planSentKeys: sql`(
+        SELECT COALESCE(jsonb_agg(to_jsonb(elem)), '[]'::jsonb)
+        FROM jsonb_array_elements_text(COALESCE(${calendarSettings.planSentKeys}, '[]'::jsonb)) AS elem
+        WHERE elem <> ${key}
+      )`,
+      updatedAt: new Date(),
+    }).where(eq(calendarSettings.userId, userId));
   }
 
   async getLocationSettingsByUser(userId: string): Promise<LocationSettings | undefined> {
@@ -2888,6 +2921,7 @@ export class DatabaseStorage implements IStorage {
       name: it.name,
       quantity: it.quantity ?? null,
       isChecked: it.isChecked ?? false,
+      alreadyHave: it.alreadyHave ?? false,
       sourceMealIds: Array.isArray(it.sourceMealIds) ? it.sourceMealIds : [],
       category: it.category ?? null,
     }));
@@ -3304,6 +3338,24 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async claimHealthReminderDispatch(id: string, fromStatus: "pending" | "snoozed"): Promise<boolean> {
+    const updated = await db.update(healthReminderEvents)
+      .set({ firedAt: new Date(), status: "fired" })
+      .where(and(eq(healthReminderEvents.id, id), eq(healthReminderEvents.status, fromStatus)))
+      .returning({ id: healthReminderEvents.id });
+    return updated.length > 0;
+  }
+
+  async releaseHealthReminderDispatch(id: string, fromStatus: "pending" | "snoozed"): Promise<void> {
+    await db.update(healthReminderEvents)
+      .set({ firedAt: null, status: fromStatus })
+      .where(and(
+        eq(healthReminderEvents.id, id),
+        eq(healthReminderEvents.status, "fired"),
+        isNull(healthReminderEvents.acknowledgedAt),
+      ));
+  }
+
   async acknowledgeHealthReminderEvent(id: string, userId: string, byProfileId: string | null): Promise<HealthReminderEvent | undefined> {
     const [updated] = await db.update(healthReminderEvents)
       .set({
@@ -3682,6 +3734,7 @@ export class MemStorage implements IStorage {
     const event: Event = {
       ...insertEvent,
       id,
+      movedFrom: insertEvent.movedFrom ?? null,
       createdAt: new Date(),
     };
     this.events.set(id, event);
@@ -3907,6 +3960,8 @@ export class MemStorage implements IStorage {
       weekStartsOn: settings.weekStartsOn ?? 0,
       twoWaySyncEnabled: settings.twoWaySyncEnabled ?? false,
       familyCalendarId: settings.familyCalendarId ?? null,
+      familyCalendarProfileId: settings.familyCalendarProfileId ?? null,
+      familyCalendarProvider: settings.familyCalendarProvider ?? null,
       scanInbox: settings.scanInbox ?? true,
       shareOriginals: settings.shareOriginals ?? false,
       mutedSenders: settings.mutedSenders ?? [],
@@ -3917,6 +3972,49 @@ export class MemStorage implements IStorage {
     };
     this.calendarSettings = calendarSettings;
     return calendarSettings;
+  }
+
+  async claimPlanKey(userId: string, key: string, today: string): Promise<boolean> {
+    const existing = this.calendarSettings?.userId === userId ? this.calendarSettings.planSentKeys ?? [] : null;
+    if (existing?.includes(key)) return false;
+    const kept = (existing ?? []).filter((item) => {
+      const day = item.slice(item.lastIndexOf(":") + 1);
+      return !/^\d{4}-\d{2}-\d{2}$/.test(day) || day >= today;
+    });
+    const planSentKeys = [...kept, key];
+    if (!this.calendarSettings || this.calendarSettings.userId !== userId) {
+      this.calendarSettings = {
+        id: randomUUID(),
+        userId,
+        startHour: 8,
+        endHour: 22,
+        weekStartsOn: 0,
+        twoWaySyncEnabled: false,
+        familyCalendarId: null,
+        familyCalendarProfileId: null,
+        familyCalendarProvider: null,
+        scanInbox: true,
+        shareOriginals: false,
+        mealsOnCalendar: false,
+        mutedSenders: [],
+        dismissedSlipKeys: [],
+        planSentKeys,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      return true;
+    }
+    this.calendarSettings = { ...this.calendarSettings, planSentKeys, updatedAt: new Date() };
+    return true;
+  }
+
+  async releasePlanKey(userId: string, key: string): Promise<void> {
+    if (!this.calendarSettings || this.calendarSettings.userId !== userId) return;
+    this.calendarSettings = {
+      ...this.calendarSettings,
+      planSentKeys: (this.calendarSettings.planSentKeys ?? []).filter((item) => item !== key),
+      updatedAt: new Date(),
+    };
   }
 
   async getLocationSettingsByUser(userId: string): Promise<LocationSettings | undefined> {
@@ -4635,6 +4733,8 @@ export class MemStorage implements IStorage {
     return { event: { id: randomUUID(), ..._input, firedAt: null, acknowledgedAt: null, acknowledgedByProfileId: null, status: "pending", snoozeUntil: null, createdAt: new Date() } as HealthReminderEvent, created: true };
   }
   async markHealthReminderEventFired(_id: string): Promise<HealthReminderEvent | undefined> { return undefined; }
+  async claimHealthReminderDispatch(_id: string, _fromStatus: "pending" | "snoozed"): Promise<boolean> { return true; }
+  async releaseHealthReminderDispatch(_id: string, _fromStatus: "pending" | "snoozed"): Promise<void> {}
   async acknowledgeHealthReminderEvent(_id: string, _userId: string, _byProfileId: string | null): Promise<HealthReminderEvent | undefined> { return undefined; }
   async snoozeHealthReminderEvent(_id: string, _userId: string, _until: Date): Promise<HealthReminderEvent | undefined> { return undefined; }
   async markHealthReminderEventMissed(_id: string): Promise<HealthReminderEvent | undefined> { return undefined; }

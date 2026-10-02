@@ -1,10 +1,205 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { claimPlanSend, planBody, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
+import type { Event } from "@workspace/db";
+import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, googlePlanRows, heldSchoolTitles, icalPlanRows, moveClock, moveLabel, outlookPlanRows, planBirthdayLine, planBody, planDayEvents, planEventTitle, planKeysForClaim, planOpenPath, planTitle, planWho, pushesForProfile, uniqueExternalRows, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
+
+test("a Google event can be named on the evening plan", () => {
+  const rows = googlePlanRows([
+    {
+      id: "abc",
+      summary: "Soccer",
+      location: "Field 2",
+      start: { dateTime: "2026-10-02T16:00:00-05:00" },
+      end: { dateTime: "2026-10-02T17:00:00-05:00" },
+      extendedProperties: { private: { google_calendar_id: "cal-1", familyhub_profile_ids: "[\"liam\"]", familyhub_driving_profile_ids: "[\"liam\"]" } },
+    },
+    {
+      id: "copy",
+      summary: "Dinner",
+      start: { dateTime: "2026-10-02T18:00:00-05:00" },
+      extendedProperties: { private: { familyhub_origin: "app" } },
+    },
+    {
+      id: "piano",
+      summary: "Piano",
+      start: { dateTime: "2026-10-02T15:00:00-05:00" },
+      extendedProperties: { private: { google_calendar_id: "kid-cal" } },
+    },
+  ], "dad", [{ calendarId: "kid-cal", calendarType: "google", profileId: "liam", audienceProfileIds: ["liam"] }]);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.find((row) => row.title === "Piano")?.profileIds, ["liam"]);
+  assert.equal(rows[0].title, "Soccer");
+  assert.equal(rows[0].source, "google");
+  assert.equal(rows[0].location, "Field 2");
+  assert.deepEqual(rows[0].profileIds, ["liam"]);
+  assert.deepEqual(rows[0].drivingProfileIds, ["liam"]);
+  assert.equal(rows[0].googleCalendarId, "cal-1");
+});
+
+test("an Outlook event can be named on the evening plan", () => {
+  const rows = outlookPlanRows([
+    {
+      id: "o1",
+      subject: "Piano",
+      isAllDay: false,
+      start: { dateTime: "2026-10-02T15:00:00", timeZone: "UTC" },
+      end: { dateTime: "2026-10-02T15:30:00", timeZone: "UTC" },
+      location: { displayName: "Studio" },
+      calendar: { id: "ocal" },
+    },
+  ], "dad", [{ calendarId: "ocal", calendarType: "outlook", profileId: "liam", audienceProfileIds: ["liam"] }]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].title, "Piano");
+  assert.equal(rows[0].source, "outlook");
+  assert.equal(rows[0].location, "Studio");
+  assert.deepEqual(rows[0].profileIds, ["liam"]);
+  assert.equal(rows[0].outlookCalendarId, "ocal");
+});
+
+test("a subscribed calendar event can be named on the evening plan", () => {
+  const rows = icalPlanRows([
+    { id: "i1", title: "Practice", start: "2026-10-02T16:00:00", end: "2026-10-02T17:00:00", location: "Field 2", isAllDay: false },
+  ], "dad");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].title, "Practice");
+  assert.equal(rows[0].source, "ical");
+  assert.equal(rows[0].location, "Field 2");
+  assert.deepEqual(rows[0].profileIds, ["dad"]);
+});
+
+test("the same outside event from two people is one plan line", () => {
+  const soccer = {
+    id: "abc",
+    summary: "Soccer",
+    start: { dateTime: "2026-10-02T16:00:00-05:00" },
+    end: { dateTime: "2026-10-02T17:00:00-05:00" },
+  };
+  const rows = uniqueExternalRows([...googlePlanRows([soccer], "dad"), ...googlePlanRows([soccer], "mom")]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].title, "Soccer");
+});
+
+test("the evening plan names who is driving", () => {
+  assert.equal(planEventTitle("Soccer, 4:00 PM, Field 2", ["Liam"]), "Soccer, 4:00 PM, Field 2, Liam driving");
+  assert.equal(planEventTitle("Soccer, 4:00 PM", ["Liam", "Ava"]), "Soccer, 4:00 PM, Liam and Ava driving");
+  assert.equal(planEventTitle("Soccer, 4:00 PM", []), "Soccer, 4:00 PM");
+});
+
+test("a morning plan is titled for today", () => {
+  assert.equal(planTitle(false, "morningOf"), "Today's plan");
+  assert.equal(planTitle(true, "eveningBefore"), "Tomorrow");
+});
 
 test("a profile with a plan time does not also receive a daily brief", () => {
   const kinds = pushesForProfile({ planTime: "19:00", dailyBriefTime: "07:30" });
   assert.deepEqual(kinds, ["evening-plan"]);
+});
+
+test("two people claimed together both stay sent", () => {
+  const saved = planKeysForClaim(["dad:2026-10-02"], ["dad:2026-10-02"]);
+  const second = claimPlanSend(planKeysForClaim([], saved), "kid", "2026-10-02");
+  assert.deepEqual(second.sentKeys, ["dad:2026-10-02", "kid:2026-10-02"]);
+});
+
+test("tomorrow's plan skips a chore that is not due then", () => {
+  const thursday = new Date(2026, 9, 1, 12, 0);
+  const rows = dueForPlan(
+    [
+      { id: "dog", title: "Feed the dog", taskType: "chore", recurrenceType: "daily" },
+      { id: "mow", title: "Mow", taskType: "chore", daysOfWeek: [6] },
+      { id: "milk", title: "Buy milk", taskType: "todo" },
+    ],
+    thursday,
+  );
+  assert.deepEqual(rows.map((row) => row.id), ["dog", "milk"]);
+});
+
+test("a finished to-do stays out of tomorrow's plan", () => {
+  const rows = choresForPlan(
+    [
+      { id: "milk", title: "Buy milk", taskType: "todo", profileIds: ["liam"] },
+      { id: "dog", title: "Feed the dog", taskType: "chore", profileIds: ["liam"] },
+    ],
+    [],
+    "liam",
+    ["milk"],
+  );
+  assert.deepEqual(rows.map((row) => row.id), ["dog"]);
+});
+
+test("the plan keeps this person's open chores", () => {
+  const rows = choresForPlan(
+    [
+      { id: "dog", title: "Feed the dog", profileIds: ["liam"] },
+      { id: "done", title: "Dishes", profileIds: ["liam"] },
+      { id: "dad", title: "Pay the bill", profileIds: ["chad"] },
+    ],
+    ["done"],
+    "liam",
+  );
+  assert.deepEqual(rows.map((row) => row.id), ["dog"]);
+});
+
+test("dinner stays in the plan when the list is long", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [
+      { title: "One", taskType: "chore" },
+      { title: "Two", taskType: "chore" },
+      { title: "Three", taskType: "chore" },
+      { title: "Four", taskType: "chore" },
+      { title: "Five", taskType: "chore" },
+      { title: "Six", taskType: "chore" },
+    ],
+    events: [],
+    dinner: "Tacos",
+  });
+  assert.equal(body.includes("Dinner. Tacos"), true);
+  assert.equal(body.includes("Six"), false);
+});
+
+test("a birthday stays in the plan when the list is long", () => {
+  assert.equal(planBirthdayLine([{ name: "Liam", monthDay: "10-03", year: 2018, type: "birthday" }], "2026-10-03"), "Liam turns 8.");
+  assert.equal(planBirthdayLine([{ name: "Liam", monthDay: "10-04", year: 2018 }], "2026-10-03"), null);
+  assert.equal(planBirthdayLine([{ name: "Us", monthDay: "10-03", year: 2013, type: "anniversary" }], "2026-10-03"), "Us, 13-year anniversary.");
+  assert.equal(planBirthdayLine([{ name: "Rover", monthDay: "10-03", type: "other", customLabel: "adoption day" }], "2026-10-03"), "Rover, adoption day.");
+  assert.equal(planBirthdayLine([{ name: "Liam", monthDay: "02-29", year: 2016 }], "2027-02-28"), "Liam turns 11.");
+  const body = planBody({
+    isChild: false,
+    chores: [
+      { title: "One", taskType: "chore" },
+      { title: "Two", taskType: "chore" },
+      { title: "Three", taskType: "chore" },
+      { title: "Four", taskType: "chore" },
+      { title: "Five", taskType: "chore" },
+      { title: "Six", taskType: "chore" },
+    ],
+    events: [],
+    dinner: "Tacos",
+    birthday: "Liam turns 8.",
+  });
+  assert.equal(body.split("\n")[0], "Liam turns 8.");
+  assert.equal(body.includes("Dinner. Tacos"), true);
+  assert.equal(body.includes("Six"), false);
+});
+
+test("a schedule change stays in the plan when the list is long", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [
+      { title: "One", taskType: "chore" },
+      { title: "Two", taskType: "chore" },
+      { title: "Three", taskType: "chore" },
+      { title: "Four", taskType: "chore" },
+      { title: "Five", taskType: "chore" },
+      { title: "Six", taskType: "chore" },
+    ],
+    events: [{ title: "Soccer, 5:30 PM", movedFrom: "4:00 PM" }],
+    dinner: "Tacos",
+  });
+  assert.equal(body.includes("Soccer, 5:30 PM, moved from 4:00 PM"), true);
+  assert.equal(body.includes("Dinner. Tacos"), true);
+  assert.equal(body.split("\n")[0], "Soccer, 5:30 PM, moved from 4:00 PM");
 });
 
 test("a second run the same day does not send again", () => {
@@ -12,19 +207,187 @@ test("a second run the same day does not send again", () => {
   const second = claimPlanSend(first.sentKeys, "chad", "2026-10-02");
   assert.equal(first.send, true);
   assert.equal(second.send, false);
+  assert.deepEqual(planKeysForClaim(["chad:2026-09-01", "chad:2026-10-02"], [], "2026-10-02"), ["chad:2026-10-02"]);
+});
+
+test("a parent's plan names a child's event", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [{ title: "Make bed", who: ["Liam"] }, { title: "Take out trash" }],
+    events: [{ title: "Soccer, 4:00 PM", who: ["Liam"] }, { title: "Dentist, 9:00 AM" }],
+  });
+  assert.equal(body, "Take out trash\nDentist, 9:00 AM\nMake bed, for Liam\nSoccer, 4:00 PM, for Liam");
+  assert.equal(planWho("Soccer, 4:00 PM, Liam driving", ["Liam"]), "Soccer, 4:00 PM, Liam driving");
 });
 
 test("a kid plan leaves out a school email line", () => {
   const body = planBody({
     isChild: true,
+    kidName: "Ava",
     chores: [
-      { title: "Permission slip", taskType: "todo", category: "school_email" },
+      { title: "Permission slip", description: "Bring it back", taskType: "todo", category: "school_email" },
+      { title: "Ava's slip", description: "Ava must return it", taskType: "todo", category: "school_email" },
       { title: "Feed the dog", taskType: "chore", category: "pets" },
     ],
-    events: [],
+    events: [
+      { title: "Picture day", source: "school" },
+      { title: "Ava concert", description: "Ava sings", source: "school" },
+    ],
     dinner: "Tacos",
   });
   assert.equal(body.includes("Permission slip"), false);
+  assert.equal(body.includes("Picture day"), false);
+  assert.equal(body.includes("Ava's slip"), true);
+  assert.equal(body.includes("Ava concert"), true);
   assert.equal(body.includes("Feed the dog"), true);
   assert.equal(body.includes("Tacos"), true);
+});
+
+test("a kid plan still names the school event they are driving", () => {
+  const body = planBody({
+    isChild: true,
+    kidName: "Ava",
+    chores: [
+      { title: "Picture day", description: "Wear blue", taskType: "todo", category: "school_email" },
+    ],
+    events: [
+      { title: "Picture day, 8:00 AM", description: "Wear blue", source: "school", driving: true },
+      { title: "Staff meeting", description: "Parents only", source: "school" },
+    ],
+  });
+  assert.equal(body.includes("Picture day, 8:00 AM"), true);
+  assert.equal(body.includes("Wear blue"), false);
+  assert.equal(body.includes("Staff meeting"), false);
+});
+
+test("a changed start keeps the old clock time", () => {
+  const previous = new Date(2026, 9, 2, 16, 0);
+  const next = new Date(2026, 9, 2, 17, 30);
+  assert.equal(moveClock(previous, next), "4:00 PM");
+  assert.equal(moveClock(previous, previous), null);
+  assert.equal(moveClock(new Date("2026-10-02T21:00:00.000Z"), new Date("2026-10-02T22:30:00.000Z"), "America/Chicago"), "4:00 PM");
+});
+
+test("a plan keeps household events and the ones for that person", () => {
+  const rows = eventsForPlan(
+    [
+      { title: "Dinner out", profileIds: [] },
+      { title: "Liam soccer", profileIds: ["liam"] },
+      { title: "Carpool", profileIds: ["liam"], drivingProfileIds: ["chad"] },
+    ],
+    "chad",
+  );
+  assert.deepEqual(rows.map((row) => row.title), ["Dinner out", "Carpool"]);
+  const legacy = eventsForPlan(
+    [{ title: "Pickup", profileIds: ["liam"], drivingProfileId: "chad", drivingProfileIds: [] }],
+    "chad",
+  );
+  assert.deepEqual(legacy.map((row) => row.title), ["Pickup"]);
+});
+
+test("a weekly event is on the plan the week after it starts", () => {
+  const start = new Date("2026-10-01T21:00:00Z");
+  const event = {
+    id: "soccer",
+    title: "Soccer",
+    startTime: start,
+    endTime: new Date(start.getTime() + 60 * 60 * 1000),
+    recurrenceType: "weekly",
+    excludedDates: [],
+  } as Event;
+  const found = planDayEvents([event], "2026-10-08", "America/Chicago", new Date("2026-10-01T12:00:00Z"));
+  assert.equal(found.length, 1);
+  assert.equal(found[0]?.title, "Soccer");
+});
+
+test("a plan event names a saved place", () => {
+  assert.equal(appendPlace("Soccer, 4:00 PM", "Field 2"), "Soccer, 4:00 PM, Field 2");
+  assert.equal(appendPlace("Soccer at Field 2, 4:00 PM", "Field 2"), "Soccer at Field 2, 4:00 PM");
+  assert.equal(appendPlace("Soccer, 4:00 PM", "  "), "Soccer, 4:00 PM");
+});
+
+test("a plan event names its clock in the family timezone", () => {
+  assert.equal(eventClockTitle("Soccer", new Date("2026-10-02T21:00:00Z"), "America/Chicago"), "Soccer, 4:00 PM");
+  assert.equal(eventClockTitle("Picture day", new Date("2026-10-02T05:00:00Z"), "America/Chicago"), "Picture day");
+  assert.equal(eventClockTitle("Picture day", new Date("2026-10-02T00:00:00Z"), "America/Chicago", true), "Picture day");
+});
+
+test("a school email with a time is one line", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [{ title: "Picture day", category: "school_email", taskType: "todo" }],
+    events: [{ title: "Picture day, 3:30 PM", source: "school" }],
+  });
+  assert.equal(body, "Picture day, 3:30 PM");
+});
+
+test("a school email with a place and a driver is still one line", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [{ title: "Picture day", category: "school_email", taskType: "todo" }],
+    events: [{ title: "Picture day, 3:30 PM, Field 2, Liam driving", source: "school" }],
+  });
+  assert.equal(body, "Picture day, 3:30 PM, Field 2, Liam driving");
+  const held = withoutSchoolEventsHeldToday(
+    [{ title: "Picture day, 3:30 PM, Field 2, Liam, Ava, and Noah driving", source: "school" }],
+    ["Picture day"],
+  );
+  assert.deepEqual(held, []);
+});
+
+test("a school email checked off before the plan day stays off", () => {
+  const titles = heldSchoolTitles(
+    [{ id: "c1", title: "Picture day", category: "school_email" }],
+    [{ choreId: "c1" }],
+  );
+  const events = withoutSchoolEventsHeldToday(
+    [{ title: "Picture day, 3:30 PM, Field 2, Liam driving", source: "school" }, { title: "Soccer, 4:00 PM", source: "app" }],
+    titles,
+  );
+  assert.deepEqual(events.map((event) => event.title), ["Soccer, 4:00 PM"]);
+});
+
+test("a school email checked off that day stays off the plan", () => {
+  const events = withoutSchoolEventsHeldToday(
+    [{ title: "Picture day, 3:30 PM", source: "school" }, { title: "Soccer, 4:00 PM", source: "app" }],
+    ["Picture day"],
+  );
+  assert.deepEqual(events.map((event) => event.title), ["Soccer, 4:00 PM"]);
+});
+
+test("a move from earlier in the day is named, and an old one is not", () => {
+  const now = new Date("2026-10-02T22:00:00Z");
+  assert.equal(moveLabel(`4:00 PM\n${new Date(now.getTime() - 60 * 60 * 1000).toISOString()}`, now), "4:00 PM");
+  assert.equal(moveLabel(`4:00 PM\n${new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()}`, now), null);
+  assert.equal(moveLabel("4:00 PM", now), null);
+});
+
+test("a moved event names the old time", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [],
+    events: [{ title: "Soccer", movedFrom: "4:00 PM" }],
+  });
+  assert.equal(body.includes("Soccer, moved from 4:00 PM"), true);
+  const titled = eventClockTitle("Soccer", new Date("2026-10-02T22:30:00Z"), "America/Chicago");
+  const moved = planBody({ isChild: false, chores: [], events: [{ title: titled, movedFrom: "4:00 PM" }] });
+  assert.equal(moved, "Soccer, 5:30 PM, moved from 4:00 PM");
+});
+
+test("a dinner on the calendar is not listed twice", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [],
+    events: [{ title: "Tacos, 6:00 PM", source: "meal" }, { title: "Soccer, 4:00 PM" }],
+    dinner: "Tacos",
+  });
+  assert.equal(body, "Soccer, 4:00 PM\nDinner. Tacos");
+});
+
+test("the plan link opens chat with the dinner line", () => {
+  const path = planOpenPath("Feed the dog\nDinner. Tacos", "liam");
+  const params = new URLSearchParams(path.slice(path.indexOf("?")));
+  assert.equal(params.get("openTab"), "chat");
+  assert.equal(params.get("openProfile"), "liam");
+  assert.equal(params.get("openPlan")?.includes("Dinner. Tacos"), true);
 });

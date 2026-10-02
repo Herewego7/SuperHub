@@ -1,7 +1,7 @@
 import type { Express, Request } from "express";
 import { isAuthenticated } from "../replit_integrations/auth";
 import { buildBriefsForUser, buildDailyBrief } from "../lib/dailyBrief";
-import { db } from "../db";
+import { loadProfiles } from "../lib/profileRows";
 import { profiles } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 
@@ -20,11 +20,7 @@ export function registerDailyBriefRoutes(app: Express): void {
     const profileId = typeof req.query.profileId === "string" ? req.query.profileId : null;
     try {
       if (profileId) {
-        const owned = await db
-          .select()
-          .from(profiles)
-          .where(and(eq(profiles.id, profileId), eq(profiles.userId, userId)))
-          .limit(1);
+        const owned = await loadProfiles(and(eq(profiles.id, profileId), eq(profiles.userId, userId)));
         if (!owned[0]) return res.status(404).json({ error: "Profile not found" });
         const brief = await buildDailyBrief(userId, owned[0]);
         return res.json(brief);

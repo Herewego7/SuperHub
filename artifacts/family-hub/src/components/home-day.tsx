@@ -2,7 +2,10 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, dinnerName, horizonEvents, todosForHome } from "@/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonWithoutChecked, mailVisibleToKid, openTodos, schoolEmailNames, schoolHomeTitle, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { eventSourceChip } from "@/lib/upcoming";
+import { appendPlace, eventClockLine, planEventTitle, pointsProfileId } from "@/lib/chatTools";
+import { openEmailHref, schoolSaveTarget, slipQuote, slipSender } from "@/lib/slipMail";
 
 type Props = {
   chores: Chore[];
@@ -11,12 +14,21 @@ type Props = {
   selectedIds: string[];
   familyIds: string[];
   day: Date;
+  kidName?: string | null;
+  personId?: string | null;
+  people?: { id: string; name: string; school?: string | null; isChild?: boolean | null; role?: string | null; connected?: boolean }[];
   onOpenChores: () => void;
 };
 
-export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, onOpenChores }: Props) {
+export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, kidName, personId, people = [], onOpenChores }: Props) {
   const [earlierOpen, setEarlierOpen] = useState(false);
   const dayKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+  const { data: calendarSettings } = useQuery<{ shareOriginals?: boolean | null }>({
+    queryKey: ["/api/calendar-settings"],
+  });
+  const { data: celebrations = [] } = useQuery<{ name: string; monthDay: string; year?: number | null; type?: string | null; customLabel?: string | null }[]>({
+    queryKey: ["/api/celebrations"],
+  });
   const { data: meals = [] } = useQuery<Meal[]>({
     queryKey: ["/api/meals", dayKey, dayKey],
     queryFn: async () => {
@@ -25,9 +37,35 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
     },
   });
 
+  const muteSender = useMutation({
+    mutationFn: async (address: string) => {
+      await apiRequest("POST", "/api/ingest/mute", { address });
+    },
+  });
+
+  const saveSchool = useMutation({
+    mutationFn: async (offer: { profileId: string; school: string }) => {
+      await apiRequest("POST", "/api/ingest/school", offer);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
+    },
+  });
+
+  const dismissSlip = useMutation({
+    mutationFn: async (title: string) => {
+      await apiRequest("POST", "/api/ingest/not-relevant", { title });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    },
+  });
+
   const complete = useMutation({
     mutationFn: async (choreId: string) => {
-      const profileId = chores.find((chore) => chore.id === choreId)?.profileIds[0];
+      const chore = chores.find((item) => item.id === choreId);
+      const profileId = pointsProfileId(chore?.profileIds ?? [], selectedIds.join(","));
       if (!profileId) return;
       const at = new Date();
       const localDayStart = new Date(at);
@@ -35,33 +73,42 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
       await apiRequest("POST", "/api/chore-completions", {
         choreId,
         profileId,
-        points: 0,
+        points: chore?.points ?? 0,
         completedAt: at.toISOString(),
         localDayStart: localDayStart.toISOString(),
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, choreId) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/chore-completions"] });
+      const chore = chores.find((item) => item.id === choreId);
+      const profileId = pointsProfileId(chore?.profileIds ?? [], selectedIds.join(","));
+      if (profileId) await queryClient.invalidateQueries({ queryKey: ["/api/points", profileId] });
     },
   });
 
-  const todos = todosForHome(chores, selectedIds, familyIds);
-  const progress = choreProgress(chores, completions, day);
-  const start = new Date(day);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  const todayEvents = events.filter((event) => {
-    const at = new Date(event.startTime);
-    return at >= start && at < end;
-  });
-  const horizon = horizonEvents(events, day);
+  const todos = openTodos(todosForHome(chores, selectedIds, familyIds), completions).filter((todo) => !kidName || schoolEmailNames(todo, kidName));
+  const progress = choreProgress(choresForCount(chores, selectedIds, familyIds), completions, day);
   const dinner = dinnerName(meals, day);
-  const earlier = completions.filter((completion) => {
-    if (!completion.completedAt) return false;
-    const at = new Date(completion.completedAt);
-    return at >= start && at < end;
-  });
+  const birthday = homeBirthdayLine(celebrations, day);
+  const todayEvents = eventsOnHomeDay(
+    visibleForProfiles(events, selectedIds),
+    day,
+    kidName,
+    dinner,
+    schoolSlipsHeldOnHome(todosForHome(chores, selectedIds, familyIds), completions, day),
+  );
+  const drives = drivesOnHomeDay(events, day, selectedIds, kidName ?? null);
+  const checkedSlips = todosForHome(chores, selectedIds, familyIds).filter((todo) => todo.category === "school_email" && completions.some((completion) => completion.choreId === todo.id));
+  const horizon = horizonWithoutChecked(
+    visibleForProfiles(events, selectedIds).filter((event) => mailVisibleToKid(event, kidName)),
+    day,
+    checkedSlips,
+  );
+  const coming = [
+    ...horizonBirthdays(celebrations, day).map((row) => ({ key: row.id, title: row.title, startTime: row.startTime, allDay: true, source: null as string | null, location: null as string | null })),
+    ...horizon.map((event) => ({ key: event.id, title: event.title, startTime: event.startTime, allDay: event.isAllDay === true, source: event.source ?? null, location: event.location ?? null, drivers: driverNamesFor(event.drivingProfileIds, people) })),
+  ].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  const earlier = earlierForHome(completions, selectedIds, familyIds, day);
 
   return (
     <div className="flex flex-col gap-4" data-testid="home-day">
@@ -71,7 +118,17 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           <p className="text-sm text-muted-foreground">Nothing waiting.</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {todos.map((todo) => (
+            {todos.map((todo) => {
+              const quote = slipQuote(todo.description);
+              const title = todo.category === "school_email" ? schoolHomeTitle(todo.title, events, day, people) : todo.title;
+              const sender = slipSender(todo.description);
+              const offer = schoolSaveTarget(todo.title, todo.description, people, personId ?? null);
+              const viewer = people.find((person) => person.id === personId);
+              const emailHref = openEmailHref(calendarSettings?.shareOriginals === true, sender, {
+                isChild: !!kidName,
+                ownsAccount: viewer?.connected === true,
+              });
+              return (
               <li key={todo.id} data-testid={`home-todo-${todo.id}`} className="flex items-start gap-3 rounded-2xl border border-border bg-card px-3 py-2">
                 <button
                   type="button"
@@ -80,18 +137,37 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
                   onClick={() => complete.mutate(todo.id)}
                 />
                 <div className="min-w-0">
-                  <div className="text-[15px] font-medium">{todo.title}</div>
-                  {todo.description && <div className="text-sm text-muted-foreground">{todo.description}</div>}
-                  <div className="mt-1 text-xs text-muted-foreground">
+                  <div className="text-[15px] font-medium">{title}</div>
+                  {quote && <div data-testid="home-todo-quote" className="text-sm text-muted-foreground">{quote}</div>}
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     {todo.category === "school_email" ? (
-                      <span data-testid="home-todo-source" className="inline-block rounded-full bg-muted px-2 py-0.5">School email</span>
+                      <>
+                        <span data-testid="home-todo-source" className="inline-block rounded-full bg-muted px-2 py-0.5">School email</span>
+                        <button type="button" data-testid="home-todo-not-relevant" className="underline" onClick={() => dismissSlip.mutate(todo.title)}>
+                          Not relevant
+                        </button>
+                        {sender && (
+                          <button type="button" data-testid="home-todo-mute" className="underline" onClick={() => muteSender.mutate(sender)}>
+                            Mute sender
+                          </button>
+                        )}
+                        {emailHref && (
+                          <a data-testid="home-todo-open-email" className="underline" href={emailHref}>Open email</a>
+                        )}
+                        {offer && (
+                          <button type="button" data-testid="home-todo-save-school" className="underline" onClick={() => saveSchool.mutate(offer)}>
+                            Save {offer.school}{offer.profileId === personId ? "" : ` for ${offer.name}`}
+                          </button>
+                        )}
+                      </>
                     ) : (
                       "To-do"
                     )}
                   </div>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>
@@ -113,24 +189,53 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
         ) : (
           <ul className="flex flex-col gap-1">
             {todayEvents.slice(0, 6).map((event) => (
-              <li key={event.id} className="text-sm">{event.title}</li>
+              <li key={event.id} className="text-sm">
+                {planEventTitle(appendPlace(eventClockLine(event.title, event.startTime, false, event.isAllDay === true), event.location), driverNamesFor(event.drivingProfileIds, people))}
+                {eventSourceChip(event.source) && (
+                  <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(event.source)}</span>
+                )}
+              </li>
             ))}
           </ul>
         )}
       </section>
 
+      {drives.length > 0 && (
+        <section data-testid="home-driving">
+          <h2 className="font-display text-lg mb-2">Driving</h2>
+          <ul className="flex flex-col gap-1">
+            {drives.map((event) => (
+              <li key={event.id} className="text-sm">
+                {appendPlace(eventClockLine(event.title, event.startTime, true, event.isAllDay === true), event.location)}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section data-testid="home-horizon">
         <h2 className="font-display text-lg mb-2">On the Horizon</h2>
-        {horizon.length === 0 ? (
+        {coming.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing in the next week.</p>
         ) : (
           <ul className="flex flex-col gap-1">
-            {horizon.slice(0, 5).map((event) => (
-              <li key={event.id} className="text-sm">{event.title}</li>
+            {coming.slice(0, 5).map((row) => (
+              <li key={row.key} className="text-sm">
+                {planEventTitle(appendPlace(eventClockLine(row.title, row.startTime, true, row.allDay), row.location), "drivers" in row ? row.drivers : [])}
+                {eventSourceChip(row.source) && (
+                  <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(row.source)}</span>
+                )}
+              </li>
             ))}
           </ul>
         )}
       </section>
+
+      {birthday && (
+        <p data-testid="home-birthday" className="text-sm">
+          {birthday}
+        </p>
+      )}
 
       {dinner && (
         <p data-testid="home-dinner" className="text-sm">

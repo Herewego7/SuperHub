@@ -1,4 +1,5 @@
 /** Chat tools carried over from Bot Life. Mail tools stay off a kid's thread. */
+import { dinnerName, eventsForDayPlan, homeBirthdayLine } from "./homeDay";
 
 export const CHAT_TOOLS = [
   "get_plan",
@@ -27,8 +28,953 @@ export function toolsForRole(isChild: boolean): string[] {
   return CHAT_TOOLS.filter((tool) => !INBOX_TOOLS.has(tool));
 }
 
+export function unknownReply(isChild: boolean): string {
+  return isChild
+    ? "I can tell you the plan, check a chore, or add a to-do."
+    : "I can tell you the plan, check a chore, add a to-do, or take something off the grocery list.";
+}
+
+export function pointsProfileId(profileIds: string[], profileKey: string): string | null {
+  const selected = profileKey.split(",").filter((id) => id && id !== "family");
+  if (profileIds.length === 0) return selected[0] ?? null;
+  if (selected.length === 1 && profileIds.includes(selected[0])) return selected[0];
+  return profileIds[0] ?? null;
+}
+
+/** Who an event is for. A missing person is named. "what is for …" is not an event. */
+export function eventPeople(
+  text: string,
+  profiles: { id: string; name: string }[],
+): { title: string; profileIds: string[]; reply: string } | { title: string; reply: string } | null {
+  const trimmed = text.trim();
+  const named = trimmed.match(/^(.+?)\s+is for\s+(.+?)\.?$/i);
+  const assigned = trimmed.match(/^assign\s+(.+?)\s+to\s+(.+?)\.?$/i);
+  const title = (named?.[1] ?? assigned?.[1])?.trim();
+  const who = (named?.[2] ?? assigned?.[2])?.trim();
+  if (!title || !who || /^(?:what|who|where|when)$/i.test(title)) return null;
+  if (/^(?:everyone|everybody|the family|all family)$/i.test(who)) {
+    return { title, profileIds: [], reply: `${title} is for everyone.` };
+  }
+  const parts = who.split(/\s*,\s*|\s+and\s+/i).map((part) => part.trim()).filter(Boolean);
+  const chosen: { id: string; name: string }[] = [];
+  for (const part of parts) {
+    const profile = profiles.find((person) => person.name.toLowerCase() === part.toLowerCase());
+    if (!profile) return { title, reply: `I don't see ${part}.` };
+    if (!chosen.some((person) => person.id === profile.id)) chosen.push(profile);
+  }
+  if (chosen.length === 0) return null;
+  const names = chosen.map((person) => person.name);
+  const pretty = names.length <= 2
+    ? names.join(" and ")
+    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return { title, profileIds: chosen.map((person) => person.id), reply: `${title} is for ${pretty}.` };
+}
+
+export function assignChange(
+  text: string,
+  chores: { id: string; title: string }[],
+  profiles: { id: string; name: string }[],
+): { choreId: string; profileIds: string[]; reply: string } | { reply: string } | null {
+  const match = text.trim().match(/^assign\s+(.+?)\s+to\s+(.+?)\.?$/i);
+  if (!match) return null;
+  const title = match[1].trim();
+  const who = match[2].trim();
+  const chore = chores.find((item) => item.title.toLowerCase() === title.toLowerCase());
+  if (!chore) return { reply: `I don't see ${title}.` };
+  if (/^(nobody|no one|everyone)$/i.test(who)) {
+    return { choreId: chore.id, profileIds: [], reply: `${chore.title} is for everyone.` };
+  }
+  const profile = profiles.find((person) => person.name.toLowerCase() === who.toLowerCase());
+  if (!profile) return { reply: `I don't see ${who}.` };
+  return { choreId: chore.id, profileIds: [profile.id], reply: `${chore.title} is assigned to ${profile.name}.` };
+}
+
+export function feedbackNote(text: string): string | null {
+  const match = text.trim().match(/^(?:(?:i have|send)\s+)?feedback:?\s+(.+?)\.?$/i);
+  const note = match?.[1]?.trim();
+  return note ? note : null;
+}
+
+export type SavedFeedback = { text: string; at: string };
+
+export const FEEDBACK_KEY = "superhub_feedback";
+
+/** Keep a feedback note on this device. A blank note changes nothing. */
+export function feedbackStored(existing: SavedFeedback[], note: string, at: string): SavedFeedback[] {
+  const text = note.trim();
+  if (!text) return existing;
+  return [...existing, { text, at }].slice(-50);
+}
+
+/** This device's notes plus the family's. The same text is listed once, at the later time. Newest first. */
+export function feedbackList(local: SavedFeedback[], remote: SavedFeedback[]): SavedFeedback[] {
+  const byText = new Map<string, SavedFeedback>();
+  for (const note of [...local, ...remote]) {
+    const text = note.text.trim();
+    if (!text) continue;
+    const prev = byText.get(text);
+    if (!prev || note.at > prev.at) byText.set(text, { text, at: note.at });
+  }
+  return [...byText.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+}
+
+export function feedbackNotesFrom(raw: string | null): SavedFeedback[] {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is SavedFeedback =>
+      !!item && typeof item.text === "string" && item.text.trim().length > 0 && typeof item.at === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function spokenClock(raw: string): string | null {
+  const match = raw.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+  if (!match) return null;
+  const parsed = clock24(Number(match[1]), match[2] ? Number(match[2]) : 0, (match[3] || "pm").toLowerCase());
+  if (!parsed) return null;
+  const show = parsed.hours % 12 || 12;
+  const label = parsed.hours >= 12 ? "PM" : "AM";
+  return `${show}:${String(parsed.minutes).padStart(2, "0")} ${label}`;
+}
+
+function titledAt(task: string, clock: string | null): string | null {
+  const title = task.trim();
+  if (!title) return null;
+  if (!clock || title.toLowerCase().includes(clock.toLowerCase())) return title;
+  return `${title}, ${clock}`;
+}
+
+export function reminderRequest(
+  text: string,
+  profiles: { id: string; name: string }[],
+): { title: string; profileIds: string[] } | { reply: string } | null {
+  const trimmed = text.trim();
+  const clock = String.raw`(\d{1,2}(?::\d{2})?(?:\s*(?:am|pm))?)`;
+  const person = (name: string) => profiles.find((profile) => profile.name.toLowerCase() === name.toLowerCase());
+  const namedAt = trimmed.match(new RegExp(`^remind\\s+([A-Za-z]+)\\s+at\\s+${clock}\\s+to\\s+(.+?)\\.?$`, "i"));
+  if (namedAt && !/^(me|us)$/i.test(namedAt[1])) {
+    const profile = person(namedAt[1]);
+    if (!profile) return { reply: `I don't see ${namedAt[1]}.` };
+    const title = titledAt(namedAt[3], spokenClock(namedAt[2]));
+    return title ? { title, profileIds: [profile.id] } : null;
+  }
+  const selfAt = trimmed.match(new RegExp(`^remind\\s+(?:me|us)\\s+at\\s+${clock}\\s+(?:to\\s+)?(.+?)\\.?$`, "i"));
+  if (selfAt) {
+    const title = titledAt(selfAt[2], spokenClock(selfAt[1]));
+    return title ? { title, profileIds: [] } : null;
+  }
+  const namedTrail = trimmed.match(new RegExp(`^remind\\s+([A-Za-z]+)\\s+to\\s+(.+?)\\s+at\\s+${clock}\\.?$`, "i"));
+  if (namedTrail && !/^(me|us)$/i.test(namedTrail[1])) {
+    const profile = person(namedTrail[1]);
+    if (!profile) return { reply: `I don't see ${namedTrail[1]}.` };
+    const title = titledAt(namedTrail[2], spokenClock(namedTrail[3]));
+    return title ? { title, profileIds: [profile.id] } : null;
+  }
+  const selfTrail = trimmed.match(new RegExp(`^remind\\s+(?:me|us)\\s+to\\s+(.+?)\\s+at\\s+${clock}\\.?$`, "i"));
+  if (selfTrail) {
+    const title = titledAt(selfTrail[1], spokenClock(selfTrail[2]));
+    return title ? { title, profileIds: [] } : null;
+  }
+  const named = trimmed.match(/^remind\s+([A-Za-z]+)\s+to\s+(.+?)\.?$/i);
+  if (named && !/^(me|us)$/i.test(named[1])) {
+    const profile = person(named[1]);
+    if (!profile) return { reply: `I don't see ${named[1]}.` };
+    const title = named[2].trim();
+    return title ? { title, profileIds: [profile.id] } : null;
+  }
+  const self = trimmed.match(/^remind\s+(?:me|us)\s+(?:to\s+)?(.+?)\.?$/i);
+  const title = self?.[1]?.trim();
+  return title ? { title, profileIds: [] } : null;
+}
+
+export function createTodoTitle(text: string): string | null {
+  const match = text.trim().match(/^(?:add|create)\s+(?:a\s+)?to-?do\s+(?:called\s+)?(.+?)\.?$/i);
+  const title = match?.[1]?.trim();
+  return title ? title : null;
+}
+
+/** A new to-do. Named people replace whoever is selected. */
+export function todoCreate(
+  text: string,
+  profiles: { id: string; name: string }[],
+  selectedIds: string[],
+): { title: string; profileIds: string[] } | null {
+  const raw = createTodoTitle(text);
+  if (!raw) return null;
+  const cast = createEventCast(raw, profiles);
+  return {
+    title: cast.title,
+    profileIds: cast.profileIds.length > 0 ? cast.profileIds : selectedIds,
+  };
+}
+
+export function createEventTitle(text: string): string | null {
+  const match = text.trim().match(/^(?:add|create)\s+(?:an?\s+)?event\s+(?:called\s+)?(.+?)\.?$/i);
+  const title = match?.[1]?.trim();
+  return title ? title : null;
+}
+
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+function eventOn(name: string, from: Date): { title: string; on: Date } | null {
+  const weekday = name.match(/^(.*?)\s+(?:on\s+)?(?:(next|this)\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/i);
+  if (weekday?.[1]?.trim()) {
+    const on = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    const target = WEEKDAYS.indexOf(weekday[3].toLowerCase());
+    let delta = (target - on.getDay() + 7) % 7;
+    if (weekday[2]?.toLowerCase() === "next" && delta === 0) delta = 7;
+    on.setDate(on.getDate() + delta);
+    return { title: weekday[1].trim(), on };
+  }
+  const written = name.match(/^(.*?)\s+(?:on\s+)?(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?$/i);
+  if (written?.[1]?.trim()) {
+    const label = written[2].toLowerCase() === "sept" ? "sep" : written[2].toLowerCase();
+    const month = MONTHS.indexOf(label) >= 0 ? MONTHS.indexOf(label) : ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"].indexOf(label.slice(0, 3));
+    const day = Number(written[3]);
+    const on = new Date(from.getFullYear(), month, day);
+    if (month < 0 || on.getMonth() !== month) return null;
+    const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    if (on < today) on.setFullYear(from.getFullYear() + 1);
+    return { title: written[1].trim(), on };
+  }
+  const numeric = name.match(/^(.*?)\s+(?:on\s+)?(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  if (!numeric?.[1]?.trim()) return null;
+  const month = Number(numeric[2]) - 1;
+  const day = Number(numeric[3]);
+  const rawYear = numeric[4] ? Number(numeric[4]) : null;
+  const year = rawYear == null ? from.getFullYear() : rawYear < 100 ? 2000 + rawYear : rawYear;
+  const on = new Date(year, month, day);
+  if (month < 0 || month > 11 || on.getMonth() !== month) return null;
+  if (rawYear == null) {
+    const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    if (on < today) on.setFullYear(from.getFullYear() + 1);
+  }
+  return { title: numeric[1].trim(), on };
+}
+
+function clock24(hours: number, minutes: number, suffix: string): { hours: number; minutes: number } | null {
+  if (hours < 1 || hours > 12 || minutes > 59) return null;
+  let next = hours;
+  if (suffix === "pm" && next !== 12) next += 12;
+  if (suffix === "am" && next === 12) next = 0;
+  return { hours: next, minutes };
+}
+
+/** People and a driver named in a new event. The clock and the place stay in the title. */
+export function createEventCast(
+  title: string,
+  profiles: { id: string; name: string }[],
+): { title: string; profileIds: string[]; drivingProfileIds: string[] } {
+  const named = profiles
+    .map((person) => person.name.trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  if (named.length === 0) return { title, profileIds: [], drivingProfileIds: [] };
+  const group = `(?:${named.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`;
+  const list = (spoken: string) => {
+    const ids: string[] = [];
+    for (const part of spoken.split(/\s+and\s+/i)) {
+      const profile = profiles.find((person) => person.name.toLowerCase() === part.trim().toLowerCase());
+      if (profile && !ids.includes(profile.id)) ids.push(profile.id);
+    }
+    return ids;
+  };
+  let rest = title;
+  const drivingProfileIds: string[] = [];
+  const drive = rest.match(new RegExp(`\\s+(${group}(?:\\s+and\\s+${group})*)\\s+(?:is|are) driving\\b`, "i"));
+  if (drive?.[1]) {
+    drivingProfileIds.push(...list(drive[1]));
+    rest = rest.replace(drive[0], " ");
+  }
+  const profileIds: string[] = [];
+  const assigned = rest.match(new RegExp(`\\s+for\\s+(${group}(?:\\s+and\\s+${group})*)\\b`, "i"));
+  if (assigned?.[1]) {
+    profileIds.push(...list(assigned[1]));
+    rest = rest.replace(assigned[0], " ");
+  }
+  return { title: rest.replace(/\s+/g, " ").trim(), profileIds, drivingProfileIds };
+}
+
+/** A place in the title is not a clock. "at 4 pm" stays a time. */
+export function createEventPlace(title: string): { title: string; location?: string } {
+  const match = title.match(/^(.*?)\s+at\s+(?!\d)(.+)$/i);
+  const name = match?.[1]?.trim();
+  const location = match?.[2]?.trim();
+  if (!name || !location) return { title };
+  return { title: name, location };
+}
+
+export function createEventClock(title: string, from = new Date()): { title: string; hours?: number; minutes?: number; endHours?: number; endMinutes?: number; day: "today" | "tomorrow"; on?: Date } {
+  const match = title.match(/^(.*?)(?:\s+(today|tonight|tomorrow|this (?:morning|afternoon|evening)))?(?:\s+at\s+(\d{1,2})(?::(\d{2}))?(?:\s*(am|pm))?(?:\s*[-–]\s*(\d{1,2})(?::(\d{2}))?)?\s*(am|pm))?$/i);
+  const placed = eventOn((match?.[1] ?? title).trim(), from);
+  if (!match || (!match[2] && !match[3] && !placed)) return { title, day: "tomorrow" };
+  const name = (placed?.title ?? match[1] ?? "").trim();
+  if (!match[3]) {
+    const day = match[2] && match[2].toLowerCase() !== "tomorrow" ? "today" : "tomorrow";
+    return name ? { title: name, day, ...(placed ? { on: placed.on } : {}) } : { title, day: "tomorrow" };
+  }
+  const suffix = (match[5] || match[8] || "").toLowerCase();
+  const start = clock24(Number(match[3]), match[4] ? Number(match[4]) : 0, suffix);
+  if (!name || !suffix || !start) return { title, day: "tomorrow" };
+  const end = match[6] ? clock24(Number(match[6]), match[7] ? Number(match[7]) : 0, (match[8] || suffix).toLowerCase()) : null;
+  const ended = end && end.hours * 60 + end.minutes > start.hours * 60 + start.minutes ? end : null;
+  let day: "today" | "tomorrow";
+  if (match[2]) day = match[2].toLowerCase() === "tomorrow" ? "tomorrow" : "today";
+  else if (placed) day = "tomorrow";
+  else {
+    const passed = from.getHours() > start.hours || (from.getHours() === start.hours && from.getMinutes() > start.minutes);
+    day = passed ? "tomorrow" : "today";
+  }
+  return {
+    title: name,
+    hours: start.hours,
+    minutes: start.minutes,
+    ...(ended ? { endHours: ended.hours, endMinutes: ended.minutes } : {}),
+    day,
+    ...(placed ? { on: placed.on } : {}),
+  };
+}
+
+/** The people selected in chat. All Family is everyone, so the event stays unassigned. */
+export function selectedProfileIds(profileKey: string): string[] {
+  return profileKey.split(",").filter((id) => id && id !== "family");
+}
+
+export function familyCalendarOffer(familyCalendarId: string | null | undefined): string | null {
+  const id = familyCalendarId?.trim();
+  if (!id || id === "none") return null;
+  return id;
+}
+
 export function checkOffTitle(text: string): string | null {
   const match = text.trim().match(/^check off (.+)$/i);
   const title = match?.[1]?.trim();
   return title ? title : null;
+}
+
+export function appendPlace(line: string, location?: string | null): string {
+  const place = location?.trim();
+  if (!place) return line;
+  if (line.toLowerCase().includes(place.toLowerCase())) return line;
+  return `${line}, ${place}`;
+}
+
+export function eventClockLine(title: string, startTime: Date | string, withDay = false, allDay = false): string {
+  const at = new Date(startTime);
+  if (Number.isNaN(at.getTime())) return title;
+  const day = withDay ? at.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
+  if (allDay || (at.getHours() === 0 && at.getMinutes() === 0)) return day ? `${title}, ${day}` : title;
+  let hours = at.getHours();
+  const suffix = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  const clock = `${hours}:${String(at.getMinutes()).padStart(2, "0")} ${suffix}`;
+  return [title, day, clock].filter(Boolean).join(", ");
+}
+
+function dueOnDay(
+  chore: {
+    taskType?: string | null;
+    isActive?: boolean | null;
+    daysOfWeek?: number[] | null;
+    recurrenceType?: string | null;
+    targetCount?: number | null;
+    endDate?: Date | string | null;
+  },
+  start: Date,
+): boolean {
+  if (chore.isActive === false) return false;
+  if (chore.taskType === "todo") return true;
+  if (chore.taskType && chore.taskType !== "chore") return false;
+  if (chore.endDate && new Date(chore.endDate) < start) return false;
+  if (chore.targetCount && chore.targetCount > 0) return true;
+  if (chore.recurrenceType === "daily") return true;
+  return (chore.daysOfWeek ?? []).includes(start.getDay());
+}
+
+const MOVE_WINDOW_MS = 36 * 60 * 60 * 1000;
+
+/** A move is news for a day and a half. Matches the evening plan. */
+export function planMoveLabel(movedFrom: string | null | undefined, now: Date): string | null {
+  if (!movedFrom) return null;
+  const [label, stamp] = movedFrom.split("\n");
+  const clock = label?.trim();
+  if (!clock || !stamp?.trim()) return null;
+  const at = new Date(stamp.trim());
+  if (Number.isNaN(at.getTime())) return null;
+  const age = now.getTime() - at.getTime();
+  if (age < 0 || age > MOVE_WINDOW_MS) return null;
+  return clock;
+}
+
+/** A parent plan names who an item is for. A name already on the line is not repeated. */
+export function planWho(title: string, names?: string[] | null): string {
+  const others = (names ?? []).map((name) => name.trim()).filter(Boolean);
+  if (others.length === 0) return title;
+  if (others.every((name) => title.toLowerCase().includes(name.toLowerCase()))) return title;
+  const pretty = others.length <= 2 ? others.join(" and ") : `${others.slice(0, -1).join(", ")} and ${others[others.length - 1]}`;
+  const line = `for ${pretty}`;
+  if (title.toLowerCase().includes(line.toLowerCase())) return title;
+  return `${title}, ${line}`;
+}
+
+export function planForOthers(
+  ids: string[] | null | undefined,
+  selectedIds: string[],
+  people: { id: string; name: string }[],
+): string[] {
+  if (selectedIds.length === 0) return [];
+  const list = ids ?? [];
+  if (list.length === 0 || list.some((id) => selectedIds.includes(id))) return [];
+  return list.map((id) => people.find((person) => person.id === id)?.name).filter((name): name is string => !!name?.trim());
+}
+
+/** The school to-do title, without the clock, place, or driver added to the line. */
+export function schoolSlipTitle(title: string): string {
+  const clock = title.match(/^(.*?),\s+\d{1,2}:\d{2}\s+[AP]M\b/i);
+  if (clock?.[1]) return clock[1].trim();
+  return title.replace(/,\s+[^,]+\s+driving$/i, "").trim();
+}
+
+export function planEventTitle(title: string, drivers?: string[] | null): string {
+  const names = (drivers ?? []).map((name) => name.trim()).filter(Boolean);
+  if (names.length === 0) return title;
+  const pretty = names.length <= 2 ? names.join(" and ") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const line = `${pretty} driving`;
+  if (title.toLowerCase().includes(line.toLowerCase())) return title;
+  return `${title}, ${line}`;
+}
+
+export function dayReply(
+  text: string,
+  input: {
+    chores: {
+      id?: string;
+      title: string;
+      taskType?: string | null;
+      isActive?: boolean | null;
+      daysOfWeek?: number[] | null;
+      recurrenceType?: string | null;
+      targetCount?: number | null;
+      endDate?: Date | string | null;
+      category?: string | null;
+      who?: string[] | null;
+    }[];
+    events: { title: string; startTime: Date | string; isAllDay?: boolean | null; source?: string | null; movedFrom?: string | null; location?: string | null; drivers?: string[] | null; who?: string[] | null }[];
+    completions?: { choreId: string; completedAt?: Date | string | null }[];
+    dinner?: string | null;
+    meals?: { date: string; slot: string; name: string }[];
+    celebrations?: { name: string; monthDay: string; year?: number | null; type?: string | null; customLabel?: string | null }[];
+    day: Date;
+  },
+): string | null {
+  const asked = text.trim().match(/\bwhat(?:'s| is) (?:the plan|my day)(?:\s+(?:for|on))?\s*(.*?)\??$/i);
+  if (!asked) return null;
+  const start = new Date(input.day);
+  start.setHours(0, 0, 0, 0);
+  const when = asked[1].trim();
+  if (when && !/^today$/i.test(when)) {
+    const on = moveDay(when, start);
+    if (!on) return "I don't know that day.";
+    start.setFullYear(on.getFullYear(), on.getMonth(), on.getDate());
+  }
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  const finishedTodos = new Set(
+    (input.completions ?? [])
+      .filter((completion) => input.chores.some((chore) => chore.id === completion.choreId && chore.taskType === "todo"))
+      .map((completion) => completion.choreId),
+  );
+  const done = new Set(
+    (input.completions ?? [])
+      .filter((completion) => {
+        if (!completion.completedAt) return false;
+        const at = new Date(completion.completedAt);
+        return at >= start && at < end;
+      })
+      .map((completion) => completion.choreId),
+  );
+  const heldSchool = new Set(
+    input.chores
+      .filter((chore) => chore.category === "school_email" && chore.id && (done.has(chore.id) || finishedTodos.has(chore.id)))
+      .map((chore) => chore.title.toLowerCase()),
+  );
+  const askedToday = start.toDateString() === new Date(input.day).toDateString();
+  const dinner = input.meals ? dinnerName(input.meals, start) : askedToday ? input.dinner : null;
+  const rows: { text: string; change: boolean; mine: boolean; match: string }[] = [];
+  const birthday = homeBirthdayLine(input.celebrations ?? [], start);
+  if (birthday) rows.push({ text: birthday, change: true, mine: true, match: birthday });
+  for (const chore of input.chores) {
+    if (chore.id && (done.has(chore.id) || finishedTodos.has(chore.id))) continue;
+    if (!dueOnDay(chore, start)) continue;
+    const who = chore.who ?? [];
+    rows.push({ text: planWho(chore.title, who), change: false, mine: who.length === 0, match: chore.title });
+  }
+  for (const event of input.events) {
+    if (event.source === "meal" && dinner) continue;
+    if (event.source === "school" && heldSchool.has(schoolSlipTitle(event.title).toLowerCase())) continue;
+    const at = new Date(event.startTime);
+    if (at < start || at >= end) continue;
+    const moved = planMoveLabel(event.movedFrom, input.day);
+    const clock = eventClockLine(event.title, at, false, event.isAllDay === true);
+    const placed = appendPlace(clock, event.location);
+    const named = planEventTitle(placed, event.drivers);
+    const line = moved ? `${named}, moved from ${moved}` : named;
+    const bare = clock.replace(/, \d{1,2}:\d{2} [AP]M$/i, "");
+    const who = event.who ?? [];
+    const same = event.source === "school" ? rows.findIndex((item) => item.match.toLowerCase() === bare.toLowerCase()) : -1;
+    const row = { text: planWho(line, who), change: Boolean(moved), mine: who.length === 0, match: bare };
+    if (same >= 0) rows[same] = row;
+    else rows.push(row);
+  }
+  const lines = [
+    ...rows.filter((row) => row.change),
+    ...rows.filter((row) => !row.change && row.mine),
+    ...rows.filter((row) => !row.change && !row.mine),
+  ].map((row) => row.text);
+  const kept = lines.slice(0, 5);
+  if (dinner) kept.push(`Dinner. ${dinner}`);
+  return kept.join("\n") || "Nothing on the plan.";
+}
+
+export function memoryFact(
+  text: string,
+  profiles: { id: string; name: string; isAllFamilyProfile?: boolean | null }[],
+): { profileId: string; name: string; fact: string } | null {
+  const match = text.trim().match(/^remember (?:that )?(.+?) ((?:is|likes|has) .+?)\.?$/i);
+  const who = match?.[1]?.trim();
+  const fact = match?.[2]?.trim();
+  if (!who || !fact) return null;
+  const profile = profiles.find((person) => person.name.trim().toLowerCase() === who.toLowerCase());
+  if (!profile || profile.isAllFamilyProfile) return null;
+  return { profileId: profile.id, name: profile.name, fact };
+}
+
+export function forgetFact(
+  text: string,
+  profiles: { id: string; name: string; facts?: string[] | null; isAllFamilyProfile?: boolean | null }[],
+): { profileId: string; name: string; fact: string; facts: string[] } | { reply: string } | null {
+  const match = text.trim().match(/^forget (?:that )?(.+?) ((?:is|likes|has) .+?)\.?$/i);
+  const who = match?.[1]?.trim();
+  const fact = match?.[2]?.trim();
+  if (!who || !fact) return null;
+  const profile = profiles.find((person) => person.name.trim().toLowerCase() === who.toLowerCase());
+  if (!profile || profile.isAllFamilyProfile) return { reply: `I don't see ${who}.` };
+  const existing = profile.facts ?? [];
+  const facts = existing.filter((item) => item.toLowerCase() !== fact.toLowerCase());
+  if (facts.length === existing.length) return { reply: `I don't remember that about ${profile.name}.` };
+  return { profileId: profile.id, name: profile.name, fact, facts };
+}
+
+export function rememberedFacts(existing: string[], fact: string): string[] {
+  if (existing.some((item) => item.toLowerCase() === fact.toLowerCase())) return existing;
+  return [...existing, fact];
+}
+
+export function memoryReply(
+  text: string,
+  profiles: { name: string; facts?: string[] | null; school?: string | null }[],
+): string | null {
+  const match = text.trim().match(/^what do you remember about (.+?)\??$/i);
+  const who = match?.[1]?.trim();
+  if (!who) return null;
+  const profile = profiles.find((person) => person.name.trim().toLowerCase() === who.toLowerCase());
+  if (!profile) return `I don't see ${who}.`;
+  const lines: string[] = [];
+  const school = profile.school?.trim();
+  if (school) lines.push(`${profile.name} goes to ${school}.`);
+  for (const fact of profile.facts ?? []) lines.push(`${profile.name} ${fact}`);
+  if (lines.length === 0) return `I don't remember anything about ${profile.name}.`;
+  return lines.join("\n");
+}
+
+/** Clears a saved school. A missing person or a blank school is said back instead of saved. */
+export function forgetSchool(
+  text: string,
+  profiles: { id: string; name: string; school?: string | null }[],
+): { profileId: string; name: string; school: null } | { reply: string } | null {
+  const match = text.trim().match(/^forget (.+?)['’]s school\.?$/i);
+  const who = match?.[1]?.trim().toLowerCase();
+  if (!who) return null;
+  const profile = profiles.find((person) => person.name.trim().toLowerCase() === who);
+  if (!profile) return { reply: `I don't see ${match?.[1]?.trim()}.` };
+  if (!profile.school?.trim()) return { reply: `I don't have a school for ${profile.name}.` };
+  return { profileId: profile.id, name: profile.name, school: null };
+}
+
+export function schoolFact(
+  text: string,
+  profiles: { id: string; name: string }[],
+): { profileId: string; name: string; school: string } | null {
+  const match = text.trim().match(/^(.+?)['’]s school is\s+(.+?)\.?$/i);
+  const who = match?.[1]?.trim().toLowerCase();
+  const school = match?.[2]?.trim();
+  if (!who || !school) return null;
+  const profile = profiles.find((person) => person.name.trim().toLowerCase() === who);
+  if (!profile) return null;
+  return { profileId: profile.id, name: profile.name, school };
+}
+
+const BIRTHDAY_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function birthdayDate(year: number, monthDay: string): Date | null {
+  const match = monthDay.match(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/);
+  if (!match) return null;
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const date = new Date(year, month - 1, day);
+  if (date.getMonth() !== month - 1) return new Date(year, 1, 28);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function nextBirthday(monthDay: string, now: Date): Date | null {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  let date = birthdayDate(start.getFullYear(), monthDay);
+  if (!date) return null;
+  if (date.getTime() < start.getTime()) date = birthdayDate(start.getFullYear() + 1, monthDay);
+  return date;
+}
+
+function birthdayLine(name: string, date: Date, days: number, year: number | null | undefined): string {
+  const age = year ? date.getFullYear() - year : null;
+  const label = `${BIRTHDAY_MONTHS[date.getMonth()]} ${date.getDate()}`;
+  if (age && age > 0) {
+    if (days === 0) return `${name} turns ${age} today.`;
+    if (days === 1) return `${name} turns ${age} tomorrow.`;
+    return `${name} turns ${age} on ${label}.`;
+  }
+  if (days === 0) return `${name}'s birthday is today.`;
+  if (days === 1) return `${name}'s birthday is tomorrow.`;
+  return `${name}'s birthday is ${label}.`;
+}
+
+export function birthdayReply(
+  text: string,
+  rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[],
+  now = new Date(),
+): string | null {
+  const trimmed = text.trim();
+  const named = trimmed.match(/^when(?:'s| is)\s+(.+?)['’]s birthday\??$/i);
+  const next = /^when(?:'s| is) the next birthday\??$/i.test(trimmed);
+  if (!named && !next) return null;
+  const birthdays = rows.filter((row) => !row.type || row.type === "birthday");
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  if (named) {
+    const who = named[1].trim();
+    const row = birthdays.find((item) => item.name.trim().toLowerCase() === who.toLowerCase());
+    if (!row) return `I don't have a birthday for ${who}.`;
+    const date = nextBirthday(row.monthDay, now);
+    if (!date) return `I don't have a birthday for ${who}.`;
+    const days = Math.round((date.getTime() - start.getTime()) / 86400000);
+    return birthdayLine(row.name, date, days, row.year);
+  }
+  const upcoming = birthdays
+    .map((row) => ({ row, date: nextBirthday(row.monthDay, now) }))
+    .filter((item): item is { row: (typeof birthdays)[number]; date: Date } => !!item.date)
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  if (upcoming.length === 0) return "I don't have any birthdays saved.";
+  const soonest = upcoming[0].date;
+  return upcoming
+    .filter((item) => item.date.getTime() === soonest.getTime())
+    .map((item) => birthdayLine(item.row.name, item.date, Math.round((item.date.getTime() - start.getTime()) / 86400000), item.row.year))
+    .join("\n");
+}
+
+function anniversaryLine(name: string, date: Date, days: number, year: number | null | undefined): string {
+  const age = year ? date.getFullYear() - year : null;
+  const what = age && age > 0 ? `${name}, ${age}-year anniversary` : `${name}'s anniversary`;
+  const label = `${BIRTHDAY_MONTHS[date.getMonth()]} ${date.getDate()}`;
+  if (days === 0) return `${what} is today.`;
+  if (days === 1) return `${what} is tomorrow.`;
+  return `${what} is ${label}.`;
+}
+
+export function anniversaryReply(
+  text: string,
+  rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[],
+  now = new Date(),
+): string | null {
+  const trimmed = text.trim();
+  const named = trimmed.match(/^when(?:'s| is)\s+(.+?)['’]s anniversary\??$/i);
+  const next = /^when(?:'s| is) (?:our|the next) anniversary\??$/i.test(trimmed);
+  if (!named && !next) return null;
+  const anniversaries = rows.filter((row) => row.type === "anniversary");
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  if (named) {
+    const who = named[1].trim();
+    const row = anniversaries.find((item) => item.name.trim().toLowerCase() === who.toLowerCase());
+    if (!row) return `I don't have an anniversary for ${who}.`;
+    const date = nextBirthday(row.monthDay, now);
+    if (!date) return `I don't have an anniversary for ${who}.`;
+    return anniversaryLine(row.name, date, Math.round((date.getTime() - start.getTime()) / 86400000), row.year);
+  }
+  const upcoming = anniversaries
+    .map((row) => ({ row, date: nextBirthday(row.monthDay, now) }))
+    .filter((item): item is { row: (typeof anniversaries)[number]; date: Date } => !!item.date)
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  if (upcoming.length === 0) return "I don't have an anniversary saved.";
+  const soonest = upcoming[0];
+  return anniversaryLine(soonest.row.name, soonest.date, Math.round((soonest.date.getTime() - start.getTime()) / 86400000), soonest.row.year);
+}
+
+export function schoolReply(
+  text: string,
+  profiles: { name: string; school?: string | null }[],
+  selfName?: string | null,
+): string | null {
+  const mine = /^what(?:'s| is) my school\??$/i.test(text.trim());
+  const named = text.trim().match(/^what(?:'s| is)\s+(.+?)['’]s school\??$/i);
+  const who = (mine ? selfName : named?.[1])?.trim();
+  if (!who) return null;
+  const profile = profiles.find((person) => person.name.trim().toLowerCase() === who.toLowerCase());
+  if (!profile) return `I don't see ${who}.`;
+  if (!profile.school) return `${profile.name} doesn't have a school saved.`;
+  return `${profile.name}'s school is ${profile.school}.`;
+}
+
+/** Who drives an event. "who is driving" stays a question. */
+export function driverChange(
+  text: string,
+  profiles: { id: string; name: string }[],
+  selfName?: string | null,
+): { title: string; profileIds: string[]; reply: string } | { title: string; reply: string } | null {
+  const trimmed = text.trim();
+  const self = trimmed.match(/^(?:i'm|i am)\s+driving\s+(.+?)\.?$/i);
+  if (self?.[1]?.trim()) {
+    const title = self[1].trim();
+    const mine = selfName?.trim();
+    if (!mine) return { title, reply: "Pick one person first." };
+    const profile = profiles.find((person) => person.name.toLowerCase() === mine.toLowerCase());
+    if (!profile) return { title, reply: "Pick one person first." };
+    return { title, profileIds: [profile.id], reply: `${profile.name} is driving ${title}.` };
+  }
+  const match = trimmed.match(/^(.+?)\s+(?:is|are) driving\s+(.+?)\.?$/i);
+  const who = match?.[1]?.trim();
+  const title = match?.[2]?.trim();
+  if (!who || !title || /^(?:who|what|where|when)$/i.test(who)) return null;
+  if (/^(?:nobody|no one|no-one)$/i.test(who)) {
+    return { title, profileIds: [], reply: `Nobody is driving ${title}.` };
+  }
+  const parts = who.split(/\s*,\s*|\s+and\s+/i).map((part) => part.trim()).filter(Boolean);
+  const chosen: { id: string; name: string }[] = [];
+  for (const part of parts) {
+    const profile = profiles.find((person) => person.name.toLowerCase() === part.toLowerCase());
+    if (!profile) return { title, reply: `I don't see ${part}.` };
+    if (!chosen.some((person) => person.id === profile.id)) chosen.push(profile);
+  }
+  if (chosen.length === 0) return null;
+  const names = chosen.map((person) => person.name);
+  const pretty = names.length <= 2
+    ? names.join(" and ")
+    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const verb = names.length === 1 ? "is" : "are";
+  return { title, profileIds: chosen.map((person) => person.id), reply: `${pretty} ${verb} driving ${title}.` };
+}
+
+export function drivingReply(
+  text: string,
+  events: { title: string; drivingProfileIds?: string[] | null }[],
+  profiles: { id: string; name: string }[],
+): string | null {
+  const asked = text.trim().match(/^who(?:'s| is) driving\s+(.+?)\??$/i)?.[1]?.trim();
+  if (!asked) return null;
+  const event = events.find((item) => item.title.toLowerCase().includes(asked.toLowerCase()));
+  if (!event) return `I don't see ${asked}.`;
+  const names = (event.drivingProfileIds ?? [])
+    .map((id) => profiles.find((profile) => profile.id === id)?.name)
+    .filter((name): name is string => !!name);
+  if (names.length === 0) return `Nobody is set to drive ${event.title}.`;
+  if (names.length === 1) return `${names[0]} is driving ${event.title}.`;
+  const last = names[names.length - 1];
+  return `${names.slice(0, -1).join(", ")} and ${last} are driving ${event.title}.`;
+}
+
+export function familyReply(
+  text: string,
+  profiles: { name: string; school?: string | null; facts?: string[] | null; isAllFamilyProfile?: boolean | null }[],
+): string | null {
+  if (!/^who(?:'s| is) (?:in|on) the family\??$/i.test(text.trim())) return null;
+  const people = profiles.filter((person) => person.name.trim() && !person.isAllFamilyProfile);
+  if (people.length === 0) return "Nobody is in the family yet.";
+  return people.map((person) => [person.name, person.school, ...(person.facts ?? [])].filter(Boolean).join(", ")).join("\n");
+}
+
+export function placeAnswer(
+  text: string,
+  events: (Parameters<typeof eventsForDayPlan>[0][number] & { location?: string | null })[],
+  assignments: Parameters<typeof eventsForDayPlan>[1],
+  selectedIds: string[],
+  kidName: string | null,
+): string | null {
+  return placeReply(text, eventsForDayPlan(events, assignments, selectedIds, kidName));
+}
+
+export function placeReply(text: string, events: { title: string; location?: string | null }[]): string | null {
+  const asked = text.trim().match(/^where(?:'s| is)\s+(.+?)\??$/i)?.[1]?.trim();
+  if (!asked) return null;
+  const event = events.find((item) => item.title.toLowerCase().includes(asked.toLowerCase()));
+  const link = (place: string) => `https://maps.apple.com/?q=${encodeURIComponent(place)}`;
+  if (!event) return link(asked);
+  if (!event.location?.trim()) return `${event.title} doesn't have a place saved.`;
+  const place = event.location.trim();
+  return `${event.title} is at ${place}. ${link(place)}`;
+}
+
+export function weatherReply(
+  text: string,
+  weather: { location?: string | null; temperature?: number | null; condition?: string | null } | null,
+): string | null {
+  if (!/^what(?:'s| is) the weather\??$/i.test(text.trim())) return null;
+  if (!weather || weather.temperature == null) return "I don't have the weather.";
+  const place = weather.location ? ` in ${weather.location}` : "";
+  const condition = weather.condition ? `, ${weather.condition}` : "";
+  return `${Math.round(weather.temperature)}°${place}${condition}.`;
+}
+
+export function newsletterTitles(text: string, rows: { title: string; category?: string | null }[]): string[] | null {
+  if (!/^newsletters?\.?$/i.test(text.trim())) return null;
+  return rows.filter((row) => row.category === "school_email").map((row) => row.title).slice(0, 5);
+}
+
+export function searchHits(text: string, rows: { title: string; description?: string | null }[]): string[] | null {
+  const query = text.trim().match(/^search\s+(.+?)\.?$/i)?.[1]?.trim().toLowerCase();
+  if (!query) return null;
+  return rows
+    .filter((row) => `${row.title}\n${row.description ?? ""}`.toLowerCase().includes(query))
+    .map((row) => row.title)
+    .slice(0, 5);
+}
+
+export function muteAddress(text: string): string | null {
+  const match = text.trim().match(/^mute\s+(\S+@\S+)$/i);
+  const address = match?.[1]?.replace(/\.+$/, "");
+  return address || null;
+}
+
+export function notRelevantTitle(text: string): string | null {
+  const match = text.trim().match(/^(?:not relevant|ignore)\s+(.+?)\.?$/i);
+  const title = match?.[1]?.trim();
+  return title || null;
+}
+
+/** A new title. A clock or a day stays a time move. */
+export function titleChange(text: string): { title: string; next: string } | null {
+  const match = text.trim().match(/^(?:rename|change the name of)\s+(.+?)\s+to\s+(.+?)\.?$/i);
+  const title = match?.[1]?.trim();
+  const next = match?.[2]?.trim();
+  if (!title || !next || title.toLowerCase() === next.toLowerCase()) return null;
+  if (moveEventWhen(`move item to ${next}`)) return null;
+  return { title, next };
+}
+
+/** A place correction. A clock or a day stays a time move. */
+export function placeChange(text: string): { title: string; location: string } | null {
+  const trimmed = text.trim();
+  const moved = trimmed.match(/^move\s+(.+?)\s+to\s+(.+?)\.?$/i);
+  if (moved) {
+    if (moveEventWhen(trimmed)) return null;
+    const title = moved[1].trim();
+    const location = moved[2].trim();
+    if (!title || !location) return null;
+    return { title, location };
+  }
+  const named = trimmed.match(/^(.+?)\s+is at\s+(.+?)\.?$/i);
+  const title = named?.[1]?.trim();
+  const location = named?.[2]?.trim();
+  if (!title || !location || /^(?:what|where|when|who)$/i.test(title)) return null;
+  if (moveEventWhen(`move item to ${location}`)) return null;
+  return { title, location };
+}
+
+export function moveEventWhen(text: string, from = new Date()): { title: string; hours?: number; minutes?: number; on?: Date } | null {
+  const match = text.trim().match(/^move\s+(.+?)\s+to\s+(.+?)\.?$/i);
+  if (!match) return null;
+  const title = match[1].trim();
+  const when = match[2].trim();
+  if (!title || !when) return null;
+  const clock = when.match(/^(.*?)(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i);
+  let hours: number | undefined;
+  let minutes: number | undefined;
+  let dayPart = when;
+  if (clock) {
+    let parsed = Number(clock[2]);
+    const parsedMinutes = clock[3] ? Number(clock[3]) : 0;
+    const suffix = clock[4].toLowerCase();
+    if (parsed >= 1 && parsed <= 12 && parsedMinutes <= 59) {
+      if (suffix === "pm" && parsed !== 12) parsed += 12;
+      if (suffix === "am" && parsed === 12) parsed = 0;
+      hours = parsed;
+      minutes = parsedMinutes;
+      dayPart = clock[1].replace(/\s+at\s*$/i, "").trim();
+    }
+  }
+  const on = moveDay(dayPart, from);
+  if (!on && hours == null) return null;
+  return { title, ...(hours != null ? { hours, minutes } : {}), ...(on ? { on } : {}) };
+}
+
+export function moveDay(dayPart: string, from: Date): Date | undefined {
+  if (!dayPart) return undefined;
+  if (/^(?:today|tonight|this (?:morning|afternoon|evening))$/i.test(dayPart)) return new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  if (/^tomorrow$/i.test(dayPart)) {
+    const on = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    on.setDate(on.getDate() + 1);
+    return on;
+  }
+  return eventOn(`event ${dayPart}`, from)?.on;
+}
+
+const CONFIRM_YES = /^\s*(yes|yep|yeah|yup|sure|ok|okay|confirm|confirmed|do it|go ahead|please do|sounds good|correct|that's right)(?:\s+please)?[.!]?$/i;
+const CONFIRM_NO = /^\s*(no|nope|nah|cancel|don't|do not)(?:\s+thanks)?[.!]?$/i;
+
+export function confirmedReply(text: string): boolean {
+  return CONFIRM_YES.test(text.trim());
+}
+
+export function declinedReply(text: string): boolean {
+  return CONFIRM_NO.test(text.trim());
+}
+
+export function deleteEventTitle(text: string): string | null {
+  const match = /^(?:please\s+)?(?:delete|remove|cancel)\s+(?:the\s+)?(?:event\s+)?["']?(.+?)["']?\.?$/i.exec(text.trim());
+  const title = match?.[1]?.trim();
+  if (!title || /^(?:yes|no)$/i.test(title)) return null;
+  return title;
+}
+
+/** Imported events stay until the person confirms. App-made rows do not. */
+export function importedEventNeedsConfirm(source: string | null | undefined): boolean {
+  return !!source && source !== "app" && source !== "meal";
+}
+
+/** A copy that only lives on another calendar cannot be deleted from chat. */
+export function eventStaysPut(source: string | null | undefined, id: string): string | null {
+  if (source === "meal") return "the meal plan";
+  if (id.startsWith("google-") || source === "google") return "Google Calendar";
+  if (id.startsWith("outlook-") || source === "outlook") return "Outlook";
+  if (id.startsWith("ical-") || source === "ical") return "the subscribed calendar";
+  return null;
+}
+
+export function moveEventAction(source: string | null | undefined, id: string): "keep-meal" | "keep-google" | "keep-outlook" | "keep-ical" | "confirm" | "move" {
+  const place = eventStaysPut(source, id);
+  if (place === "the meal plan") return "keep-meal";
+  if (place === "Google Calendar") return "keep-google";
+  if (place === "Outlook") return "keep-outlook";
+  if (place === "the subscribed calendar") return "keep-ical";
+  if (importedEventNeedsConfirm(source)) return "confirm";
+  return "move";
+}
+
+export function deleteEventAction(source: string | null | undefined, id: string): "keep" | "confirm" | "delete" {
+  if (eventStaysPut(source, id)) return "keep";
+  if (importedEventNeedsConfirm(source)) return "confirm";
+  return "delete";
 }

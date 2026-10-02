@@ -1,0 +1,92 @@
+export function slipSender(description: string | null | undefined): string | null {
+  const match = description?.match(/^From: (\S+)\n/);
+  return match?.[1] ?? null;
+}
+
+export function slipText(description: string | null | undefined): string {
+  if (!description) return "";
+  return description.replace(/^From: \S+\n/, "");
+}
+
+export function slipQuote(description: string | null | undefined): string {
+  return slipText(description).split(/\n\s*\n/)[0] ?? "";
+}
+
+/** The adult who connected the account can open the original. Other adults need the share switch. A child never gets the link. */
+export function openEmailHref(
+  shareOriginals: boolean,
+  sender: string | null,
+  viewer?: { isChild?: boolean; ownsAccount?: boolean },
+): string | null {
+  if (!sender || viewer?.isChild) return null;
+  if (viewer?.ownsAccount || shareOriginals) return `mailto:${sender}`;
+  return null;
+}
+
+/** One remembered fact per line. A blank field clears them. A repeat is kept once. */
+export function savedFacts(raw: string): string[] {
+  const facts: string[] = [];
+  for (const line of raw.split("\n")) {
+    const fact = line.trim().slice(0, 200);
+    if (!fact || facts.includes(fact)) continue;
+    facts.push(fact);
+    if (facts.length === 20) break;
+  }
+  return facts;
+}
+
+/** A blank school field clears the saved school. */
+export function savedSchool(raw: string | null | undefined): string | null {
+  const school = raw?.trim() ?? "";
+  return school || null;
+}
+
+export function personRecordLines(person: { school?: string | null; facts?: string[] | null }): string[] {
+  const lines: string[] = [];
+  const school = person.school?.trim();
+  if (school) lines.push(school);
+  const facts: string[] = [];
+  for (const fact of person.facts ?? []) {
+    const trimmed = fact.trim();
+    if (trimmed && !facts.includes(trimmed)) facts.push(trimmed);
+  }
+  if (facts.length > 0) lines.push(facts.join(" · "));
+  return lines;
+}
+
+export function suggestedSchool(text: string): string | null {
+  const match = text.match(/\b([A-Z][\w'.-]*(?:\s+[A-Z][\w'.-]*){0,4}\s+(?:School|Academy|Elementary|Middle|High))\b/);
+  return match?.[1] ?? null;
+}
+
+export function schoolFromSlip(title: string, description: string | null | undefined): string | null {
+  return suggestedSchool(`${title}\n${slipText(description)}`);
+}
+
+type SlipPerson = { id: string; name: string; school?: string | null; isChild?: boolean | null; role?: string | null };
+
+function namesPerson(text: string, name: string): boolean {
+  const who = name.trim();
+  if (!who) return false;
+  const escaped = who.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escaped}\\b`, "i").test(text);
+}
+
+/** Save a school onto the person the email names. A parent on screen is not that person. */
+export function schoolSaveTarget(
+  title: string,
+  description: string | null | undefined,
+  people: SlipPerson[],
+  selectedId: string | null,
+): { profileId: string; name: string; school: string } | null {
+  const school = schoolFromSlip(title, description);
+  if (!school) return null;
+  const text = `${title}\n${slipText(description)}`;
+  const named = people.filter((person) => namesPerson(text, person.name) && !person.school?.trim());
+  if (named.length === 1) return { profileId: named[0].id, name: named[0].name, school };
+  if (named.length > 1) return null;
+  const selected = people.find((person) => person.id === selectedId);
+  if (!selected || selected.school?.trim()) return null;
+  if (selected.role !== "child" && !selected.isChild) return null;
+  return { profileId: selected.id, name: selected.name, school };
+}

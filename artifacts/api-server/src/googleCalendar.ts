@@ -1,13 +1,16 @@
 import { google, calendar_v3 } from 'googleapis';
+import { gmailPayload, INBOX_SCAN_LIMIT, toInbound, type InboundMessage } from './ingest/parse';
+import { inboxFailure, inboxListStopped, inboxTokenExpiry } from './ingest/process';
 
-// Deliberately calendar-only — no userinfo.email/userinfo.profile. Those
+// Calendar plus read-only mail. No userinfo.email/userinfo.profile. Those
 // identity scopes are what makes Google's consent screen read as
 // "<App> wants to use <Google Account> to sign in", even though this flow
-// only connects calendar access to an already-authenticated profile and
-// never establishes an app session. The connected account's email is read
-// off the primary calendar itself (see getUserEmail below) instead.
+// only connects an already-authenticated profile and never establishes an
+// app session. The connected account's email is read off the primary
+// calendar itself (see getUserEmail below) instead.
 const SCOPES = [
-  'https://www.googleapis.com/auth/calendar'
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/gmail.readonly',
 ];
 
 export class GoogleCalendarService {
@@ -258,6 +261,61 @@ export class GoogleCalendarService {
       console.error('Error fetching available calendars:', error);
       throw error;
     }
+  }
+
+  async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string, tokenExpiry?: Date | string | null): Promise<InboundMessage[]> {
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+    );
+    oauth2Client.setCredentials({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expiry_date: inboxTokenExpiry(tokenExpiry, !!refreshToken),
+    });
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    const ids: string[] = [];
+    let pageToken: string | undefined;
+    while (ids.length < INBOX_SCAN_LIMIT) {
+      try {
+        const listed = await gmail.users.messages.list({
+          userId: "me",
+          q: "newer_than:2d in:inbox",
+          maxResults: Math.min(50, INBOX_SCAN_LIMIT - ids.length),
+          pageToken,
+        });
+        const before = ids.length;
+        for (const item of listed.data.messages ?? []) {
+          if (item.id && !ids.includes(item.id)) ids.push(item.id);
+          if (ids.length >= INBOX_SCAN_LIMIT) break;
+        }
+        pageToken = listed.data.nextPageToken ?? undefined;
+        if (!pageToken || ids.length === before) break;
+      } catch (err) {
+        if (!inboxListStopped(err, ids.length)) throw err;
+        console.warn("Inbox list stopped early:", err instanceof Error ? err.message : err);
+        break;
+      }
+    }
+    const out: InboundMessage[] = [];
+    for (const id of ids) {
+      try {
+        const full = await gmail.users.messages.get({
+          userId: "me",
+          id,
+          format: "full",
+        });
+        out.push(toInbound({
+          id,
+          snippet: full.data.snippet ?? undefined,
+          payload: gmailPayload(full.data.payload),
+        }, accountId));
+      } catch (err) {
+        if (inboxFailure(err) === "reconnect") throw err;
+        console.warn("Inbox message skipped:", err instanceof Error ? err.message : err);
+      }
+    }
+    return out;
   }
 
   async getUserProfile(accessToken: string) {

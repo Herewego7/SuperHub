@@ -1,4 +1,9 @@
 import type { HealthReminder, HealthSchedule } from "@workspace/db";
+
+/** A dose stays sent when nobody was waiting, or at least one push went out. */
+export function healthDispatchSticks(sent: number, recipients: number): boolean {
+  return recipients === 0 || sent > 0;
+}
 import { localDate, localDayOfWeek } from "./choreToday";
 
 /**

@@ -1,4 +1,4 @@
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, isNotNull, lte, or } from "drizzle-orm";
 import { db } from "../db";
 import {
   profiles,
@@ -18,6 +18,11 @@ import {
 import { isKidProfile } from "./profileRole";
 import { DEFAULT_TIMEZONE } from "./timezone";
 import { driverIdsOf } from "./eventDrivers";
+import { expandRecurringEvents } from "./eventRecurrence";
+import { eventsOnWatchedCalendars } from "./calendarAssignmentScope";
+import { withoutDismissedSlips } from "../ingest/process";
+import { storage } from "../storage";
+import { loadProfiles } from "./profileRows";
 
 export interface DailyBriefItem {
   id: string;
@@ -110,24 +115,34 @@ export async function buildDailyBrief(
   const scopeToSelfOnly = !!profile && isKidProfile(profile);
 
   // ---- Events ----
-  const allEvents = await db
-    .select()
-    .from(events)
-    .where(
-      and(
-        eq(events.userId, userId),
-        gte(events.startTime, wideStart),
-        lte(events.startTime, wideEnd),
+  const mailSettings = await storage.getCalendarSettingsByUser(userId);
+  const allEvents = eventsOnWatchedCalendars(expandRecurringEvents(withoutDismissedSlips(
+    await db
+      .select()
+      .from(events)
+      .where(
+        and(
+          eq(events.userId, userId),
+          or(
+            and(gte(events.startTime, wideStart), lte(events.startTime, wideEnd)),
+            isNotNull(events.recurrenceType),
+          ),
+        ),
       ),
-    );
+      mailSettings?.dismissedSlipKeys ?? [],
+    ),
+    now,
+  ), await storage.getCalendarAssignmentsByUser(userId));
   const todaysAllEvents = allEvents
     .filter((e) => localDate(e.startTime, tz) === today)
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
   const todaysEvents = !sections.events
     ? []
     : todaysAllEvents
-        .filter((e) => {
-          if (!scopeToSelfOnly) return true;
+      .filter((e) => {
+        if (!briefListsEvent(e, sections.meals)) return false;
+        if (scopeToSelfOnly && !briefShowsForKid(e, profile!.name)) return false;
+        if (!scopeToSelfOnly) return true;
           const ids = (e.profileIds as string[] | null) ?? [];
           return ids.length === 0 || ids.includes(profile!.id);
         })
@@ -161,7 +176,7 @@ export async function buildDailyBrief(
   if (sections.chores) {
     const targetProfiles: Profile[] = scopeToSelfOnly
       ? [profile!]
-      : (await db.select().from(profiles).where(eq(profiles.userId, userId)))
+      : (await loadProfiles(eq(profiles.userId, userId)))
           .filter((p) => !p.isAllFamilyProfile);
 
     let totalDue = 0;
@@ -172,12 +187,16 @@ export async function buildDailyBrief(
     const remainingTitles: string[] = [];
     const byPerson: { name: string; regular: number; target: number; inspiration: number }[] = [];
     for (const p of targetProfiles) {
-      const { due, completedIds } = await getTodayChoresForProfile(
+      const loaded = await getTodayChoresForProfile(
         userId,
         p.id,
         now,
         tz,
       );
+      const due = scopeToSelfOnly
+        ? loaded.due.filter((chore) => briefShowsForKid(chore, p.name))
+        : loaded.due;
+      const completedIds = loaded.completedIds;
       totalDue += due.length;
       for (const c of due) {
         if (!completedIds.has(c.id)) {
@@ -250,6 +269,29 @@ export async function buildDailyBrief(
   };
 }
 
+export function briefListsEvent(event: { source?: string | null }, mealsSection: boolean): boolean {
+  return !(event.source === "meal" && mealsSection);
+}
+
+/** A kid's brief hides school mail that does not name them. A parent still sees it. */
+export function briefShowsForKid(
+  row: { title: string; description?: string | null; category?: string | null; source?: string | null },
+  kidName: string | null | undefined,
+): boolean {
+  if (!kidName?.trim()) return true;
+  if (row.category !== "school_email" && row.source !== "school") return true;
+  const escaped = kidName.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escaped}\\b`, "i").test(`${row.title}\n${row.description ?? ""}`);
+}
+
+export function choresNamedForKid<T extends { title: string; description?: string | null; category?: string | null; source?: string | null }>(
+  rows: T[],
+  kidName: string | null | undefined,
+): T[] {
+  if (!kidName) return rows;
+  return rows.filter((row) => briefShowsForKid(row, kidName));
+}
+
 function slotOrder(slot: string): number {
   return slot === "breakfast" ? 0 : slot === "lunch" ? 1 : slot === "dinner" ? 2 : 3;
 }
@@ -294,10 +336,7 @@ export async function buildBriefsForUser(
   now: Date = new Date(),
 ): Promise<DailyBrief[]> {
   const tz = await getUserTimezone(userId);
-  const userProfiles = await db
-    .select()
-    .from(profiles)
-    .where(eq(profiles.userId, userId));
+  const userProfiles = await loadProfiles(eq(profiles.userId, userId));
   const real = userProfiles.filter((p) => !p.isAllFamilyProfile);
   const family = await buildDailyBrief(userId, null, now, tz);
   const perProfile = await Promise.all(

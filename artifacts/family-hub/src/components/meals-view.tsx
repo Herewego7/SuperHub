@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
+import { Switch } from "@/components/ui/switch";
+import { dinnerCopyRange } from "@/lib/mealCalendar";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format, addDays, addWeeks, startOfWeek } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -158,6 +160,22 @@ interface MealPlanViewProps {
 }
 
 function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekEndIso, onOpenGrocery }: MealPlanViewProps) {
+  const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null; mealsOnCalendar?: boolean | null }>({ queryKey: ["/api/calendar-settings"] });
+  const mealsOnCalendar = calendarSettings?.mealsOnCalendar === true;
+  useEffect(() => {
+    if (!mealsOnCalendar) return;
+    let cancelled = false;
+    const range = dinnerCopyRange(weekStartIso, weekEndIso, new Date());
+    void apiRequest("POST", "/api/calendar-settings/meals-on-calendar/copy", {
+      start: range.start,
+      end: range.end,
+    }).then(() => {
+      if (!cancelled) void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mealsOnCalendar, weekStartIso, weekEndIso]);
   const [editingMeal, setEditingMeal] = useState<MealWithIngredients | null>(null);
   const [creatingFor, setCreatingFor] = useState<{ date: string; slot: MealSlot } | null>(null);
 
@@ -289,12 +307,13 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       // invalidate so a just-planned meal shows up immediately, not after its
       // 30s staleTime happens to lapse.
       queryClient.invalidateQueries({ queryKey: ["/api/activity-log"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       if (created.ingredients && created.ingredients.length > 0) {
         setGroceryPrompt(created);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: mealsKey });
+      queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
     },
   });
 
@@ -325,9 +344,10 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       queryClient.setQueryData<MealWithIngredients[]>(mealsKey, (old) =>
         (old ?? []).map((m) => (m.id === updated.id ? updated : m)),
       );
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: mealsKey });
+      queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
     },
   });
 
@@ -353,9 +373,10 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       return res.json();
     },
     onSuccess: (created: MealWithIngredients) => {
-      queryClient.invalidateQueries({ queryKey: mealsKey });
+      queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
       // Family History synthesizes "meal_planned" live from the meals table.
       queryClient.invalidateQueries({ queryKey: ["/api/activity-log"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       toast({ title: "Meal restored" });
       if (created.ingredients && created.ingredients.length > 0) {
         setGroceryPrompt(created);
@@ -384,6 +405,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       return { previous };
     },
     onSuccess: (_data, meal) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       toast({
         title: `Removed "${meal.name}"`,
         description: `No longer planned for ${format(new Date(meal.date + "T00:00:00"), "EEE, MMM d")}.`,
@@ -399,7 +421,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       toast({ title: "Failed to remove meal", variant: "destructive" });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: mealsKey });
+      queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
     },
   });
 
@@ -441,6 +463,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
     },
     onSuccess: ({ created, failed }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       // Family History synthesizes "meal_planned" live from the meals table.
       queryClient.invalidateQueries({ queryKey: ["/api/activity-log"] });
       if (failed > 0) {
@@ -722,10 +745,30 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
           Meal Ideas card. It's a tab-level destination, not a meal-ideas
           action — and inside that card it became the most prominent control
           on an empty Meals tab, outranking anything to do with adding a meal. */}
-      <div className="flex justify-end mb-3">
+      <div className="flex items-center justify-end gap-3 mb-3">
+        <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+          Put dinners on the calendar
+          <Switch
+            checked={mealsOnCalendar}
+            data-testid="meals-on-calendar"
+            onCheckedChange={(checked) => {
+              const on = !!checked;
+              queryClient.setQueryData(["/api/calendar-settings"], (old: { mealsOnCalendar?: boolean } | undefined) => ({ ...old, mealsOnCalendar: on }));
+              void apiRequest("PATCH", "/api/calendar-settings/meals-on-calendar", { enabled: on }).then(async () => {
+                void queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+                if (!on) return;
+                await apiRequest("POST", "/api/calendar-settings/meals-on-calendar/copy", {
+                  start: weekStartIso,
+                  end: weekEndIso,
+                });
+                void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+              });
+            }}
+          />
+        </label>
         <Button
           variant="default" size="default"
-          className="w-full sm:w-auto gap-2 h-10 rounded-full"
+          className="shrink-0 gap-2 h-10 rounded-full"
           onClick={onOpenGrocery}
           data-testid="meals-open-grocery"
         >
@@ -2357,6 +2400,7 @@ function MealModal({ meal, creatingFor, weekStartIso, weekEndIso, onClose, onCre
         const k = q.queryKey[0];
         return (
           k === "/api/meals" ||
+          k === "/api/events" ||
           k === "/api/grocery-list/aggregate" ||
           k === "/api/grocery-items"
         );
@@ -3392,10 +3436,13 @@ function GroceryListView({ weekStartIso, weekEndIso, weekLabel, onBack }: Grocer
 
   const merged = useMemo<MergedGroceryRow[]>(() => {
     const rowsByKey = new Map<string, MergedGroceryRow>();
+    const gone = new Set(
+      persisted.filter((item) => item.alreadyHave).map((item) => item.name.trim().toLowerCase()),
+    );
 
     for (const agg of aggregated) {
       const key = agg.name.trim().toLowerCase();
-      if (!key) continue;
+      if (!key || gone.has(key)) continue;
       rowsByKey.set(key, {
         key,
         name: agg.name,
@@ -3411,7 +3458,7 @@ function GroceryListView({ weekStartIso, weekEndIso, weekLabel, onBack }: Grocer
 
     for (const item of persisted) {
       const key = item.name.trim().toLowerCase();
-      if (!key) continue;
+      if (!key || gone.has(key)) continue;
       const existing = rowsByKey.get(key);
       if (existing) {
         existing.persistedId = item.id;

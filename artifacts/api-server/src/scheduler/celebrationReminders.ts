@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { celebrations, locationSettings } from "@workspace/db";
 import { sendPushToUser } from "../lib/push";
+import { pushReachedSomeone } from "../lib/pushDelivery";
 import { getFamilyMemberAccountIds } from "../familyService";
 import { celebrationsWithMeta } from "../lib/celebrations";
 import { logger } from "../lib/logger";
@@ -17,6 +18,25 @@ const MILESTONES = [
   { days: 30, field: "reminder30SentYear" as const, label: "30 days" },
   { days: 7, field: "reminder7SentYear" as const, label: "7 days" },
 ];
+
+type StampField = (typeof MILESTONES)[number]["field"];
+
+async function claimCelebration(id: string, field: StampField, year: number, previous: number | null): Promise<boolean> {
+  const stillPrevious = previous == null ? isNull(celebrations[field]) : eq(celebrations[field], previous);
+  const rows = await db
+    .update(celebrations)
+    .set({ [field]: year })
+    .where(and(eq(celebrations.id, id), stillPrevious))
+    .returning({ id: celebrations.id });
+  return rows.length > 0;
+}
+
+async function releaseCelebration(id: string, field: StampField, year: number, previous: number | null): Promise<void> {
+  await db
+    .update(celebrations)
+    .set({ [field]: previous })
+    .where(and(eq(celebrations.id, id), eq(celebrations[field], year)));
+}
 
 export async function runCelebrationReminderTick(now: Date = new Date()): Promise<void> {
   const rows = await db.select().from(celebrations);
@@ -48,6 +68,16 @@ export async function runCelebrationReminderTick(now: Date = new Date()): Promis
       if (c.daysUntil !== milestone.days) continue;
       if (c[milestone.field] === occurrenceYear) continue; // already sent for this occurrence
 
+      const previous = c[milestone.field] ?? null;
+      let claimed = false;
+      try {
+        claimed = await claimCelebration(c.id, milestone.field, occurrenceYear, previous);
+      } catch (err) {
+        logger.warn({ err, celebrationId: c.id, milestone: milestone.days }, "Celebration reminder claim failed");
+        continue;
+      }
+      if (!claimed) continue;
+
       try {
         const memberIds = await getFamilyMemberAccountIds(c.userId);
         const displayName = c.type === "other" && c.customLabel ? c.customLabel : c.name;
@@ -77,17 +107,16 @@ export async function runCelebrationReminderTick(now: Date = new Date()): Promis
           tag: `celebration-reminder-${c.id}-${milestone.days}-${occurrenceYear}`,
           data: { kind: "celebration-reminder", celebrationId: c.id },
         };
-        await Promise.all(
+        const results = await Promise.all(
           memberIds.map((memberId) => sendPushToUser({ userId: memberId }, payload, "celebrationReminder")),
         );
-        await db
-          .update(celebrations)
-          .set({ [milestone.field]: occurrenceYear })
-          .where(eq(celebrations.id, c.id));
+        if (results.length > 0 && results.every((item) => !pushReachedSomeone(item))) {
+          throw new Error("Celebration reminder reached nobody");
+        }
         logger.info({ celebrationId: c.id, milestone: milestone.days }, "Celebration reminder dispatched");
       } catch (err) {
+        await releaseCelebration(c.id, milestone.field, occurrenceYear, previous);
         logger.warn({ err, celebrationId: c.id, milestone: milestone.days }, "Celebration reminder failed");
-        // don't mark sent — retry next tick
       }
     }
   }

@@ -13,6 +13,7 @@
  */
 import { storage } from "./storage";
 import { twoWaySyncFromSettings } from "./lib/settingsOwnership";
+import { familyCalendarAccount, familyCalendarCreates, syncTargetsForEvent, writeTargetAllowed } from "./lib/calendarAssignmentScope";
 import { googleRecurrence, outlookRecurrence, excludedInstants } from "./lib/recurrenceRule";
 import { DEFAULT_TIMEZONE } from "./lib/timezone";
 import { GoogleCalendarService } from "./googleCalendar";
@@ -87,11 +88,22 @@ export async function getFreshOutlookAccessToken(profileId: string): Promise<str
 
   if (tokens.refreshToken && process.env.OUTLOOK_CLIENT_ID && process.env.OUTLOOK_CLIENT_SECRET) {
     try {
-      const refreshed = await outlookCalendarService.refreshAccessToken(
-        process.env.OUTLOOK_CLIENT_ID,
-        process.env.OUTLOOK_CLIENT_SECRET,
-        tokens.refreshToken,
-      );
+      const mailScope = "https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Read offline_access";
+      let refreshed;
+      try {
+        refreshed = await outlookCalendarService.refreshAccessToken(
+          process.env.OUTLOOK_CLIENT_ID,
+          process.env.OUTLOOK_CLIENT_SECRET,
+          tokens.refreshToken,
+          mailScope,
+        );
+      } catch {
+        refreshed = await outlookCalendarService.refreshAccessToken(
+          process.env.OUTLOOK_CLIENT_ID,
+          process.env.OUTLOOK_CLIENT_SECRET,
+          tokens.refreshToken,
+        );
+      }
       await storage.saveOutlookCalendarTokens({
         profileId,
         accessToken: refreshed.access_token,
@@ -159,13 +171,15 @@ async function familyTimeZone(event: Event): Promise<string> {
   }
 }
 
-async function createGoogleCopy(event: Event, profileId: string): Promise<void> {
+async function createGoogleCopy(event: Event, profileId: string, calendarId?: string): Promise<void> {
   const tokens = await storage.getGoogleCalendarTokens(profileId);
   if (!tokens || !tokens.isActive) return;
   // User-configured write target (Settings → Manage calendars), falling back
   // to the account's primary calendar — the only behavior before this was
-  // configurable.
-  const targetCalendarId = tokens.writeCalendarId || GOOGLE_PRIMARY_CALENDAR;
+  // configurable. A family calendar is that one calendar, not every write target.
+  const targetCalendarId = calendarId || tokens.writeCalendarId || GOOGLE_PRIMARY_CALENDAR;
+  const assignments = await storage.getCalendarAssignments(profileId);
+  if (!writeTargetAllowed(calendarId, assignments, targetCalendarId)) return;
   try {
     const created = await googleCalendarService.createEvent(
       tokens.accessToken,
@@ -203,14 +217,18 @@ async function createGoogleCopy(event: Event, profileId: string): Promise<void> 
   }
 }
 
-async function createOutlookCopy(event: Event, profileId: string): Promise<void> {
+async function createOutlookCopy(event: Event, profileId: string, calendarId?: string): Promise<void> {
   const accessToken = await getFreshOutlookAccessToken(profileId);
   if (!accessToken) return;
   const tokens = await storage.getOutlookCalendarTokens(profileId);
   // User-configured write target, falling back to the account's default
   // calendar (undefined → outlookCalendarService.createEvent posts to
   // /me/events) — the only behavior before this was configurable.
-  const targetCalendarId = tokens?.writeCalendarId || undefined;
+  const targetCalendarId = calendarId || tokens?.writeCalendarId || undefined;
+  if (targetCalendarId) {
+    const assignments = await storage.getCalendarAssignments(profileId);
+    if (!writeTargetAllowed(calendarId, assignments, targetCalendarId)) return;
+  }
   try {
     const created = await outlookCalendarService.createEvent(
       accessToken,
@@ -346,6 +364,55 @@ async function recordError(eventId: string, userId: string, profileId: string, p
 
 // ── Public orchestration ────────────────────────────────────────────────────
 
+/** Accounts that actually hold a Google or Outlook connection, whoever a calendar is "for". */
+async function connectedCalendarOwners(userId: string) {
+  const people = await storage.getProfilesByUser(userId);
+  const owners: {
+    profileId: string;
+    provider: "google" | "outlook";
+    isActive?: boolean | null;
+    calendarIds?: string[] | null;
+    writeCalendarId?: string | null;
+  }[] = [];
+  for (const person of people) {
+    if (person.isAllFamilyProfile) continue;
+    const google = await storage.getGoogleCalendarTokens(person.id);
+    if (google?.isActive !== false && google?.accessToken) {
+      owners.push({
+        profileId: person.id,
+        provider: "google",
+        isActive: google.isActive,
+        calendarIds: google.selectedCalendarIds ?? null,
+        writeCalendarId: google.writeCalendarId ?? null,
+      });
+    }
+    const outlook = await storage.getOutlookCalendarTokens(person.id);
+    if (outlook?.isActive !== false && outlook?.accessToken) {
+      owners.push({
+        profileId: person.id,
+        provider: "outlook",
+        isActive: outlook.isActive,
+        calendarIds: outlook.selectedCalendarIds ?? null,
+        writeCalendarId: outlook.writeCalendarId ?? null,
+      });
+    }
+  }
+  return owners;
+}
+
+async function familyWriterFor(event: Event) {
+  const [assignments, owners, settings] = await Promise.all([
+    storage.getCalendarAssignmentsByUser(event.userId!),
+    connectedCalendarOwners(event.userId!),
+    storage.getCalendarSettingsByUser(event.userId!),
+  ]);
+  const same = !!event.calendarId && settings?.familyCalendarId === event.calendarId;
+  return familyCalendarAccount(event.calendarId, assignments, owners, same ? {
+    profileId: settings?.familyCalendarProfileId,
+    provider: settings?.familyCalendarProvider,
+  } : null);
+}
+
 /**
  * Resolve which profile IDs to sync to. If the event is assigned to specific
  * profiles, use those. If it is a family event (no assignees), fall back to
@@ -365,6 +432,14 @@ export async function syncEventCreate(event: Event): Promise<void> {
   try {
     if (!event.userId) return;
     if (!(await isTwoWaySyncEnabled(event.userId))) return;
+    const writer = await familyWriterFor(event);
+    if (writer && event.calendarId) {
+      await (writer.provider === "google"
+        ? createGoogleCopy(event, writer.profileId, event.calendarId)
+        : createOutlookCopy(event, writer.profileId, event.calendarId));
+      return;
+    }
+    if (event.source === "meal") return;
     const profileIds = await resolveProfileIds(event);
     // Run every profile/provider copy concurrently rather than one after the
     // other. Each copy is an independent external round-trip (plus a possible
@@ -411,7 +486,15 @@ export async function syncEventUpdate(event: Event): Promise<void> {
     if (!event.userId) return;
     const existing = await storage.getEventCalendarSyncs(event.id);
     const syncEnabled = await isTwoWaySyncEnabled(event.userId);
-    const plan = planEventUpdate(existing, await resolveProfileIds(event), syncEnabled);
+    const writer = await familyWriterFor(event);
+    const profileIds = syncTargetsForEvent(
+      event.source,
+      writer?.profileId ?? null,
+      existing.map((link) => link.profileId),
+      writer ? [] : await resolveProfileIds(event),
+    );
+    const plan = planEventUpdate(existing, profileIds, syncEnabled);
+    const creates = familyCalendarCreates(plan.toCreate, writer);
 
     // planEventUpdate guarantees the three buckets cover disjoint
     // (provider, profileId) pairs, so they're safe to run concurrently — and
@@ -429,9 +512,9 @@ export async function syncEventUpdate(event: Event): Promise<void> {
         else if (link.provider === "outlook") await deleteOutlookCopy(link);
         await storage.deleteEventCalendarSync(link.eventId, link.profileId, link.provider);
       }),
-      ...plan.toCreate.map(({ profileId, provider }) =>
-        provider === "google" ? createGoogleCopy(event, profileId)
-        : provider === "outlook" ? createOutlookCopy(event, profileId)
+      ...creates.map(({ profileId, provider }) =>
+        provider === "google" ? createGoogleCopy(event, profileId, writer && profileId === writer.profileId ? event.calendarId ?? undefined : undefined)
+        : provider === "outlook" ? createOutlookCopy(event, profileId, writer && profileId === writer.profileId ? event.calendarId ?? undefined : undefined)
         : Promise.resolve(),
       ),
     ]);
