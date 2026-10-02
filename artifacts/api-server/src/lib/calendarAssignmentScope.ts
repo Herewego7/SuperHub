@@ -63,6 +63,47 @@ export function familyCalendarWriter(
   return { profileId: row.profileId, provider: row.calendarType };
 }
 
+type CalendarAccount = {
+  profileId: string;
+  provider: "google" | "outlook";
+  isActive?: boolean | null;
+  calendarIds?: string[] | null;
+  writeCalendarId?: string | null;
+};
+
+/** The account that can write this calendar. "Who it's for" may be a child, and a child has no connection. */
+export function calendarTokenOwner(
+  calendarId: string,
+  provider: "google" | "outlook",
+  owners: CalendarAccount[],
+  fallbackProfileId = "",
+): string | null {
+  const same = owners.filter((owner) => owner.provider === provider && owner.isActive !== false);
+  const write = same.find((owner) => owner.writeCalendarId === calendarId);
+  if (write) return write.profileId;
+  const listed = same.find((owner) => owner.calendarIds?.includes(calendarId));
+  if (listed) return listed.profileId;
+  const open = same.filter((owner) => owner.calendarIds == null);
+  if (open.length === 1) return open[0].profileId;
+  return fallbackProfileId || null;
+}
+
+export function familyCalendarAccount(
+  calendarId: string | null | undefined,
+  assignments: { profileId: string; calendarId: string; calendarType: string; isActive?: boolean | null }[],
+  owners: CalendarAccount[],
+): { profileId: string; provider: "google" | "outlook" } | null {
+  const id = calendarId?.trim();
+  if (!id || id === "none") return null;
+  const hinted = familyCalendarWriter(id, assignments);
+  const providers = hinted ? [hinted.provider] : (["google", "outlook"] as const);
+  for (const provider of providers) {
+    const profileId = calendarTokenOwner(id, provider, owners, hinted?.provider === provider ? hinted.profileId : "");
+    if (profileId) return { profileId, provider };
+  }
+  return hinted;
+}
+
 export function familyCalendarCreates<T extends { profileId: string; provider: string }>(
   creates: T[],
   writer: { profileId: string; provider: "google" | "outlook" } | null,

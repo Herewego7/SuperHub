@@ -13,7 +13,7 @@
  */
 import { storage } from "./storage";
 import { twoWaySyncFromSettings } from "./lib/settingsOwnership";
-import { calendarIsWritable, familyCalendarCreates, familyCalendarWriter } from "./lib/calendarAssignmentScope";
+import { calendarIsWritable, familyCalendarAccount, familyCalendarCreates } from "./lib/calendarAssignmentScope";
 import { googleRecurrence, outlookRecurrence, excludedInstants } from "./lib/recurrenceRule";
 import { DEFAULT_TIMEZONE } from "./lib/timezone";
 import { GoogleCalendarService } from "./googleCalendar";
@@ -364,6 +364,42 @@ async function recordError(eventId: string, userId: string, profileId: string, p
 
 // ── Public orchestration ────────────────────────────────────────────────────
 
+/** Accounts that actually hold a Google or Outlook connection, whoever a calendar is "for". */
+async function connectedCalendarOwners(userId: string) {
+  const people = await storage.getProfilesByUser(userId);
+  const owners: {
+    profileId: string;
+    provider: "google" | "outlook";
+    isActive?: boolean | null;
+    calendarIds?: string[] | null;
+    writeCalendarId?: string | null;
+  }[] = [];
+  for (const person of people) {
+    if (person.isAllFamilyProfile) continue;
+    const google = await storage.getGoogleCalendarTokens(person.id);
+    if (google?.isActive !== false && google?.accessToken) {
+      owners.push({
+        profileId: person.id,
+        provider: "google",
+        isActive: google.isActive,
+        calendarIds: google.selectedCalendarIds ?? null,
+        writeCalendarId: google.writeCalendarId ?? null,
+      });
+    }
+    const outlook = await storage.getOutlookCalendarTokens(person.id);
+    if (outlook?.isActive !== false && outlook?.accessToken) {
+      owners.push({
+        profileId: person.id,
+        provider: "outlook",
+        isActive: outlook.isActive,
+        calendarIds: outlook.selectedCalendarIds ?? null,
+        writeCalendarId: outlook.writeCalendarId ?? null,
+      });
+    }
+  }
+  return owners;
+}
+
 /**
  * Resolve which profile IDs to sync to. If the event is assigned to specific
  * profiles, use those. If it is a family event (no assignees), fall back to
@@ -384,7 +420,7 @@ export async function syncEventCreate(event: Event): Promise<void> {
     if (!event.userId) return;
     if (!(await isTwoWaySyncEnabled(event.userId))) return;
     const assignments = await storage.getCalendarAssignmentsByUser(event.userId);
-    const writer = familyCalendarWriter(event.calendarId, assignments);
+    const writer = familyCalendarAccount(event.calendarId, assignments, await connectedCalendarOwners(event.userId));
     if (writer && event.calendarId) {
       await (writer.provider === "google"
         ? createGoogleCopy(event, writer.profileId, event.calendarId)
@@ -437,7 +473,11 @@ export async function syncEventUpdate(event: Event): Promise<void> {
     if (!event.userId) return;
     const existing = await storage.getEventCalendarSyncs(event.id);
     const syncEnabled = await isTwoWaySyncEnabled(event.userId);
-    const writer = familyCalendarWriter(event.calendarId, await storage.getCalendarAssignmentsByUser(event.userId));
+    const writer = familyCalendarAccount(
+      event.calendarId,
+      await storage.getCalendarAssignmentsByUser(event.userId),
+      await connectedCalendarOwners(event.userId),
+    );
     const profileIds = writer
       ? [...new Set([writer.profileId, ...existing.map((link) => link.profileId)])]
       : await resolveProfileIds(event);

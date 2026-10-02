@@ -6,6 +6,8 @@ import {
   assignPeopleToCalendar,
   calendarIsWritable,
   familyCalendarCreates,
+  calendarTokenOwner,
+  familyCalendarAccount,
   familyCalendarWriter,
   eventsOnWatchedCalendars,
 } from "../src/lib/calendarAssignmentScope.ts";
@@ -42,6 +44,23 @@ test("a family calendar is written by the account that connected it", () => {
     { profileId: "a-mum", provider: "google" },
   );
   assert.deepEqual(creates, [{ profileId: "a-mum", provider: "google" }]);
+  const kidFirst = [{ profileId: "liam", calendarId: "family@group.calendar.google.com", calendarType: "google", isActive: true }];
+  assert.deepEqual(
+    familyCalendarAccount("family@group.calendar.google.com", kidFirst, [
+      { profileId: "chad", provider: "google", calendarIds: null, writeCalendarId: "family@group.calendar.google.com" },
+    ]),
+    { profileId: "chad", provider: "google" },
+  );
+  assert.equal(calendarTokenOwner("family@group.calendar.google.com", "google", [
+    { profileId: "chad", provider: "google", calendarIds: null },
+    { profileId: "alex", provider: "google", calendarIds: null },
+  ], "liam"), "liam");
+  assert.equal(calendarTokenOwner("family@group.calendar.google.com", "google", [
+    { profileId: "chad", provider: "google", calendarIds: ["family@group.calendar.google.com"] },
+  ], "liam"), "chad");
+  assert.equal(calendarTokenOwner("family@group.calendar.google.com", "google", [
+    { profileId: "chad", provider: "google", calendarIds: null },
+  ], "liam"), "chad");
 });
 
 test("a family sees only its own assignments", () => {
