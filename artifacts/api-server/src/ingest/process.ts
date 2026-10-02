@@ -77,6 +77,8 @@ export type PlannedEvent = {
   profileIds: string[];
   hours: number;
   minutes: number;
+  endHours?: number;
+  endMinutes?: number;
 };
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -128,7 +130,25 @@ function clockFrom(match: RegExpMatchArray): { hours: number; minutes: number } 
 
 const DAY_NEAR = /\b(?:today|tonight|tomorrow|this (?:morning|afternoon|evening)|sunday|monday|tuesday|wednesday|thursday|friday|saturday|january|february|march|april|may|june|july|august|september|october|november|december)\b|\b\d{1,2}\/\d{1,2}\b/i;
 
-export function slipClock(text: string): { hours: number; minutes: number } | null {
+function slipRange(text: string): { hours: number; minutes: number; endHours: number; endMinutes: number } | null {
+  const ranges = [...text.matchAll(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*[-–]\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/gi)].flatMap((match) => {
+    const suffix = match[3] || match[6];
+    const start = clockFrom(["", match[1], match[2] ?? "", suffix] as unknown as RegExpMatchArray);
+    const end = clockFrom(["", match[4], match[5] ?? "", match[6]] as unknown as RegExpMatchArray);
+    if (!start || !end) return [];
+    if (end.hours * 60 + end.minutes <= start.hours * 60 + start.minutes) return [];
+    return [{ ...start, endHours: end.hours, endMinutes: end.minutes, index: match.index ?? 0 }];
+  });
+  if (ranges.length === 0) return null;
+  const near = ranges.find((item) => DAY_NEAR.test(text.slice(Math.max(0, item.index - 24), item.index)));
+  const picked = near ?? (ranges.length === 1 ? ranges[0] : null);
+  if (!picked) return null;
+  return { hours: picked.hours, minutes: picked.minutes, endHours: picked.endHours, endMinutes: picked.endMinutes };
+}
+
+export function slipClock(text: string): { hours: number; minutes: number; endHours?: number; endMinutes?: number } | null {
+  const range = slipRange(text);
+  if (range) return range;
   const parsed = [...text.matchAll(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/gi)].flatMap((match) => {
     const clock = clockFrom(match);
     return clock ? [{ clock, index: match.index ?? 0, length: match[0].length }] : [];
@@ -304,6 +324,7 @@ function plannedEvent(message: InboundMessage, key: string, profileIds: string[]
     profileIds,
     hours: clock.hours,
     minutes: clock.minutes,
+    ...(clock.endHours != null ? { endHours: clock.endHours, endMinutes: clock.endMinutes } : {}),
   };
 }
 

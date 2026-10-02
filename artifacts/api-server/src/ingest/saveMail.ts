@@ -31,8 +31,11 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
   const events = [];
   for (const event of planned.events) {
     const note = `${event.title} ${event.description}`;
-    const start = schoolEventStart(note, event.hours, event.minutes, new Date(), timeZone);
-    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    const now = new Date();
+    const start = schoolEventStart(note, event.hours, event.minutes, now, timeZone);
+    const end = event.endHours == null
+      ? new Date(start.getTime() + 60 * 60 * 1000)
+      : schoolEventStart(note, event.endHours, event.endMinutes ?? 0, now, timeZone);
     const saved = await storage.createEvent({
       userId,
       title: event.title,
