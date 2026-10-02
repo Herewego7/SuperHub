@@ -375,6 +375,28 @@ export function planMoveLabel(movedFrom: string | null | undefined, now: Date): 
   return clock;
 }
 
+/** A parent plan names who an item is for. A name already on the line is not repeated. */
+export function planWho(title: string, names?: string[] | null): string {
+  const others = (names ?? []).map((name) => name.trim()).filter(Boolean);
+  if (others.length === 0) return title;
+  if (others.every((name) => title.toLowerCase().includes(name.toLowerCase()))) return title;
+  const pretty = others.length <= 2 ? others.join(" and ") : `${others.slice(0, -1).join(", ")} and ${others[others.length - 1]}`;
+  const line = `for ${pretty}`;
+  if (title.toLowerCase().includes(line.toLowerCase())) return title;
+  return `${title}, ${line}`;
+}
+
+export function planForOthers(
+  ids: string[] | null | undefined,
+  selectedIds: string[],
+  people: { id: string; name: string }[],
+): string[] {
+  if (selectedIds.length === 0) return [];
+  const list = ids ?? [];
+  if (list.length === 0 || list.some((id) => selectedIds.includes(id))) return [];
+  return list.map((id) => people.find((person) => person.id === id)?.name).filter((name): name is string => !!name?.trim());
+}
+
 export function planEventTitle(title: string, drivers?: string[] | null): string {
   const names = (drivers ?? []).map((name) => name.trim()).filter(Boolean);
   if (names.length === 0) return title;
@@ -397,8 +419,9 @@ export function dayReply(
       targetCount?: number | null;
       endDate?: Date | string | null;
       category?: string | null;
+      who?: string[] | null;
     }[];
-    events: { title: string; startTime: Date | string; isAllDay?: boolean | null; source?: string | null; movedFrom?: string | null; location?: string | null; drivers?: string[] | null }[];
+    events: { title: string; startTime: Date | string; isAllDay?: boolean | null; source?: string | null; movedFrom?: string | null; location?: string | null; drivers?: string[] | null; who?: string[] | null }[];
     completions?: { choreId: string; completedAt?: Date | string | null }[];
     dinner?: string | null;
     meals?: { date: string; slot: string; name: string }[];
@@ -439,13 +462,14 @@ export function dayReply(
   );
   const askedToday = start.toDateString() === new Date(input.day).toDateString();
   const dinner = input.meals ? dinnerName(input.meals, start) : askedToday ? input.dinner : null;
-  const rows: { text: string; change: boolean }[] = [];
+  const rows: { text: string; change: boolean; mine: boolean; match: string }[] = [];
   const birthday = homeBirthdayLine(input.celebrations ?? [], start);
-  if (birthday) rows.push({ text: birthday, change: true });
+  if (birthday) rows.push({ text: birthday, change: true, mine: true, match: birthday });
   for (const chore of input.chores) {
     if (chore.id && (done.has(chore.id) || finishedTodos.has(chore.id))) continue;
     if (!dueOnDay(chore, start)) continue;
-    rows.push({ text: chore.title, change: false });
+    const who = chore.who ?? [];
+    rows.push({ text: planWho(chore.title, who), change: false, mine: who.length === 0, match: chore.title });
   }
   for (const event of input.events) {
     if (event.source === "meal" && dinner) continue;
@@ -458,12 +482,17 @@ export function dayReply(
     const named = planEventTitle(placed, event.drivers);
     const line = moved ? `${named}, moved from ${moved}` : named;
     const bare = clock.replace(/, \d{1,2}:\d{2} [AP]M$/i, "");
-    const same = event.source === "school" ? rows.findIndex((item) => item.text.toLowerCase() === bare.toLowerCase()) : -1;
-    const row = { text: line, change: Boolean(moved) };
+    const who = event.who ?? [];
+    const same = event.source === "school" ? rows.findIndex((item) => item.match.toLowerCase() === bare.toLowerCase()) : -1;
+    const row = { text: planWho(line, who), change: Boolean(moved), mine: who.length === 0, match: bare };
     if (same >= 0) rows[same] = row;
     else rows.push(row);
   }
-  const lines = [...rows.filter((row) => row.change), ...rows.filter((row) => !row.change)].map((row) => row.text);
+  const lines = [
+    ...rows.filter((row) => row.change),
+    ...rows.filter((row) => !row.change && row.mine),
+    ...rows.filter((row) => !row.change && !row.mine),
+  ].map((row) => row.text);
   const kept = lines.slice(0, 5);
   if (dinner) kept.push(`Dinner. ${dinner}`);
   return kept.join("\n") || "Nothing on the plan.";

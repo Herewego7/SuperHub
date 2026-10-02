@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
 import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
 import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleDeleteChoice, googleMoveBody, outlookChatWrite, outlookDeleteChoice, outlookMoveBody } from "@/lib/chatGoogle";
 import type { Chore } from "@workspace/shared-types";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
@@ -434,11 +434,18 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       );
       return;
     }
-    const planChores = talkChores.filter((chore) => {
-      const people = chore.profileIds ?? [];
-      return selectedIds.length === 0 || people.length === 0 || people.some((id) => selectedIds.includes(id));
-    });
-    const planEvents = eventsForDayPlan(knownEvents, calendarAssignments, selectedIds, kid?.name ?? null);
+    const others = (ids: string[] | null | undefined) => kid ? [] : planForOthers(ids, selectedIds, profiles);
+    const planChores = (kid
+      ? talkChores.filter((chore) => {
+          const people = chore.profileIds ?? [];
+          return selectedIds.length === 0 || people.length === 0 || people.some((id) => selectedIds.includes(id));
+        })
+      : talkChores
+    ).map((chore) => ({ ...chore, who: others(chore.profileIds) }));
+    const planEvents = (kid
+      ? eventsForDayPlan(knownEvents, calendarAssignments, selectedIds, kid.name)
+      : eventsForDayPlan(knownEvents, calendarAssignments, [], null)
+    );
     const plan = tools.includes("get_plan")
       ? dayReply(text, {
           chores: planChores,
@@ -447,6 +454,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
             drivers: (event.drivingProfileIds ?? [])
               .map((id) => profiles.find((person) => person.id === id)?.name)
               .filter((name): name is string => !!name),
+            who: others(event.profileIds),
           })),
           completions,
           meals,

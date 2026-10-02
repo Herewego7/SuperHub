@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, planForOthers, planWho, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -231,6 +231,24 @@ test("a check-off credits the person on screen", () => {
 test("check off names the chore", () => {
   assert.equal(checkOffTitle("check off dishes"), "dishes");
   assert.equal(checkOffTitle("Who is driving soccer?"), null);
+});
+
+test("what's the plan names a child's event for a parent", () => {
+  const day = new Date(2026, 9, 2, 15, 0);
+  assert.equal(dayReply("what's the plan?", {
+    chores: [
+      { title: "Make bed", taskType: "chore", daysOfWeek: [5], who: ["Liam"] },
+      { title: "Take out trash", taskType: "chore", daysOfWeek: [5] },
+    ],
+    events: [
+      { title: "Soccer", startTime: new Date(2026, 9, 2, 16, 0), who: ["Liam"] },
+      { title: "Dentist", startTime: new Date(2026, 9, 2, 9, 0) },
+    ],
+    day,
+  }), "Take out trash\nDentist, 9:00 AM\nMake bed, for Liam\nSoccer, 4:00 PM, for Liam");
+  assert.equal(planWho("Soccer, 4:00 PM, Liam driving", ["Liam"]), "Soccer, 4:00 PM, Liam driving");
+  assert.deepEqual(planForOthers(["liam"], ["dad"], [{ id: "liam", name: "Liam" }, { id: "dad", name: "Chad" }]), ["Liam"]);
+  assert.deepEqual(planForOthers(["dad"], ["dad"], [{ id: "dad", name: "Chad" }]), []);
 });
 
 test("what's the plan names a saved place", () => {
