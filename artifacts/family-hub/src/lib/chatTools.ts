@@ -352,16 +352,19 @@ export function rememberedFacts(existing: string[], fact: string): string[] {
 
 export function memoryReply(
   text: string,
-  profiles: { name: string; facts?: string[] | null }[],
+  profiles: { name: string; facts?: string[] | null; school?: string | null }[],
 ): string | null {
   const match = text.trim().match(/^what do you remember about (.+?)\??$/i);
   const who = match?.[1]?.trim();
   if (!who) return null;
   const profile = profiles.find((person) => person.name.trim().toLowerCase() === who.toLowerCase());
   if (!profile) return `I don't see ${who}.`;
-  const facts = profile.facts ?? [];
-  if (facts.length === 0) return `I don't remember anything about ${profile.name}.`;
-  return facts.map((fact) => `${profile.name} ${fact}`).join("\n");
+  const lines: string[] = [];
+  const school = profile.school?.trim();
+  if (school) lines.push(`${profile.name} goes to ${school}.`);
+  for (const fact of profile.facts ?? []) lines.push(`${profile.name} ${fact}`);
+  if (lines.length === 0) return `I don't remember anything about ${profile.name}.`;
+  return lines.join("\n");
 }
 
 export function schoolFact(
