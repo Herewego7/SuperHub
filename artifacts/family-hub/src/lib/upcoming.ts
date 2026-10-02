@@ -24,6 +24,12 @@ export function upcomingKindForMail(categoryOrSource: string | null | undefined)
   return categoryOrSource === "school_email" || categoryOrSource === "school" ? "newsletter" : "todo";
 }
 
+/** A school email with a clock is an event. One with no time stays a newsletter. */
+export function schoolEventKind(event: { source?: string | null; isAllDay?: boolean | null }): "newsletter" | undefined {
+  if (event.source !== "school" || event.isAllDay === false) return undefined;
+  return "newsletter";
+}
+
 function kindOf(row: Row): "todo" | "keyDate" | "event" | "newsletter" {
   if (row.kind) return row.kind;
   if (row.isAllDay) return "keyDate";
