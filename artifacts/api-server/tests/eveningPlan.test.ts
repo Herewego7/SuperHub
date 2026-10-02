@@ -1,7 +1,40 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Event } from "@workspace/db";
-import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, moveClock, moveLabel, planBirthdayLine, planBody, planDayEvents, planEventTitle, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
+import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, googlePlanRows, moveClock, moveLabel, planBirthdayLine, planBody, planDayEvents, planEventTitle, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
+
+test("a Google event can be named on the evening plan", () => {
+  const rows = googlePlanRows([
+    {
+      id: "abc",
+      summary: "Soccer",
+      location: "Field 2",
+      start: { dateTime: "2026-10-02T16:00:00-05:00" },
+      end: { dateTime: "2026-10-02T17:00:00-05:00" },
+      extendedProperties: { private: { google_calendar_id: "cal-1", familyhub_profile_ids: "[\"liam\"]", familyhub_driving_profile_ids: "[\"liam\"]" } },
+    },
+    {
+      id: "copy",
+      summary: "Dinner",
+      start: { dateTime: "2026-10-02T18:00:00-05:00" },
+      extendedProperties: { private: { familyhub_origin: "app" } },
+    },
+    {
+      id: "piano",
+      summary: "Piano",
+      start: { dateTime: "2026-10-02T15:00:00-05:00" },
+      extendedProperties: { private: { google_calendar_id: "kid-cal" } },
+    },
+  ], "dad", [{ calendarId: "kid-cal", calendarType: "google", profileId: "liam", audienceProfileIds: ["liam"] }]);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.find((row) => row.title === "Piano")?.profileIds, ["liam"]);
+  assert.equal(rows[0].title, "Soccer");
+  assert.equal(rows[0].source, "google");
+  assert.equal(rows[0].location, "Field 2");
+  assert.deepEqual(rows[0].profileIds, ["liam"]);
+  assert.deepEqual(rows[0].drivingProfileIds, ["liam"]);
+  assert.equal(rows[0].googleCalendarId, "cal-1");
+});
 
 test("the evening plan names who is driving", () => {
   assert.equal(planEventTitle("Soccer, 4:00 PM, Field 2", ["Liam"]), "Soccer, 4:00 PM, Field 2, Liam driving");

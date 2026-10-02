@@ -17,6 +17,7 @@ import { expandRecurringEvents } from "../lib/eventRecurrence";
 import { eventsOnWatchedCalendars } from "../lib/calendarAssignmentScope";
 import { withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
 import { storage } from "../storage";
+import { GoogleCalendarService } from "../googleCalendar";
 
 export type PlanPush = "evening-plan" | "daily-brief";
 
@@ -101,6 +102,102 @@ export function dueForPlan<T extends {
     if (chore.recurrenceType === "daily") return true;
     return (chore.daysOfWeek ?? []).includes(start.getDay());
   });
+}
+
+function savedIds(raw: unknown): string[] {
+  if (typeof raw !== "string" || !raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((id) => typeof id === "string")) return parsed;
+  } catch {
+    /* A bad assignment falls back to the connected person. */
+  }
+  return [];
+}
+
+/** Google events the evening plan can name. A copy the app already saved is left out. */
+export function googlePlanRows(events: unknown[], profileId: string, assignments: { calendarId: string; calendarType?: string | null; profileId?: string | null; audienceProfileIds?: string[] | null; isActive?: boolean | null }[] = []): {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  source: "google";
+  startTime: string;
+  endTime: string;
+  isAllDay: boolean;
+  profileIds: string[];
+  drivingProfileIds: string[];
+  googleCalendarId: string | null;
+  outlookCalendarId: null;
+}[] {
+  const seen = new Set<string>();
+  const rows = [];
+  for (const item of events) {
+    const event = item as {
+      id?: string;
+      summary?: string;
+      description?: string;
+      location?: string;
+      start?: { date?: string; dateTime?: string };
+      end?: { date?: string; dateTime?: string };
+      extendedProperties?: { private?: Record<string, string> };
+    };
+    if (!event?.id || seen.has(event.id)) continue;
+    const priv = event.extendedProperties?.private ?? {};
+    if (priv.familyhub_origin) continue;
+    const start = event.start?.dateTime
+      ? new Date(event.start.dateTime)
+      : event.start?.date
+        ? new Date(`${event.start.date}T00:00:00`)
+        : null;
+    if (!start || Number.isNaN(start.getTime())) continue;
+    seen.add(event.id);
+    const end = event.end?.dateTime ? new Date(event.end.dateTime) : start;
+    const assigned = savedIds(priv.familyhub_profile_ids);
+    const calendarId = priv.google_calendar_id ?? null;
+    const assignment = calendarId
+      ? assignments.find((item) => item.calendarType === "google" && item.calendarId === calendarId && item.isActive !== false)
+      : undefined;
+    const audience = (assignment?.audienceProfileIds ?? []).filter((id) => id.length > 0);
+    const profileIds = assigned.length > 0 ? assigned : audience.length > 0 ? audience : assignment?.profileId ? [assignment.profileId] : [profileId];
+    rows.push({
+      id: `google-${profileId}-${event.id}`,
+      title: event.summary?.trim() || "Untitled",
+      description: event.description ?? null,
+      location: event.location ?? null,
+      source: "google" as const,
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+      isAllDay: !event.start?.dateTime,
+      profileIds,
+      drivingProfileIds: savedIds(priv.familyhub_driving_profile_ids),
+      googleCalendarId: priv.google_calendar_id ?? null,
+      outlookCalendarId: null,
+    });
+  }
+  return rows;
+}
+
+async function googleEventsForPlan(userId: string, assignments: { calendarId: string; calendarType?: string | null; profileId?: string | null; audienceProfileIds?: string[] | null; isActive?: boolean | null }[]) {
+  const rows = [];
+  const googleCalendar = new GoogleCalendarService();
+  const people = await loadProfiles(eq(profiles.userId, userId));
+  for (const person of people) {
+    if (!person.googleCalendarConnected) continue;
+    try {
+      const tokens = await storage.getGoogleCalendarTokens(person.id);
+      if (!tokens?.isActive) continue;
+      const raw = await googleCalendar.getCalendarEvents(
+        tokens.accessToken,
+        tokens.refreshToken || undefined,
+        tokens.selectedCalendarIds,
+      );
+      rows.push(...googlePlanRows(raw, person.id, assignments));
+    } catch (err) {
+      logger.warn({ err, profileId: person.id }, "Evening plan skipped Google");
+    }
+  }
+  return rows;
 }
 
 export function eventsForPlan<T extends { profileIds?: string[] | null; drivingProfileId?: string | null; drivingProfileIds?: string[] | null }>(
@@ -312,7 +409,8 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const isChild = profile.role === "child" || profile.isChild === true;
     const chores = await storage.getChoresByUser(profile.userId);
     const completions = await storage.getChoreCompletionsByUser(profile.userId);
-    const events = await storage.getEventsByUser(profile.userId);
+    const assignments = await storage.getCalendarAssignmentsByUser(profile.userId);
+    const events = [...await storage.getEventsByUser(profile.userId), ...await googleEventsForPlan(profile.userId, assignments)];
     const meals = await storage.getMealsByUser(profile.userId);
     const celebrations = await storage.getCelebrationsByUser(profile.userId);
     const target = profile.eveningPlanTiming === "morningOf" ? day : nextDayKey(day);
@@ -330,7 +428,6 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
       choresForPlan(withoutDismissedChores(chores, settings?.dismissedSlipKeys ?? []), doneToday, profile.id, finishedTodos),
       new Date(`${target}T12:00:00`),
     );
-    const assignments = await storage.getCalendarAssignmentsByUser(profile.userId);
     const family = new Map((await loadProfiles(eq(profiles.userId, profile.userId))).map((person) => [person.id, person.name]));
     const dayEvents = eventsForPlan(
       eventsOnWatchedCalendars(planDayEvents(withoutDismissedSlips(events, settings?.dismissedSlipKeys ?? []), target, tz), assignments),
