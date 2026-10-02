@@ -1,4 +1,4 @@
-import { appendPlace, eventClockLine, planEventTitle } from "./chatTools";
+import { appendPlace, eventClockLine, planEventTitle, schoolSlipTitle } from "./chatTools";
 import { routineSeriesIds } from "./homeDay";
 
 export const UPCOMING_KINDS = ["all", "todos", "keyDates", "events", "newsletters"] as const;
@@ -73,13 +73,23 @@ export function eventSourceChip(source: string | null | undefined): string | nul
   return null;
 }
 
+/** A school email already checked off leaves the Upcoming list. A place or a driver does not keep it. */
+export function withoutCheckedSchoolEvents<T extends { title: string; source?: string | null }>(
+  events: T[],
+  slips: { title: string }[],
+): T[] {
+  const titles = new Set(slips.map((slip) => schoolSlipTitle(slip.title).toLowerCase()));
+  if (titles.size === 0) return events;
+  return events.filter((event) => event.source !== "school" || !titles.has(schoolSlipTitle(event.title).toLowerCase()));
+}
+
 export function dropSchoolTodoTwins<T extends { title: string; category?: string | null }>(
   todos: T[],
   events: { title: string; source?: string | null }[],
 ): T[] {
-  const titled = new Set(events.filter((event) => event.source === "school").map((event) => event.title.toLowerCase()));
+  const titled = new Set(events.filter((event) => event.source === "school").map((event) => schoolSlipTitle(event.title).toLowerCase()));
   if (titled.size === 0) return todos;
-  return todos.filter((todo) => todo.category !== "school_email" || !titled.has(todo.title.toLowerCase()));
+  return todos.filter((todo) => todo.category !== "school_email" || !titled.has(schoolSlipTitle(todo.title).toLowerCase()));
 }
 
 export function upcomingRows<T extends Row>(rows: T[], kind: UpcomingKind, day: Date): T[] {

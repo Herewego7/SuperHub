@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { horizonEvents } from "../../src/lib/homeDay";
-import { dropSchoolTodoTwins, eventSourceChip, recurringIdFromIcal, recurringIdFromOutlook, schoolEventKind, timeGridDetail, upcomingClock, upcomingKindForMail, upcomingRows, upcomingTitle } from "../../src/lib/upcoming";
+import { dropSchoolTodoTwins, eventSourceChip, recurringIdFromIcal, recurringIdFromOutlook, schoolEventKind, timeGridDetail, upcomingClock, upcomingKindForMail, upcomingRows, upcomingTitle, withoutCheckedSchoolEvents } from "../../src/lib/upcoming";
 
 test("a tall week block names the place under the time", () => {
   assert.equal(timeGridDetail("4:00 PM – 5:00 PM", "Field 2"), "4:00 PM – 5:00 PM · Field 2");
@@ -31,6 +31,22 @@ test("horizon skips a weekly routine and keeps a one-off in the next week", () =
     today,
   );
   assert.deepEqual(rows.map((row) => row.id), ["recital"]);
+});
+
+test("a checked school email stays off Upcoming", () => {
+  const rows = withoutCheckedSchoolEvents(
+    [
+      { id: "pic", title: "Picture day, 3:30 PM, Field 2, Liam driving", source: "school" },
+      { id: "game", title: "Soccer", source: "app" },
+    ],
+    [{ title: "Picture day" }],
+  );
+  assert.deepEqual(rows.map((row) => row.id), ["game"]);
+  const kept = dropSchoolTodoTwins(
+    [{ id: "slip", title: "Picture day", category: "school_email" }],
+    [{ title: "Picture day, 3:30 PM, Field 2, Liam driving", source: "school" }],
+  );
+  assert.deepEqual(kept.map((row) => row.id), []);
 });
 
 test("a timed school email is not also an undated newsletter row", () => {
