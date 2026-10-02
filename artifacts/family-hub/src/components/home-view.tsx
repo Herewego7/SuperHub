@@ -1,4 +1,5 @@
 import { assignmentProfileIds, outlookEventProfileIds, withoutUnwatched } from "@/lib/outlookAttribution";
+import { recurringIdFromOutlook } from "@/lib/upcoming";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { ChoreIcon } from "@/components/customChoreIcons";
 import { objectUrl } from "@/lib/apiBase";
@@ -929,7 +930,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           calendarId: oe.calendar?.name || 'Outlook Calendar',
           calendarName: oe.calendar?.name || 'Outlook Calendar',
           outlookCalendarId: oe.calendar?.id ?? null,
-          recurringEventId: oe.seriesMasterId ?? null,
+          recurringEventId: recurringIdFromOutlook(oe),
           createdAt: new Date(),
           updatedAt: new Date(),
         } as any);

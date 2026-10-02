@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { horizonEvents } from "../../src/lib/homeDay";
-import { dropSchoolTodoTwins, eventSourceChip, schoolEventKind, upcomingClock, upcomingKindForMail, upcomingRows } from "../../src/lib/upcoming";
+import { dropSchoolTodoTwins, eventSourceChip, recurringIdFromOutlook, schoolEventKind, upcomingClock, upcomingKindForMail, upcomingRows } from "../../src/lib/upcoming";
 
 test("horizon skips a weekly routine and keeps a one-off in the next week", () => {
   const today = new Date(2026, 9, 1);
@@ -73,6 +73,12 @@ test("upcoming shows a clock on an event and not on a to-do", () => {
   assert.equal(upcomingClock({ startTime: new Date(2026, 9, 2, 16, 0), kind: "todo" }), null);
   assert.equal(upcomingClock({ startTime: new Date(2026, 9, 2, 0, 0), kind: "event" }), null);
   assert.equal(upcomingClock({ startTime: new Date(2026, 9, 1, 19, 0), kind: "event", isAllDay: true }), null);
+});
+
+test("an Outlook occurrence keeps its series id", () => {
+  assert.equal(recurringIdFromOutlook({ seriesMasterId: "series-dropoff" }), "series-dropoff");
+  assert.equal(recurringIdFromOutlook({ seriesMasterId: "  " }), null);
+  assert.equal(recurringIdFromOutlook({}), null);
 });
 
 test("upcoming leaves out a weekly practice and keeps a one-off", () => {

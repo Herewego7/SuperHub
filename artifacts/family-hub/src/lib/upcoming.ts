@@ -26,6 +26,12 @@ export function upcomingKindForMail(categoryOrSource: string | null | undefined)
   return categoryOrSource === "school_email" || categoryOrSource === "school" ? "newsletter" : "todo";
 }
 
+/** Outlook names the series on the occurrence. Upcoming uses that id to skip a weekly practice. */
+export function recurringIdFromOutlook(event: { seriesMasterId?: string | null }): string | null {
+  const id = event.seriesMasterId?.trim();
+  return id ? id : null;
+}
+
 /** A school email with a clock is an event. One with no time stays a newsletter. */
 export function schoolEventKind(event: { source?: string | null; isAllDay?: boolean | null }): "newsletter" | undefined {
   if (event.source !== "school" || event.isAllDay === false) return undefined;
