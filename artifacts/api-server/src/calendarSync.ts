@@ -13,7 +13,7 @@
  */
 import { storage } from "./storage";
 import { twoWaySyncFromSettings } from "./lib/settingsOwnership";
-import { calendarIsWritable } from "./lib/calendarAssignmentScope";
+import { calendarIsWritable, familyCalendarWriter } from "./lib/calendarAssignmentScope";
 import { googleRecurrence, outlookRecurrence, excludedInstants } from "./lib/recurrenceRule";
 import { DEFAULT_TIMEZONE } from "./lib/timezone";
 import { GoogleCalendarService } from "./googleCalendar";
@@ -171,13 +171,13 @@ async function familyTimeZone(event: Event): Promise<string> {
   }
 }
 
-async function createGoogleCopy(event: Event, profileId: string): Promise<void> {
+async function createGoogleCopy(event: Event, profileId: string, calendarId?: string): Promise<void> {
   const tokens = await storage.getGoogleCalendarTokens(profileId);
   if (!tokens || !tokens.isActive) return;
   // User-configured write target (Settings → Manage calendars), falling back
   // to the account's primary calendar — the only behavior before this was
-  // configurable.
-  const targetCalendarId = tokens.writeCalendarId || GOOGLE_PRIMARY_CALENDAR;
+  // configurable. A family calendar is that one calendar, not every write target.
+  const targetCalendarId = calendarId || tokens.writeCalendarId || GOOGLE_PRIMARY_CALENDAR;
   const assignments = await storage.getCalendarAssignments(profileId);
   if (!calendarIsWritable(assignments, targetCalendarId)) return;
   try {
@@ -217,14 +217,14 @@ async function createGoogleCopy(event: Event, profileId: string): Promise<void> 
   }
 }
 
-async function createOutlookCopy(event: Event, profileId: string): Promise<void> {
+async function createOutlookCopy(event: Event, profileId: string, calendarId?: string): Promise<void> {
   const accessToken = await getFreshOutlookAccessToken(profileId);
   if (!accessToken) return;
   const tokens = await storage.getOutlookCalendarTokens(profileId);
   // User-configured write target, falling back to the account's default
   // calendar (undefined → outlookCalendarService.createEvent posts to
   // /me/events) — the only behavior before this was configurable.
-  const targetCalendarId = tokens?.writeCalendarId || undefined;
+  const targetCalendarId = calendarId || tokens?.writeCalendarId || undefined;
   if (targetCalendarId) {
     const assignments = await storage.getCalendarAssignments(profileId);
     if (!calendarIsWritable(assignments, targetCalendarId)) return;
@@ -383,6 +383,14 @@ export async function syncEventCreate(event: Event): Promise<void> {
   try {
     if (!event.userId) return;
     if (!(await isTwoWaySyncEnabled(event.userId))) return;
+    const assignments = await storage.getCalendarAssignmentsByUser(event.userId);
+    const writer = familyCalendarWriter(event.calendarId, assignments);
+    if (writer && event.calendarId) {
+      await (writer.provider === "google"
+        ? createGoogleCopy(event, writer.profileId, event.calendarId)
+        : createOutlookCopy(event, writer.profileId, event.calendarId));
+      return;
+    }
     const profileIds = await resolveProfileIds(event);
     // Run every profile/provider copy concurrently rather than one after the
     // other. Each copy is an independent external round-trip (plus a possible

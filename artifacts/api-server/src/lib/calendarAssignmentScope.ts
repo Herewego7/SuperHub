@@ -51,6 +51,18 @@ export function eventsOnWatchedCalendars<T extends { googleCalendarId?: string |
   });
 }
 
+/** A new event with a family calendar is written once, on the account that connected it. */
+export function familyCalendarWriter(
+  calendarId: string | null | undefined,
+  assignments: { profileId: string; calendarId: string; calendarType: string; isActive?: boolean | null }[],
+): { profileId: string; provider: "google" | "outlook" } | null {
+  const id = calendarId?.trim();
+  if (!id || id === "none") return null;
+  const row = assignments.find((assignment) => assignment.calendarId === id && assignment.isActive !== false);
+  if (!row || (row.calendarType !== "google" && row.calendarType !== "outlook")) return null;
+  return { profileId: row.profileId, provider: row.calendarType };
+}
+
 export function calendarIsWritable(
   assignments: { calendarId: string; watched?: boolean | null; isActive?: boolean | null }[],
   calendarId: string,

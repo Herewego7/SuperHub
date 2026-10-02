@@ -5,6 +5,7 @@ import {
   assignmentsToDeactivate,
   assignPeopleToCalendar,
   calendarIsWritable,
+  familyCalendarWriter,
   eventsOnWatchedCalendars,
 } from "../src/lib/calendarAssignmentScope.ts";
 
@@ -22,6 +23,16 @@ const all = [
   { profileId: "b-dad", calendarId: "school@group.calendar.google.com", calendarType: "google", isActive: true },
   { profileId: "a-mum", calendarId: "old@group.calendar.google.com", calendarType: "google", isActive: false },
 ];
+
+test("a family calendar is written by the account that connected it", () => {
+  assert.deepEqual(
+    familyCalendarWriter("school@group.calendar.google.com", all),
+    { profileId: "a-mum", provider: "google" },
+  );
+  assert.equal(familyCalendarWriter("none", all), null);
+  assert.equal(familyCalendarWriter("missing", all), null);
+  assert.equal(familyCalendarWriter("old@group.calendar.google.com", all), null);
+});
 
 test("a family sees only its own assignments", () => {
   // The vulnerability: this endpoint returned every family's rows, carrying
