@@ -4,7 +4,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
 import { choreProgress, choresForCount, dinnerName, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
-import { eventClockLine } from "@/lib/chatTools";
+import { eventClockLine, pointsProfileId } from "@/lib/chatTools";
 import { openEmailHref, schoolSaveTarget, slipQuote, slipSender } from "@/lib/slipMail";
 
 type Props = {
@@ -62,7 +62,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   const complete = useMutation({
     mutationFn: async (choreId: string) => {
       const chore = chores.find((item) => item.id === choreId);
-      const profileId = chore?.profileIds[0] ?? selectedIds[0];
+      const profileId = pointsProfileId(chore?.profileIds ?? [], selectedIds.join(","));
       if (!profileId) return;
       const at = new Date();
       const localDayStart = new Date(at);
@@ -70,13 +70,16 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
       await apiRequest("POST", "/api/chore-completions", {
         choreId,
         profileId,
-        points: 0,
+        points: chore?.points ?? 0,
         completedAt: at.toISOString(),
         localDayStart: localDayStart.toISOString(),
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, choreId) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/chore-completions"] });
+      const chore = chores.find((item) => item.id === choreId);
+      const profileId = pointsProfileId(chore?.profileIds ?? [], selectedIds.join(","));
+      if (profileId) await queryClient.invalidateQueries({ queryKey: ["/api/points", profileId] });
     },
   });
 
