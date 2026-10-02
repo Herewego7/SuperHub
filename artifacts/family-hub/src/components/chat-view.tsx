@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
+import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
+import { chatGoogleEvents } from "@/lib/chatGoogle";
 import type { Chore } from "@workspace/shared-types";
 import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
@@ -78,7 +79,26 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   });
   const { data: events = [], isFetched: eventsFetched } = useQuery<{ id: string; title: string; description?: string | null; location?: string | null; source?: string | null; drivingProfileIds?: string[] | null; profileIds?: string[] | null; startTime?: string | null; endTime?: string | null; googleCalendarId?: string | null; outlookCalendarId?: string | null; category?: string | null; movedFrom?: string | null }[]>({ queryKey: ["/api/events"] });
   const { data: calendarAssignments = [] } = useQuery<{ calendarId: string; watched?: boolean | null; isActive?: boolean | null }[]>({ queryKey: ["/api/calendar-assignments"] });
-  const { data: profiles = [] } = useQuery<{ id: string; name: string; school?: string | null; facts?: string[] | null; isAllFamilyProfile?: boolean | null }[]>({ queryKey: ["/api/profiles"] });
+  const { data: profiles = [] } = useQuery<{ id: string; name: string; school?: string | null; facts?: string[] | null; isAllFamilyProfile?: boolean | null; googleCalendarConnected?: boolean | null }[]>({ queryKey: ["/api/profiles"] });
+  const googleProfiles = profiles.filter((profile) => profile.googleCalendarConnected && !profile.isAllFamilyProfile);
+  const googleQueries = useQueries({
+    queries: googleProfiles.map((profile) => ({
+      queryKey: ["/api/google-calendar/events", profile.id],
+      queryFn: getQueryFn({ on401: "returnNull" }),
+      retry: false,
+      staleTime: 60_000,
+    })),
+  });
+  const knownEvents = useMemo(
+    () => [
+      ...events,
+      ...chatGoogleEvents(googleProfiles.map((profile, index) => ({
+        profileId: profile.id,
+        events: googleQueries[index]?.data as unknown[] | null | undefined,
+      }))),
+    ],
+    [events, googleProfiles, googleQueries],
+  );
   const { data: weather } = useQuery<{ location?: string; temperature?: number; condition?: string }>({ queryKey: ["/api/weather"], retry: false });
   const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
   const { data: celebrations = [], isFetched: celebrationsFetched } = useQuery<{ name: string; monthDay: string; year?: number | null; type?: string | null; customLabel?: string | null }[]>({ queryKey: ["/api/celebrations"] });
@@ -187,8 +207,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     }
     const selectedIds = profileKey.split(",").filter((id) => id && id !== "family");
     const kid = isChild ? profiles.find((profile) => selectedIds.includes(profile.id)) : undefined;
-    const watchedEvents = withoutUnwatched(events, calendarAssignments);
-    const talkEvents = chatVisibleEvents(events, calendarAssignments, selectedIds, kid?.name ?? null);
+    const watchedEvents = withoutUnwatched(knownEvents, calendarAssignments);
+    const talkEvents = chatVisibleEvents(knownEvents, calendarAssignments, selectedIds, kid?.name ?? null);
     const talkChores = chores.filter((item) => !kid || schoolEmailNames(item, kid.name));
     const title = checkOffTitle(text);
     const titled = title ? talkChores.filter((item) => item.title.toLowerCase() === title.toLowerCase()) : [];
@@ -297,7 +317,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       setDraft("");
       return;
     }
-    const driving = drivingReply(text, eventsForDrivingQuestion(events, calendarAssignments, selectedIds, kid?.name ?? null), profiles);
+    const driving = drivingReply(text, eventsForDrivingQuestion(knownEvents, calendarAssignments, selectedIds, kid?.name ?? null), profiles);
     if (driving) {
       next.push({ id: `${Date.now()}-r`, role: "assistant", text: driving });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
@@ -325,6 +345,26 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         setDraft("");
         return;
       }
+      const google = target as typeof target & { googleProfileId?: string; googleCalendarId?: string | null; googleEventId?: string; recurringEventId?: string | null };
+      if (target.source === "google") {
+        if (!google.googleProfileId || !google.googleCalendarId || !google.googleEventId) {
+          next.push({ id: `${Date.now()}-r`, role: "assistant", text: `${target.title} stays on Google Calendar.` });
+          localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+          setBubbles(next);
+          setDraft("");
+          return;
+        }
+        replyAfter(
+          apiRequest("PATCH", `/api/google-calendar/events/${google.googleProfileId}/${google.googleCalendarId}/${google.googleEventId}`, {
+            drivingProfileIds: drivingChange.profileIds,
+            recurringEventId: google.recurringEventId ?? null,
+          }).then(() => {
+            void queryClient.invalidateQueries({ queryKey: ["/api/google-calendar/events"] });
+          }),
+          drivingChange.reply,
+        );
+        return;
+      }
       const already = target.profileIds ?? [];
       const profileIds = already.length > 0 && drivingChange.profileIds.length > 0
         ? [...new Set([...already, ...drivingChange.profileIds])]
@@ -344,7 +384,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       const people = chore.profileIds ?? [];
       return selectedIds.length === 0 || people.length === 0 || people.some((id) => selectedIds.includes(id));
     });
-    const planEvents = eventsForDayPlan(events, calendarAssignments, selectedIds, kid?.name ?? null);
+    const planEvents = eventsForDayPlan(knownEvents, calendarAssignments, selectedIds, kid?.name ?? null);
     const plan = tools.includes("get_plan")
       ? dayReply(text, {
           chores: planChores,
