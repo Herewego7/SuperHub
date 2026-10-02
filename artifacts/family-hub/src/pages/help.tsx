@@ -35,10 +35,10 @@ export default function Help() {
             <ArrowLeft className="w-3.5 h-3.5" /> Support
           </a>
           <a href="/?openSettings=1" className="text-sm text-indigo-600 hover:underline">
-            ← Back to Family Hub+
+            ← Back to SuperHub
           </a>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Family Hub+ Help Center</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">SuperHub Help Center</h1>
         <p className="text-sm text-gray-500 mb-6">Search for an answer, or browse by category.</p>
 
         {view.kind === "article" && currentArticle ? (

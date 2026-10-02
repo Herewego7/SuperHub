@@ -17,13 +17,13 @@ export const troubleshootingArticles: KbArticle[] = [
       {
         kind: "text",
         text:
-          "Every event is assigned to one or more people — the field is called Assign to when you open an event. Its colour and the names shown with it come from those people. Events made in Family Hub+ are assigned to whoever you pick. For events synced from Google, the app decides in this order:",
+          "Every event is assigned to one or more people — the field is called Assign to when you open an event. Its colour and the names shown with it come from those people. Events made in SuperHub are assigned to whoever you pick. For events synced from Google, the app decides in this order:",
       },
       {
         kind: "steps",
         steps: [
-          "An assignment someone set on that event in Family Hub+ (by opening it and changing Assign to). This always wins.",
-          "Otherwise, whoever created the event in Google — if their email is a Google account connected in Family Hub+, the event goes to that person. This beats the calendar's own setting, so an event Mom adds to a shared \"Kids\" calendar shows as Mom's.",
+          "An assignment someone set on that event in SuperHub (by opening it and changing Assign to). This always wins.",
+          "Otherwise, whoever created the event in Google — if their email is a Google account connected in SuperHub, the event goes to that person. This beats the calendar's own setting, so an event Mom adds to a shared \"Kids\" calendar shows as Mom's.",
           "Otherwise, the person chosen in \"Assign to:\" for that calendar in Settings → Calendar.",
           "Otherwise, the person whose Google account the calendar was fetched from.",
         ],

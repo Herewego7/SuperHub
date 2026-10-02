@@ -101,9 +101,9 @@ export function registerFamilyRoutes(app: Express): void {
           const safeJoinUrl = escapeHtml(joinUrl);
           await sendEmail({
             to: invite.email,
-            subject: `${inviterName} invited you to join ${familyName} on Family Hub+`,
-            html: `<p>${inviterName} invited you to join <strong>${familyName}</strong> on Family Hub+.</p><p>Your invite code is:</p><p style="font-size:20px;font-weight:bold;letter-spacing:2px;">${invite.code}</p><p>Click below to sign up (or log in) and join automatically — this link expires in 14 days:</p><p><a href="${safeJoinUrl}">${safeJoinUrl}</a></p>`,
-            text: `${inviterName} invited you to join ${familyName} on Family Hub+.\n\nYour invite code is: ${invite.code}\n\nSign up (or log in) and join automatically here (expires in 14 days):\n${joinUrl}`,
+            subject: `${inviterName} invited you to join ${familyName} on SuperHub`,
+            html: `<p>${inviterName} invited you to join <strong>${familyName}</strong> on SuperHub.</p><p>Your invite code is:</p><p style="font-size:20px;font-weight:bold;letter-spacing:2px;">${invite.code}</p><p>Click below to sign up (or log in) and join automatically — this link expires in 14 days:</p><p><a href="${safeJoinUrl}">${safeJoinUrl}</a></p>`,
+            text: `${inviterName} invited you to join ${familyName} on SuperHub.\n\nYour invite code is: ${invite.code}\n\nSign up (or log in) and join automatically here (expires in 14 days):\n${joinUrl}`,
           });
         } catch (err) {
           console.error("[family invite] failed to send invite email:", err);

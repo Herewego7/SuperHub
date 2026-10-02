@@ -79,7 +79,7 @@ export function FeatureNudgeSheet({ open, cards, onDismiss, onAction }: FeatureN
           </button>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          Quick wins based on how your family's been using Family Hub+ so far.
+          Quick wins based on how your family's been using SuperHub so far.
         </p>
 
         <div className="space-y-3">

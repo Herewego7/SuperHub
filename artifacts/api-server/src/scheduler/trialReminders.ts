@@ -39,15 +39,15 @@ const FIELD_BY_KIND: Record<TrialReminderKind, "trial7dReminderSentAt" | "trial2
 const COPY: Record<TrialReminderKind, { title: string; body: string }> = {
   "7d": {
     title: "1 week left in your free trial",
-    body: "Your Family Hub+ free trial ends in 7 days. Subscribe now to keep everything running — you won't be charged until your trial is over.",
+    body: "Your SuperHub free trial ends in 7 days. Subscribe now to keep everything running — you won't be charged until your trial is over.",
   },
   "2d": {
     title: "2 days left in your free trial",
-    body: "Your Family Hub+ free trial ends in 2 days. Subscribe now so nothing interrupts your family — you won't be charged until your trial is over.",
+    body: "Your SuperHub free trial ends in 2 days. Subscribe now so nothing interrupts your family — you won't be charged until your trial is over.",
   },
   "1d": {
     title: "Your free trial expires tomorrow",
-    body: "Your Family Hub+ free trial expires tomorrow. Subscribe now to keep going without interruption — you won't be charged until your trial is over.",
+    body: "Your SuperHub free trial expires tomorrow. Subscribe now to keep going without interruption — you won't be charged until your trial is over.",
   },
 };
 

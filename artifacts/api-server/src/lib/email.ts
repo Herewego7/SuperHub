@@ -3,7 +3,7 @@
 //
 // Required env vars:
 //   RESEND_API_KEY  — from resend.com/api-keys
-//   EMAIL_FROM      — verified sender, e.g. "Family Hub+ <noreply@hubforfamilies.com>"
+//   EMAIL_FROM      — verified sender, e.g. "SuperHub <noreply@example.com>"
 //                      (falls back to Resend's onboarding@resend.dev sandbox
 //                      address if unset, which only delivers to the account
 //                      owner's own verified email — fine for initial testing,
@@ -34,7 +34,7 @@ export async function sendEmail(params: {
     );
     return;
   }
-  const from = process.env.EMAIL_FROM || "Family Hub+ <onboarding@resend.dev>";
+  const from = process.env.EMAIL_FROM || "SuperHub <onboarding@resend.dev>";
 
   const res = await fetch(RESEND_API_URL, {
     method: "POST",

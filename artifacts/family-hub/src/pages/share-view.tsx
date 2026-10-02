@@ -159,7 +159,7 @@ export default function ShareView() {
         )}
 
         <p className="text-center text-xs text-muted-foreground">
-          Shared from Family Hub+. Read-only — viewers can't see details or change anything.
+          Shared from SuperHub. Read-only — viewers can't see details or change anything.
         </p>
       </div>
     </div>

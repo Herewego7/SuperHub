@@ -53,7 +53,7 @@ export const settingsAndAccountArticles: KbArticle[] = [
         items: [
           {
             q: "Subscribing",
-            a: "Tap Subscribe Now in Settings → Subscription. Subscribing is only available in the iPhone/iPad app — on the web, open Family Hub+ on your device to subscribe.",
+            a: "Tap Subscribe Now in Settings → Subscription. Subscribing is only available in the iPhone/iPad app — on the web, open SuperHub on your device to subscribe.",
           },
           {
             q: "What it unlocks",

@@ -1112,7 +1112,7 @@ export function OnboardingWizard({ onSignOut, initialStep, onClose, forJoiner = 
                 <Home className="w-10 h-10 text-primary" />
               </div>
               <h1 className="text-3xl font-bold text-foreground mb-2">
-                Welcome to Family Hub+!
+                Welcome to SuperHub!
               </h1>
               <p className="text-muted-foreground text-base">
                 {user?.firstName ? `Hi ${user.firstName}! ` : ""}

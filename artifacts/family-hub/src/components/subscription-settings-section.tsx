@@ -49,7 +49,7 @@ export function SubscriptionSettingsSection() {
     try {
       const result = await purchaseSubscription(user.id);
       if (result.status === "success") {
-        toast({ title: result.entitled ? "You're subscribed!" : "Purchase recorded", description: result.entitled ? "Thanks for subscribing to Family Hub+." : "We're still confirming this with Apple — check back in a moment." });
+        toast({ title: result.entitled ? "You're subscribed!" : "Purchase recorded", description: result.entitled ? "Thanks for subscribing to SuperHub." : "We're still confirming this with Apple — check back in a moment." });
         queryClient.invalidateQueries({ queryKey: ["/api/subscription/status"] });
       } else if (result.status === "pending") {
         toast({ title: "Purchase pending", description: "This purchase needs approval (e.g. Ask to Buy) before it completes." });
@@ -107,7 +107,7 @@ export function SubscriptionSettingsSection() {
         headline = "Covered by your family's subscription";
         detail = "Someone in your family is subscribed, so everything is unlocked for everyone. Only they can change or cancel it.";
       } else {
-        headline = "You're subscribed to Family Hub+";
+        headline = "You're subscribed to SuperHub";
         detail = "Manage your billing, change plans, or cancel any time from the App Store.";
       }
       break;
@@ -200,7 +200,7 @@ export function SubscriptionSettingsSection() {
       </Button>
       {!native && (status.reason === "trialing" || status.reason === "expired") && (
         <p className="text-xs text-muted-foreground">
-          Subscribing is only available in the iPhone/iPad app — open Family Hub+ on your device to subscribe.
+          Subscribing is only available in the iPhone/iPad app — open SuperHub on your device to subscribe.
         </p>
       )}
     </div>

@@ -27,7 +27,7 @@ export const calendarSyncArticles: KbArticle[] = [
         kind: "note",
         tone: "info",
         text:
-          "Sync is two-way by default: events you create in Family Hub+ are also added to that person's calendar. To stop that, turn off \"Add app events to connected calendars\" at the top of the Calendar section.",
+          "Sync is two-way by default: events you create in SuperHub are also added to that person's calendar. To stop that, turn off \"Add app events to connected calendars\" at the top of the Calendar section.",
       },
       {
         kind: "note",
@@ -56,9 +56,9 @@ export const calendarSyncArticles: KbArticle[] = [
         steps: [
           "Open Settings and expand Calendar.",
           "Under the person whose account it is, tap the \"N calendars\" bar to expand it.",
-          "Tick or untick the box next to each calendar — only ticked calendars are pulled into Family Hub+ at all. Changes save straight away.",
+          "Tick or untick the box next to each calendar — only ticked calendars are pulled into SuperHub at all. Changes save straight away.",
           "Use the \"Assign to:\" menu under a calendar to choose whose events it holds (see \"My calendar events show the wrong person\").",
-          "Under \"Create new events in\", pick which calendar events made in Family Hub+ are written to.",
+          "Under \"Create new events in\", pick which calendar events made in SuperHub are written to.",
         ],
       },
       {
@@ -96,7 +96,7 @@ export const calendarSyncArticles: KbArticle[] = [
         kind: "note",
         tone: "info",
         text:
-          "Feeds are read-only — you can't edit their events in Family Hub+ — and changes at the source can take a while to show up (the app re-reads a feed about every 15 minutes). All of a feed's events belong to the person you added it under; to show them for someone else, remove it and add it again from that person's row.",
+          "Feeds are read-only — you can't edit their events in SuperHub — and changes at the source can take a while to show up (the app re-reads a feed about every 15 minutes). All of a feed's events belong to the person you added it under; to show them for someone else, remove it and add it again from that person's row.",
       },
       {
         kind: "note",
@@ -138,7 +138,7 @@ export const calendarSyncArticles: KbArticle[] = [
           },
           {
             q: "Settings says \"N events recently failed to sync to Google/Outlook\"",
-            a: "Those events are still on your Family Hub+ calendar — only the copy sent to Google or Outlook failed. Reconnect that calendar if it keeps happening.",
+            a: "Those events are still on your SuperHub calendar — only the copy sent to Google or Outlook failed. Reconnect that calendar if it keeps happening.",
           },
           {
             q: "A change I made in Google or Outlook hasn't shown up yet",

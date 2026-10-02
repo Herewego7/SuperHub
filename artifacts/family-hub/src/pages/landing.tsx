@@ -126,7 +126,7 @@ export default function Landing({
   return (
     // Safe-area padding: the viewport is `viewport-fit=cover`, so on an iPhone
     // the page runs under the status bar and Dynamic Island, and without this
-    // the "Family Hub+" wordmark sat on top of the clock (2026-09-30). The app
+    // the "SuperHub" wordmark sat on top of the clock (2026-09-30). The app
     // shell has always done this in family-hub.tsx; the sign-in screen never
     // did. Bottom inset too, so the last of the page clears the home bar.
     <div
@@ -140,7 +140,7 @@ export default function Landing({
         <div className="max-w-6xl mx-auto flex justify-center items-center">
           <div className="flex items-center gap-2">
             <Home className="h-8 w-8 text-orange-600" />
-            <h1 className="text-2xl font-bold text-gray-800">Family Hub+</h1>
+            <h1 className="text-2xl font-bold text-gray-800">SuperHub</h1>
           </div>
         </div>
       </header>
@@ -431,7 +431,7 @@ export default function Landing({
       </main>
 
       <footer className="p-6 text-center text-gray-500 text-sm">
-        <p>Family Hub+ - Bringing families together, one task at a time.</p>
+        <p>SuperHub - Bringing families together, one task at a time.</p>
       </footer>
     </div>
   );

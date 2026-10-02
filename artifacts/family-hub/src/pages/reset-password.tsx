@@ -57,7 +57,7 @@ export default function ResetPassword() {
         <div className="max-w-6xl mx-auto flex justify-center items-center">
           <div className="flex items-center gap-2">
             <Home className="h-8 w-8 text-orange-600" />
-            <h1 className="text-2xl font-bold text-gray-800">Family Hub+</h1>
+            <h1 className="text-2xl font-bold text-gray-800">SuperHub</h1>
           </div>
         </div>
       </header>
@@ -82,7 +82,7 @@ export default function ResetPassword() {
                 className="px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm text-center"
                 data-testid="text-reset-success"
               >
-                Password updated! Taking you to your Family Hub+…
+                Password updated! Taking you to your SuperHub…
               </div>
             ) : (
               <>
