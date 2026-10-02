@@ -28,6 +28,12 @@ export function toolsForRole(isChild: boolean): string[] {
   return CHAT_TOOLS.filter((tool) => !INBOX_TOOLS.has(tool));
 }
 
+export function unknownReply(isChild: boolean): string {
+  return isChild
+    ? "I can tell you the plan, check a chore, or add a to-do."
+    : "I can tell you the plan, check a chore, add a to-do, or take something off the grocery list.";
+}
+
 export function pointsProfileId(profileIds: string[], profileKey: string): string | null {
   const selected = profileKey.split(",").filter((id) => id && id !== "family");
   if (profileIds.length === 0) return selected[0] ?? null;

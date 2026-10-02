@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "@/lib/chatTools";
+import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
@@ -512,7 +512,9 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       );
       return;
     }
-    setBubbles(next);
+    const saved = [...next, { id: `${Date.now()}-u`, role: "assistant" as const, text: unknownReply(isChild) }];
+    localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(saved));
+    setBubbles(saved);
     setDraft("");
   }
 

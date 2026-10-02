@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, toolsForRole, weatherReply } from "../../src/lib/chatTools";
+import { assignChange, checkOffTitle, createEventClock, createEventTitle, createTodoTitle, dayReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+
+test("an unrecognized sentence gets a short reply", () => {
+  assert.match(unknownReply(true), /plan/);
+  assert.doesNotMatch(unknownReply(true), /grocery|inbox|mail/i);
+  assert.match(unknownReply(false), /grocery/);
+});
 
 test("a kid tool list excludes inbox search", () => {
   const tools = toolsForRole(true);
