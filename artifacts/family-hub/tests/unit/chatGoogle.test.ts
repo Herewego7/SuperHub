@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents } from "../../src/lib/chatGoogle";
+import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite } from "../../src/lib/chatGoogle";
 
 test("chat can see a Google event and who is driving it", () => {
   const rows = chatGoogleEvents([
@@ -58,4 +58,13 @@ test("chat can see an Outlook event and a subscribed event", () => {
   assert.equal(ical[0].location, "Field 2");
   assert.deepEqual(ical[0].profileIds, ["dad"]);
   assert.equal(ical[0].recurringEventId, "series-1");
+});
+
+test("a Google event chat can change has a write path", () => {
+  assert.equal(
+    googleChatWrite({ source: "google", googleProfileId: "dad", googleCalendarId: "cal 1", googleEventId: "abc" }),
+    "/api/google-calendar/events/dad/cal%201/abc",
+  );
+  assert.equal(googleChatWrite({ source: "outlook", googleProfileId: "dad", googleCalendarId: "cal", googleEventId: "abc" }), null);
+  assert.equal(googleChatWrite({ source: "google", googleProfileId: "dad", googleCalendarId: null, googleEventId: "abc" }), null);
 });

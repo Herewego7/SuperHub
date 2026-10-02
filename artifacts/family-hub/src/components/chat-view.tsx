@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
 import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
-import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents } from "@/lib/chatGoogle";
+import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite } from "@/lib/chatGoogle";
 import type { Chore } from "@workspace/shared-types";
 import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
@@ -393,8 +393,16 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
           setDraft("");
           return;
         }
+        const path = googleChatWrite(google);
+        if (!path) {
+          next.push({ id: `${Date.now()}-r`, role: "assistant", text: `${target.title} stays on Google Calendar.` });
+          localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+          setBubbles(next);
+          setDraft("");
+          return;
+        }
         replyAfter(
-          apiRequest("PATCH", `/api/google-calendar/events/${google.googleProfileId}/${google.googleCalendarId}/${google.googleEventId}`, {
+          apiRequest("PATCH", path, {
             drivingProfileIds: drivingChange.profileIds,
             recurringEventId: google.recurringEventId ?? null,
           }).then(() => {
@@ -493,7 +501,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         return;
       }
       const stays = eventStaysPut(target.source, target.id);
-      if (stays) {
+      const googlePath = stays === "Google Calendar" ? googleChatWrite(target) : null;
+      if (stays && !googlePath) {
         next.push({ id: `${Date.now()}-n`, role: "assistant", text: `${target.title} stays on ${stays}.` });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
         setBubbles(next);
@@ -501,8 +510,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         return;
       }
       replyAfter(
-        apiRequest("PATCH", `/api/events/${target.id}`, { title: renaming.next }).then(() => {
-          void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        apiRequest("PATCH", googlePath ?? `/api/events/${target.id}`, { title: renaming.next }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: googlePath ? ["/api/google-calendar/events"] : ["/api/events"] });
         }),
         `${target.title} is now ${renaming.next}.`,
       );
@@ -519,7 +528,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         return;
       }
       const stays = eventStaysPut(target.source, target.id);
-      if (stays) {
+      const googlePath = stays === "Google Calendar" ? googleChatWrite(target) : null;
+      if (stays && !googlePath) {
         next.push({ id: `${Date.now()}-p`, role: "assistant", text: `${target.title} stays on ${stays}.` });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
         setBubbles(next);
@@ -527,8 +537,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         return;
       }
       replyAfter(
-        apiRequest("PATCH", `/api/events/${target.id}`, { location: placing.location }).then(() => {
-          void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        apiRequest("PATCH", googlePath ?? `/api/events/${target.id}`, { location: placing.location }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: googlePath ? ["/api/google-calendar/events"] : ["/api/events"] });
         }),
         `${target.title} is at ${placing.location}.`,
       );
@@ -683,7 +693,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         return;
       }
       const stays = eventStaysPut(target.source, target.id);
-      if (stays) {
+      const googlePath = stays === "Google Calendar" ? googleChatWrite(target) : null;
+      if (stays && !googlePath) {
         next.push({ id: `${Date.now()}-n`, role: "assistant", text: `${target.title} stays on ${stays}.` });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
         setBubbles(next);
@@ -691,8 +702,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         return;
       }
       replyAfter(
-        apiRequest("PATCH", `/api/events/${target.id}`, { profileIds: people.profileIds }).then(() => {
-          void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        apiRequest("PATCH", googlePath ?? `/api/events/${target.id}`, { profileIds: people.profileIds }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: googlePath ? ["/api/google-calendar/events"] : ["/api/events"] });
         }),
         people.reply,
       );

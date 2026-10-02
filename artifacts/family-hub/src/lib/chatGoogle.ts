@@ -132,6 +132,17 @@ export function chatIcalEvents(
   return rows;
 }
 
+/** Where chat writes a change that belongs on Google. Outlook and a missing calendar stay null. */
+export function googleChatWrite(event: {
+  source?: string | null;
+  googleProfileId?: string;
+  googleCalendarId?: string | null;
+  googleEventId?: string;
+}): string | null {
+  if (event.source !== "google" || !event.googleProfileId || !event.googleCalendarId || !event.googleEventId) return null;
+  return `/api/google-calendar/events/${encodeURIComponent(event.googleProfileId)}/${encodeURIComponent(event.googleCalendarId)}/${encodeURIComponent(event.googleEventId)}`;
+}
+
 /** Google events chat can talk about. A second copy of the same event is dropped. */
 export function chatGoogleEvents(
   batches: { profileId: string; events?: unknown[] | null }[],
