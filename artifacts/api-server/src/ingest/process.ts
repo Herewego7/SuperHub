@@ -172,10 +172,12 @@ export function eventsDismissedBySlip<T extends { id: string; title: string; sou
     .map((event) => event.id);
 }
 
-export function slipBody(fromAddress: string | undefined, snippet: string): string {
+export function slipBody(fromAddress: string | undefined, snippet: string, body?: string): string {
   const address = fromAddress?.trim();
-  if (!address) return snippet;
-  return `From: ${address}\n${snippet}`;
+  const head = !address ? snippet : `From: ${address}\n${snippet}`;
+  const extra = body?.trim();
+  if (!extra || extra === snippet.trim()) return head;
+  return `${head}\n\n${extra}`;
 }
 
 export function slipSender(description: string | null | undefined): string | null {
@@ -259,7 +261,7 @@ export function ingestMessages(
     seen.add(key);
     todos.push({
       title: message.subject.trim(),
-      description: slipBody(message.fromAddress, message.snippet),
+      description: slipBody(message.fromAddress, message.snippet, message.body),
       taskType: "todo",
       category: "school_email",
       points: 0,

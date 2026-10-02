@@ -3,9 +3,13 @@ export function slipSender(description: string | null | undefined): string | nul
   return match?.[1] ?? null;
 }
 
-export function slipQuote(description: string | null | undefined): string {
+export function slipText(description: string | null | undefined): string {
   if (!description) return "";
   return description.replace(/^From: \S+\n/, "");
+}
+
+export function slipQuote(description: string | null | undefined): string {
+  return slipText(description).split(/\n\s*\n/)[0] ?? "";
 }
 
 export function openEmailHref(shareOriginals: boolean, sender: string | null): string | null {
@@ -19,7 +23,7 @@ export function suggestedSchool(text: string): string | null {
 }
 
 export function schoolFromSlip(title: string, description: string | null | undefined): string | null {
-  return suggestedSchool(`${title}\n${slipQuote(description)}`);
+  return suggestedSchool(`${title}\n${slipText(description)}`);
 }
 
 type SlipPerson = { id: string; name: string; school?: string | null; isChild?: boolean | null; role?: string | null };
@@ -40,7 +44,7 @@ export function schoolSaveTarget(
 ): { profileId: string; name: string; school: string } | null {
   const school = schoolFromSlip(title, description);
   if (!school) return null;
-  const text = `${title}\n${slipQuote(description)}`;
+  const text = `${title}\n${slipText(description)}`;
   const named = people.filter((person) => namesPerson(text, person.name) && !person.school?.trim());
   if (named.length === 1) return { profileId: named[0].id, name: named[0].name, school };
   if (named.length > 1) return null;

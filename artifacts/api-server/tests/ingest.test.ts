@@ -56,7 +56,7 @@ test("a time written only in the email body still becomes an event", () => {
   assert.equal(planned.events.length, 1);
   assert.equal(planned.events[0]?.hours, 15);
   assert.equal(planned.events[0]?.minutes, 30);
-  assert.match(planned.todos[0]?.description ?? "", /See the note/);
+  assert.match(planned.todos[0]?.description ?? "", /See the note\.\n\nPicture day is Thursday/);
 });
 
 test("two scans of one household share one read", async () => {
@@ -89,7 +89,7 @@ test("an outlook time written only in the body still becomes an event", () => {
     ["liam"],
   );
   assert.equal(planned.events[0]?.hours, 15);
-  assert.match(planned.todos[0]?.description ?? "", /See the note/);
+  assert.match(planned.todos[0]?.description ?? "", /See the note\.\n\nPicture day is Thursday/);
 });
 
 test("an outlook message becomes a slip with the subject and sender", () => {
