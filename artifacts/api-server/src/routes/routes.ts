@@ -2,7 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, RESET_CATEGORIES, type ResetCategory, type DbOrTx } from "../storage";
 import { insertProfileSchema, insertEventSchema, insertChoreSchema, insertChoreCompletionSchema, insertCalendarSettingsSchema, insertLocationSettingsSchema, insertDailyContentSchema, insertDailyContentAssignmentSchema, insertDailyContentCompletionSchema, insertGoogleCalendarTokensSchema, insertOutlookCalendarTokensSchema, insertCalendarAssignmentSchema, insertRewardSchema, insertRewardRedemptionSchema, insertMealSchema, insertMealIngredientSchema, insertGroceryItemSchema, insertGroceryStapleSchema, insertSavedMealSchema, insertCelebrationSchema, insertCelebrationGiftIdeaSchema, insertCelebrationPhotoSchema, insertWishlistItemSchema, db, chores as choresTbl, choreCompletions as choreCompletionsTbl, activityLog as activityLogTbl, profiles as profilesTbl, rewardRedemptions as rewardRedemptionsTbl, rewards as rewardsTbl, shoutouts as shoutoutsTbl, pointAdjustments as pointAdjustmentsTbl, meals as mealsTbl, events as eventsTbl, walletTransactions as walletTransactionsTbl, dailyContent as dailyContentTbl, dailyContentAssignments as dailyContentAssignmentsTbl } from "@workspace/db";
-import { eq, and, gte, lt, or, inArray } from "drizzle-orm";
+import { eq, and, gte, lt, or, inArray, desc } from "drizzle-orm";
+import { feedbackNotes } from "@workspace/db/schema";
 import { GoogleCalendarService } from "../googleCalendar";
 import { OutlookCalendarService } from "../outlookCalendar";
 import { ObjectStorageService, ObjectNotFoundError, cleanupReplacedPhoto } from "../objectStorage";
@@ -6780,6 +6781,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       req.log.error({ error }, "Failed to fetch activity log");
       return res.status(500).json({ message: "Failed to fetch activity log" });
+    }
+  });
+
+  app.get("/api/feedback", isAuthenticated, async (req: any, res) => {
+    try {
+      const rows = await db.select({ text: feedbackNotes.text, createdAt: feedbackNotes.createdAt })
+        .from(feedbackNotes)
+        .where(eq(feedbackNotes.userId, getUserId(req)))
+        .orderBy(desc(feedbackNotes.createdAt))
+        .limit(50);
+      res.json(rows.flatMap((row) => row.createdAt ? [{ text: row.text, at: row.createdAt.toISOString() }] : []));
+    } catch (error) {
+      req.log?.error({ error }, "Failed to read feedback");
+      res.status(503).json({ message: "Feedback is not available yet." });
+    }
+  });
+
+  app.post("/api/feedback", isAuthenticated, async (req: any, res) => {
+    try {
+      const text = typeof req.body?.text === "string" ? req.body.text.trim().slice(0, 2000) : "";
+      if (!text) return res.status(400).json({ message: "Feedback needs text." });
+      const [row] = await db.insert(feedbackNotes).values({ userId: getUserId(req), text }).returning();
+      res.status(201).json({ text: row.text, at: row.createdAt?.toISOString() ?? new Date().toISOString() });
+    } catch (error) {
+      req.log?.error({ error }, "Failed to save feedback");
+      res.status(503).json({ message: "Feedback is not available yet." });
     }
   });
 

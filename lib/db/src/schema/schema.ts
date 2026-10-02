@@ -1539,6 +1539,14 @@ export const insertActivityLogSchema = createInsertSchema(activityLog).omit({
 });
 export type ActivityLog = typeof activityLog.$inferSelect;
 
+// Notes from Chat, shared by the household so another device can read them.
+export const feedbackNotes = pgTable("feedback_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  text: text("text").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ── Onboarding walkthrough progress ─────────────────────────────────────────
 // Tracks the skippable steps (profile/location/rewards/invite) of the
 // first-run onboarding wizard so a "finish setting up" reminder can be shown

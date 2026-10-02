@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, planForOthers, planWho, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, feedbackStored, forgetSchool, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, planForOthers, planWho, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, feedbackStored, feedbackList, forgetSchool, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -452,6 +452,13 @@ test("feedback is recognized and not stored", () => {
   assert.equal(feedbackNote("feedback: the plan missed soccer"), "the plan missed soccer");
   assert.equal(feedbackNote("I have feedback: the plan missed soccer"), "the plan missed soccer");
   assert.equal(feedbackNote("hello"), null);
+});
+
+test("feedback from another device shows with the notes on this one", () => {
+  const local = [{ text: "the plan missed soccer", at: "2026-10-02T12:00:00.000Z" }];
+  const remote = [{ text: "chores are hard to check", at: "2026-10-02T13:00:00.000Z" }];
+  assert.deepEqual(feedbackList(local, remote), [...remote, ...local]);
+  assert.deepEqual(feedbackList(local, [{ text: "the plan missed soccer", at: "2026-10-02T13:00:00.000Z" }]), remote.slice(0, 0).concat([{ text: "the plan missed soccer", at: "2026-10-02T13:00:00.000Z" }]));
 });
 
 test("feedback is kept so it can be read later", () => {

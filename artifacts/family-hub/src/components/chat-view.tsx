@@ -240,8 +240,12 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     }
     const note = feedbackNote(text);
     if (tools.includes("send_feedback") && note) {
-      const stored = feedbackStored(feedbackNotesFrom(localStorage.getItem(FEEDBACK_KEY)), note, new Date().toISOString());
+      const at = new Date().toISOString();
+      const stored = feedbackStored(feedbackNotesFrom(localStorage.getItem(FEEDBACK_KEY)), note, at);
       localStorage.setItem(FEEDBACK_KEY, JSON.stringify(stored));
+      void apiRequest("POST", "/api/feedback", { text: note }).then(() => {
+        void queryClient.invalidateQueries({ queryKey: ["/api/feedback"] });
+      }).catch(() => undefined);
       next.push({ id: `${Date.now()}-b`, role: "assistant", text: "Thanks. I saved that in Settings." });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
       setBubbles(next);

@@ -106,6 +106,18 @@ export function feedbackStored(existing: SavedFeedback[], note: string, at: stri
   return [...existing, { text, at }].slice(-50);
 }
 
+/** This device's notes plus the family's. The same text is listed once, at the later time. Newest first. */
+export function feedbackList(local: SavedFeedback[], remote: SavedFeedback[]): SavedFeedback[] {
+  const byText = new Map<string, SavedFeedback>();
+  for (const note of [...local, ...remote]) {
+    const text = note.text.trim();
+    if (!text) continue;
+    const prev = byText.get(text);
+    if (!prev || note.at > prev.at) byText.set(text, { text, at: note.at });
+  }
+  return [...byText.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+}
+
 export function feedbackNotesFrom(raw: string | null): SavedFeedback[] {
   try {
     const parsed = JSON.parse(raw || "[]");

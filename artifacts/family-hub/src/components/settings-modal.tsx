@@ -27,7 +27,7 @@ import { Profile, InsertProfile, LocationSettings, insertLocationSettingsSchema,
 import { regionToTimezone, deviceTimezone, guessCountry, countryFromName, regionLabel, COUNTRIES, type CountryCode } from "@/lib/regions";
 import { familyCalendarSelectValue, parseFamilyCalendarOption, familyCalendarOptionValue } from "@/lib/familyCalendarChoice";
 import { personRecordLines, savedFacts, savedSchool } from "@/lib/slipMail";
-import { FEEDBACK_KEY, feedbackNotesFrom } from "@/lib/chatTools";
+import { FEEDBACK_KEY, feedbackList, feedbackNotesFrom, type SavedFeedback } from "@/lib/chatTools";
 import { ObjectUploader } from "./ObjectUploader";
 import { motion, AnimatePresence } from "framer-motion";
 import { Settings, Plus, Edit, X, Upload, User, Users, UserPlus, MapPin, Calendar, ChevronDown, ChevronUp, Lock, LogOut, Trash2, AlertTriangle, Bell, LayoutDashboard, GripVertical, Gift, ShieldCheck, CheckCircle, XCircle, Sun, Moon, Monitor, Camera, Save, Compass, Search, Share2, KeyRound, Star, HelpCircle, Link2, Bug, Sparkles, Home, ListTodo, UtensilsCrossed, MessageCircle } from "lucide-react";
@@ -46,12 +46,14 @@ import { ADULT_ROLE_EXPLAINER, KID_ROLE_EXPLAINER, KID_NEEDS_PIN_NUDGE } from "@
 import { LocationWeatherChip } from "@/components/location-weather-chip";
 
 function DeviceFeedback() {
-  const notes = feedbackNotesFrom(localStorage.getItem(FEEDBACK_KEY));
+  const local = feedbackNotesFrom(localStorage.getItem(FEEDBACK_KEY));
+  const { data } = useQuery<SavedFeedback[]>({ queryKey: ["/api/feedback"], retry: false });
+  const notes = feedbackList(local, Array.isArray(data) ? data : []);
   if (notes.length === 0) return null;
   return (
     <div className="space-y-1" data-testid="settings-feedback">
-      <p className="text-xs font-medium">Feedback on this device</p>
-      {[...notes].reverse().map((note) => (
+      <p className="text-xs font-medium">Feedback</p>
+      {notes.map((note) => (
         <p key={`${note.at}-${note.text}`} className="text-xs text-muted-foreground break-words">{note.text}</p>
       ))}
     </div>
