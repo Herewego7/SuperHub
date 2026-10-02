@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, planForOthers, planWho, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, forgetSchool, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, planForOthers, planWho, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, feedbackStored, forgetSchool, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -451,6 +451,14 @@ test("remember keeps a fact on that person", () => {
 test("feedback is recognized and not stored", () => {
   assert.equal(feedbackNote("feedback: the plan missed soccer"), "the plan missed soccer");
   assert.equal(feedbackNote("hello"), null);
+});
+
+test("feedback is kept so it can be read later", () => {
+  assert.deepEqual(
+    feedbackStored([], "the plan missed soccer", "2026-10-02T12:00:00.000Z"),
+    [{ text: "the plan missed soccer", at: "2026-10-02T12:00:00.000Z" }],
+  );
+  assert.deepEqual(feedbackStored([{ text: "a", at: "t" }], "  ", "later"), [{ text: "a", at: "t" }]);
 });
 
 test("remind me becomes a to-do title, not a notification", () => {

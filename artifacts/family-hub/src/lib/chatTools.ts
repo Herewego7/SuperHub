@@ -95,6 +95,29 @@ export function feedbackNote(text: string): string | null {
   return note ? note : null;
 }
 
+export type SavedFeedback = { text: string; at: string };
+
+export const FEEDBACK_KEY = "superhub_feedback";
+
+/** Keep a feedback note on this device. A blank note changes nothing. */
+export function feedbackStored(existing: SavedFeedback[], note: string, at: string): SavedFeedback[] {
+  const text = note.trim();
+  if (!text) return existing;
+  return [...existing, { text, at }].slice(-50);
+}
+
+export function feedbackNotesFrom(raw: string | null): SavedFeedback[] {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is SavedFeedback =>
+      !!item && typeof item.text === "string" && item.text.trim().length > 0 && typeof item.at === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
 function spokenClock(raw: string): string | null {
   const match = raw.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
   if (!match) return null;

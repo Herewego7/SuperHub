@@ -27,6 +27,7 @@ import { Profile, InsertProfile, LocationSettings, insertLocationSettingsSchema,
 import { regionToTimezone, deviceTimezone, guessCountry, countryFromName, regionLabel, COUNTRIES, type CountryCode } from "@/lib/regions";
 import { familyCalendarSelectValue, parseFamilyCalendarOption, familyCalendarOptionValue } from "@/lib/familyCalendarChoice";
 import { personRecordLines, savedFacts, savedSchool } from "@/lib/slipMail";
+import { FEEDBACK_KEY, feedbackNotesFrom } from "@/lib/chatTools";
 import { ObjectUploader } from "./ObjectUploader";
 import { motion, AnimatePresence } from "framer-motion";
 import { Settings, Plus, Edit, X, Upload, User, Users, UserPlus, MapPin, Calendar, ChevronDown, ChevronUp, Lock, LogOut, Trash2, AlertTriangle, Bell, LayoutDashboard, GripVertical, Gift, ShieldCheck, CheckCircle, XCircle, Sun, Moon, Monitor, Camera, Save, Compass, Search, Share2, KeyRound, Star, HelpCircle, Link2, Bug, Sparkles, Home, ListTodo, UtensilsCrossed, MessageCircle } from "lucide-react";
@@ -43,6 +44,19 @@ import { SubscriptionSettingsSection } from "./subscription-settings-section";
 import { KbPanel } from "./kb/kb-panel";
 import { ADULT_ROLE_EXPLAINER, KID_ROLE_EXPLAINER, KID_NEEDS_PIN_NUDGE } from "@/lib/copy";
 import { LocationWeatherChip } from "@/components/location-weather-chip";
+
+function DeviceFeedback() {
+  const notes = feedbackNotesFrom(localStorage.getItem(FEEDBACK_KEY));
+  if (notes.length === 0) return null;
+  return (
+    <div className="space-y-1" data-testid="settings-feedback">
+      <p className="text-xs font-medium">Feedback on this device</p>
+      {[...notes].reverse().map((note) => (
+        <p key={`${note.at}-${note.text}`} className="text-xs text-muted-foreground break-words">{note.text}</p>
+      ))}
+    </div>
+  );
+}
 
 // All tabs in canonical order — used for Default Tab select + sortable reorder list.
 // "behaviour" deliberately omitted — the Behavior Board tab is hidden from
@@ -4422,6 +4436,8 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
             <Button variant="default" className="w-full h-auto py-2.5 whitespace-nowrap text-sm font-semibold" onClick={() => setSignOutStep(1)} data-testid="settings-sign-out-button">
               <LogOut className="w-5 h-5 mr-2" /> Sign out
             </Button>
+
+            <DeviceFeedback />
 
             <div className="flex gap-3 text-xs text-muted-foreground pt-1">
               <a href="/privacy" className="hover:underline">Privacy Policy</a>

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
 import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
 import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleDeleteChoice, googleMoveBody, outlookChatWrite, outlookDeleteChoice, outlookMoveBody } from "@/lib/chatGoogle";
 import type { Chore } from "@workspace/shared-types";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, forgetSchool, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, feedbackNotesFrom, feedbackStored, FEEDBACK_KEY, forgetFact, forgetSchool, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
@@ -238,8 +238,11 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       );
       return;
     }
-    if (tools.includes("send_feedback") && feedbackNote(text)) {
-      next.push({ id: `${Date.now()}-b`, role: "assistant", text: "I can't send feedback yet." });
+    const note = feedbackNote(text);
+    if (tools.includes("send_feedback") && note) {
+      const stored = feedbackStored(feedbackNotesFrom(localStorage.getItem(FEEDBACK_KEY)), note, new Date().toISOString());
+      localStorage.setItem(FEEDBACK_KEY, JSON.stringify(stored));
+      next.push({ id: `${Date.now()}-b`, role: "assistant", text: "Thanks. I saved that in Settings." });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
       setBubbles(next);
       setDraft("");
