@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dinnerCalendarChange, dinnerEventInsert, dinnersToCopy } from "../src/meals/dinnerEvent";
+import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp, dinnersToCopy } from "../src/meals/dinnerEvent";
 
 test("a dinner saved while the switch is on is offered to the family calendar", () => {
   const event = dinnerEventInsert({ date: "2026-10-01", slot: "dinner", name: "Tacos" }, "family", true);
@@ -64,4 +64,8 @@ test("a dinner is 6pm in the family timezone", () => {
 test("the switch off leaves a new dinner off the calendar", () => {
   assert.equal(dinnerEventInsert({ date: "2026-10-01", slot: "dinner", name: "Tacos" }, "family", false), null);
   assert.equal(dinnerEventInsert({ date: "2026-10-01", slot: "breakfast", name: "Oatmeal" }, "family", true), null);
+  const onCalendar = dinnerEventInsert({ date: "2026-10-01", slot: "dinner", name: "Tacos" }, "family", true);
+  assert.equal(dinnerLeavesTheApp(onCalendar), true);
+  assert.equal(dinnerLeavesTheApp(dinnerEventInsert({ date: "2026-10-01", slot: "dinner", name: "Tacos" }, null, true)), false);
+  assert.equal(dinnerLeavesTheApp({ source: "app", calendarId: "family" }), false);
 });

@@ -9,6 +9,7 @@ import {
   calendarTokenOwner,
   familyCalendarAccount,
   familyCalendarWriter,
+  syncTargetsForEvent,
   eventsOnWatchedCalendars,
 } from "../src/lib/calendarAssignmentScope.ts";
 
@@ -73,6 +74,12 @@ test("a family calendar is written by the account that connected it", () => {
     ], { profileId: "liam", provider: "google" }),
     { profileId: "alex", provider: "google" },
   );
+});
+
+test("a dinner without a family calendar is not copied onto every account", () => {
+  assert.deepEqual(syncTargetsForEvent("meal", null, [], ["mum", "dad"]), []);
+  assert.deepEqual(syncTargetsForEvent("meal", "chad", [], ["mum", "dad"]), ["chad"]);
+  assert.deepEqual(syncTargetsForEvent("app", null, [], ["mum", "dad"]), ["mum", "dad"]);
 });
 
 test("a family sees only its own assignments", () => {

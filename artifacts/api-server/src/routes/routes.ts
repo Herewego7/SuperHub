@@ -29,7 +29,7 @@ import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip
 import { applyIngestedMail } from "../ingest/saveMail";
 import { scanConnectedInboxes } from "../ingest/scanHousehold";
 import { markSchedulerWorkDirty } from "../lib/workGate";
-import { dinnerCalendarChange, dinnerEventInsert, dinnersToCopy } from "../meals/dinnerEvent";
+import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp, dinnersToCopy } from "../meals/dinnerEvent";
 import { slipKey } from "../ingest/parse";
 import { moveClock } from "../scheduler/eveningPlan";
 import { expandRecurringEvents, resolveSeriesEventId } from "../lib/eventRecurrence";
@@ -3290,7 +3290,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const meal of dinnersToCopy(meals, events, timeZone)) {
         const event = dinnerEventInsert(meal, settings.familyCalendarId, true, timeZone);
         if (!event) continue;
-        await storage.createEvent({ ...event, userId });
+        const created = await storage.createEvent({ ...event, userId });
+        if (created && dinnerLeavesTheApp(created)) {
+          void syncEventCreate(created).catch((err) => console.warn("Dinner calendar copy failed:", err instanceof Error ? err.message : err));
+        }
         copied += 1;
       }
       res.json({ copied });
@@ -5415,9 +5418,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const events = await storage.getEventsByUser(userId);
       const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
       const change = dinnerCalendarChange(previous, next, events, settings?.familyCalendarId, settings?.mealsOnCalendar === true, timeZone);
-      if (change.updateId && change.create) await storage.updateEvent(change.updateId, change.create, userId);
-      for (const id of change.deleteIds) await storage.deleteEvent(id, userId);
-      if (!change.updateId && change.create) await storage.createEvent({ ...change.create, userId });
+      if (change.updateId && change.create) {
+        const updated = await storage.updateEvent(change.updateId, change.create, userId);
+        if (updated && dinnerLeavesTheApp(updated)) {
+          void syncEventUpdate(updated).catch((err) => console.warn("Dinner calendar update failed:", err instanceof Error ? err.message : err));
+        }
+      }
+      for (const id of change.deleteIds) {
+        const links = await storage.getEventCalendarSyncs(id).catch(() => []);
+        await storage.deleteEvent(id, userId);
+        void syncEventDelete(links).catch((err) => console.warn("Dinner calendar delete failed:", err instanceof Error ? err.message : err));
+      }
+      if (!change.updateId && change.create) {
+        const created = await storage.createEvent({ ...change.create, userId });
+        if (dinnerLeavesTheApp(created)) {
+          void syncEventCreate(created).catch((err) => console.warn("Dinner calendar create failed:", err instanceof Error ? err.message : err));
+        }
+      }
     } catch (err) {
       console.error("Dinner calendar sync failed:", err);
     }
@@ -5436,7 +5453,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dinnerEvent = dinnerEventInsert(created, settings?.familyCalendarId, settings?.mealsOnCalendar === true, timeZone);
       if (dinnerEvent) {
         try {
-          await storage.createEvent({ ...dinnerEvent, userId });
+          const created = await storage.createEvent({ ...dinnerEvent, userId });
+          if (dinnerLeavesTheApp(created)) {
+            void syncEventCreate(created).catch((err) => console.warn("Dinner calendar create failed:", err instanceof Error ? err.message : err));
+          }
         } catch (err) {
           console.error("Dinner calendar write failed:", err);
         }

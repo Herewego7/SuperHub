@@ -33,6 +33,13 @@ export function dinnerEventInsert(
   };
 }
 
+/** A dinner leaves the app only when a family calendar was chosen. Otherwise it would be copied onto every account. */
+export function dinnerLeavesTheApp(event: { calendarId?: string | null; source?: string | null } | null | undefined): boolean {
+  if (!event || event.source !== "meal") return false;
+  const id = event.calendarId?.trim();
+  return !!id && id !== "none";
+}
+
 export function dinnerEventDay(start: Date | string, timeZone?: string): string {
   const at = new Date(start);
   if (timeZone) return localDate(at, timeZone);

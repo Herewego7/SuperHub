@@ -13,7 +13,7 @@
  */
 import { storage } from "./storage";
 import { twoWaySyncFromSettings } from "./lib/settingsOwnership";
-import { calendarIsWritable, familyCalendarAccount, familyCalendarCreates } from "./lib/calendarAssignmentScope";
+import { calendarIsWritable, familyCalendarAccount, familyCalendarCreates, syncTargetsForEvent } from "./lib/calendarAssignmentScope";
 import { googleRecurrence, outlookRecurrence, excludedInstants } from "./lib/recurrenceRule";
 import { DEFAULT_TIMEZONE } from "./lib/timezone";
 import { GoogleCalendarService } from "./googleCalendar";
@@ -439,6 +439,7 @@ export async function syncEventCreate(event: Event): Promise<void> {
         : createOutlookCopy(event, writer.profileId, event.calendarId));
       return;
     }
+    if (event.source === "meal") return;
     const profileIds = await resolveProfileIds(event);
     // Run every profile/provider copy concurrently rather than one after the
     // other. Each copy is an independent external round-trip (plus a possible
@@ -486,9 +487,12 @@ export async function syncEventUpdate(event: Event): Promise<void> {
     const existing = await storage.getEventCalendarSyncs(event.id);
     const syncEnabled = await isTwoWaySyncEnabled(event.userId);
     const writer = await familyWriterFor(event);
-    const profileIds = writer
-      ? [...new Set([writer.profileId, ...existing.map((link) => link.profileId)])]
-      : await resolveProfileIds(event);
+    const profileIds = syncTargetsForEvent(
+      event.source,
+      writer?.profileId ?? null,
+      existing.map((link) => link.profileId),
+      writer ? [] : await resolveProfileIds(event),
+    );
     const plan = planEventUpdate(existing, profileIds, syncEnabled);
     const creates = familyCalendarCreates(plan.toCreate, writer);
 

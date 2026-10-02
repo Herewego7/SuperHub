@@ -112,6 +112,18 @@ export function familyCalendarAccount(
   return hinted;
 }
 
+/** A meal with no family calendar stays in the app. Other events still follow whoever they are assigned to. */
+export function syncTargetsForEvent(
+  source: string | null | undefined,
+  writerProfileId: string | null,
+  existingProfileIds: string[],
+  assignedProfileIds: string[],
+): string[] {
+  if (writerProfileId) return [...new Set([writerProfileId, ...existingProfileIds])];
+  if (source === "meal") return [...new Set(existingProfileIds)];
+  return assignedProfileIds;
+}
+
 export function familyCalendarCreates<T extends { profileId: string; provider: string }>(
   creates: T[],
   writer: { profileId: string; provider: "google" | "outlook" } | null,
