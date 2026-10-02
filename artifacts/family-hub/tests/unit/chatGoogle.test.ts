@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatGoogleEvents } from "../../src/lib/chatGoogle";
+import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents } from "../../src/lib/chatGoogle";
 
 test("chat can see a Google event and who is driving it", () => {
   const rows = chatGoogleEvents([
@@ -34,4 +34,28 @@ test("chat can see a Google event and who is driving it", () => {
   assert.equal(rows[0].source, "google");
   assert.equal(rows[0].googleEventId, "abc");
   assert.equal(rows[0].googleProfileId, "dad");
+});
+
+test("chat can see an Outlook event and a subscribed event", () => {
+  const outlook = chatOutlookEvents(
+    [{ profileId: "dad", events: [{ id: "o1", subject: "Piano", isAllDay: false, start: { dateTime: "2026-10-02T15:00:00" }, end: { dateTime: "2026-10-02T15:30:00" }, location: { displayName: "Studio" }, calendar: { id: "ocal" } }] }],
+    [{ calendarId: "ocal", calendarType: "outlook", profileId: "liam", audienceProfileIds: ["liam"] }],
+    ["liam", "dad"],
+  );
+  assert.equal(outlook.length, 1);
+  assert.equal(outlook[0].title, "Piano");
+  assert.equal(outlook[0].source, "outlook");
+  assert.equal(outlook[0].location, "Studio");
+  assert.deepEqual(outlook[0].profileIds, ["liam"]);
+  assert.equal(outlook[0].outlookCalendarId, "ocal");
+  const ical = chatIcalEvents([{
+    profileId: "dad",
+    events: [{ id: "i1", title: "Practice", start: "2026-10-02T16:00:00", end: "2026-10-02T17:00:00", location: "Field 2", isAllDay: false, uid: "series-1" }],
+  }]);
+  assert.equal(ical.length, 1);
+  assert.equal(ical[0].title, "Practice");
+  assert.equal(ical[0].source, "ical");
+  assert.equal(ical[0].location, "Field 2");
+  assert.deepEqual(ical[0].profileIds, ["dad"]);
+  assert.equal(ical[0].recurringEventId, "series-1");
 });

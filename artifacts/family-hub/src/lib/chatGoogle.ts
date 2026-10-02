@@ -1,5 +1,7 @@
-import { parseGoogleEventDates } from "./calendarDates";
+import { icalDisplayEnd, parseGoogleEventDates, parseOutlookEventDates } from "./calendarDates";
 import { driverIdsFromGoogleEvent } from "./eventDrivers";
+import { outlookEventProfileIds, type AssignmentLike } from "./outlookAttribution";
+import { recurringIdFromIcal, recurringIdFromOutlook } from "./upcoming";
 
 export type ChatGoogleEvent = {
   id: string;
@@ -29,6 +31,105 @@ function assignedIds(event: { extendedProperties?: { private?: Record<string, st
     }
   }
   return [profileId];
+}
+
+type ExternalEvent = {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  source: "outlook" | "ical";
+  startTime: string;
+  endTime: string;
+  isAllDay: boolean;
+  profileIds: string[];
+  drivingProfileIds: string[];
+  outlookCalendarId: string | null;
+  recurringEventId: string | null;
+};
+
+export function chatOutlookEvents(
+  batches: { profileId: string; events?: unknown[] | null }[],
+  assignments: AssignmentLike[],
+  knownIds: string[],
+): ExternalEvent[] {
+  const seen = new Set<string>();
+  const known = new Set(knownIds);
+  const rows: ExternalEvent[] = [];
+  for (const batch of batches) {
+    for (const item of batch.events ?? []) {
+      const event = item as {
+        id?: string;
+        subject?: string;
+        bodyPreview?: string;
+        isAllDay?: boolean;
+        start?: { dateTime?: string; timeZone?: string } | null;
+        end?: { dateTime?: string; timeZone?: string } | null;
+        location?: { displayName?: string } | null;
+        calendar?: { id?: string; name?: string } | null;
+        seriesMasterId?: string | null;
+      };
+      if (!event?.id || seen.has(event.id)) continue;
+      seen.add(event.id);
+      const { start, end } = parseOutlookEventDates(event);
+      rows.push({
+        id: `outlook-${batch.profileId}-${event.id}`,
+        title: event.subject?.trim() || "Untitled",
+        description: event.bodyPreview ?? null,
+        location: event.location?.displayName ?? null,
+        source: "outlook",
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        isAllDay: event.isAllDay === true,
+        profileIds: outlookEventProfileIds(event, batch.profileId, assignments, known),
+        drivingProfileIds: [],
+        outlookCalendarId: event.calendar?.id ?? null,
+        recurringEventId: recurringIdFromOutlook(event),
+      });
+    }
+  }
+  return rows;
+}
+
+export function chatIcalEvents(
+  batches: { profileId: string; events?: unknown[] | null }[],
+): ExternalEvent[] {
+  const seen = new Set<string>();
+  const rows: ExternalEvent[] = [];
+  for (const batch of batches) {
+    for (const item of batch.events ?? []) {
+      const event = item as {
+        id?: string;
+        title?: string;
+        description?: string;
+        location?: string;
+        start?: string;
+        end?: string;
+        isAllDay?: boolean;
+        uid?: string | null;
+      };
+      if (!event?.id || !event.start || seen.has(event.id)) continue;
+      seen.add(event.id);
+      const isAllDay = event.isAllDay === true;
+      const start = new Date(event.start);
+      const end = event.end ? icalDisplayEnd(event.end, isAllDay, start) : start;
+      rows.push({
+        id: `ical-${batch.profileId}-${event.id}`,
+        title: event.title?.trim() || "Untitled",
+        description: event.description ?? null,
+        location: event.location ?? null,
+        source: "ical",
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        isAllDay,
+        profileIds: [batch.profileId],
+        drivingProfileIds: [],
+        outlookCalendarId: null,
+        recurringEventId: recurringIdFromIcal(event),
+      });
+    }
+  }
+  return rows;
 }
 
 /** Google events chat can talk about. A second copy of the same event is dropped. */

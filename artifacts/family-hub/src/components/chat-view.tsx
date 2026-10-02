@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
 import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
-import { chatGoogleEvents } from "@/lib/chatGoogle";
+import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents } from "@/lib/chatGoogle";
 import type { Chore } from "@workspace/shared-types";
 import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
@@ -78,27 +78,58 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     },
   });
   const { data: events = [], isFetched: eventsFetched } = useQuery<{ id: string; title: string; description?: string | null; location?: string | null; source?: string | null; drivingProfileIds?: string[] | null; profileIds?: string[] | null; startTime?: string | null; endTime?: string | null; googleCalendarId?: string | null; outlookCalendarId?: string | null; category?: string | null; movedFrom?: string | null }[]>({ queryKey: ["/api/events"] });
-  const { data: calendarAssignments = [] } = useQuery<{ calendarId: string; watched?: boolean | null; isActive?: boolean | null }[]>({ queryKey: ["/api/calendar-assignments"] });
-  const { data: profiles = [] } = useQuery<{ id: string; name: string; school?: string | null; facts?: string[] | null; isAllFamilyProfile?: boolean | null; googleCalendarConnected?: boolean | null }[]>({ queryKey: ["/api/profiles"] });
+  const { data: calendarAssignments = [] } = useQuery<{ calendarId: string; calendarType?: string; profileId?: string; audienceProfileIds?: string[] | null; watched?: boolean | null; isActive?: boolean | null }[]>({ queryKey: ["/api/calendar-assignments"] });
+  const { data: profiles = [] } = useQuery<{ id: string; name: string; school?: string | null; facts?: string[] | null; isAllFamilyProfile?: boolean | null; googleCalendarConnected?: boolean | null; outlookCalendarConnected?: boolean | null; icalConnected?: boolean | null }[]>({ queryKey: ["/api/profiles"] });
   const googleProfiles = profiles.filter((profile) => profile.googleCalendarConnected && !profile.isAllFamilyProfile);
-  const googleQueries = useQueries({
-    queries: googleProfiles.map((profile) => ({
-      queryKey: ["/api/google-calendar/events", profile.id],
-      queryFn: getQueryFn({ on401: "returnNull" }),
-      retry: false,
-      staleTime: 60_000,
-    })),
+  const outlookProfiles = profiles.filter((profile) => profile.outlookCalendarConnected && !profile.isAllFamilyProfile);
+  const icalProfiles = profiles.filter((profile) => profile.icalConnected && !profile.isAllFamilyProfile);
+  const externalQueries = useQueries({
+    queries: [
+      ...googleProfiles.map((profile) => ({
+        queryKey: ["/api/google-calendar/events", profile.id],
+        queryFn: getQueryFn({ on401: "returnNull" }),
+        retry: false,
+        staleTime: 60_000,
+      })),
+      ...outlookProfiles.map((profile) => ({
+        queryKey: ["/api/outlook-calendar/events", profile.id],
+        queryFn: getQueryFn({ on401: "returnNull" }),
+        retry: false,
+        staleTime: 60_000,
+      })),
+      ...icalProfiles.map((profile) => ({
+        queryKey: ["/api/ical-calendar/events", profile.id],
+        queryFn: getQueryFn({ on401: "returnNull" }),
+        retry: false,
+        staleTime: 60_000,
+      })),
+    ],
   });
-  const knownEvents = useMemo(
-    () => [
+  const knownEvents = useMemo(() => {
+    const googleData = externalQueries.slice(0, googleProfiles.length);
+    const outlookData = externalQueries.slice(googleProfiles.length, googleProfiles.length + outlookProfiles.length);
+    const icalData = externalQueries.slice(googleProfiles.length + outlookProfiles.length);
+    const assignments = calendarAssignments.filter((assignment): assignment is typeof assignment & { calendarType: string; profileId: string } => !!assignment.calendarType && !!assignment.profileId);
+    return [
       ...events,
       ...chatGoogleEvents(googleProfiles.map((profile, index) => ({
         profileId: profile.id,
-        events: googleQueries[index]?.data as unknown[] | null | undefined,
+        events: googleData[index]?.data as unknown[] | null | undefined,
       }))),
-    ],
-    [events, googleProfiles, googleQueries],
-  );
+      ...chatOutlookEvents(
+        outlookProfiles.map((profile, index) => ({
+          profileId: profile.id,
+          events: outlookData[index]?.data as unknown[] | null | undefined,
+        })),
+        assignments,
+        profiles.map((profile) => profile.id),
+      ),
+      ...chatIcalEvents(icalProfiles.map((profile, index) => ({
+        profileId: profile.id,
+        events: icalData[index]?.data as unknown[] | null | undefined,
+      }))),
+    ];
+  }, [calendarAssignments, events, externalQueries, googleProfiles, icalProfiles, outlookProfiles, profiles]);
   const { data: weather } = useQuery<{ location?: string; temperature?: number; condition?: string }>({ queryKey: ["/api/weather"], retry: false });
   const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
   const { data: celebrations = [], isFetched: celebrationsFetched } = useQuery<{ name: string; monthDay: string; year?: number | null; type?: string | null; customLabel?: string | null }[]>({ queryKey: ["/api/celebrations"] });
@@ -340,6 +371,14 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       }
       if (!("profileIds" in drivingChange)) {
         next.push({ id: `${Date.now()}-r`, role: "assistant", text: drivingChange.reply });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
+      }
+      const stays = target.source === "google" ? null : eventStaysPut(target.source, target.id);
+      if (stays) {
+        next.push({ id: `${Date.now()}-r`, role: "assistant", text: `${target.title} stays on ${stays}.` });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
         setBubbles(next);
         setDraft("");
