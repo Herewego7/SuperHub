@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
@@ -523,16 +523,49 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       return;
     }
     const assigned = tools.includes("assign") ? assignChange(text, talkChores, profiles) : null;
-    if (assigned) {
-      if ("choreId" in assigned) {
-        replyAfter(
-          apiRequest("PATCH", `/api/chores/${assigned.choreId}`, { profileIds: assigned.profileIds }).then(() => {
-            void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
-          }),
-          assigned.reply,
-        );
+    if (assigned && "choreId" in assigned) {
+      replyAfter(
+        apiRequest("PATCH", `/api/chores/${assigned.choreId}`, { profileIds: assigned.profileIds }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+        }),
+        assigned.reply,
+      );
+      return;
+    }
+    const people = tools.includes("update_event") ? eventPeople(text, profiles) : null;
+    if (people) {
+      const target = talkEvents.find((event) => event.title.toLowerCase() === people.title.toLowerCase());
+      if (!target) {
+        next.push({ id: `${Date.now()}-n`, role: "assistant", text: assigned && !("choreId" in assigned) ? assigned.reply : `I don't see ${people.title}.` });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
         return;
       }
+      if (!("profileIds" in people)) {
+        next.push({ id: `${Date.now()}-n`, role: "assistant", text: people.reply });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
+      }
+      const stays = eventStaysPut(target.source, target.id);
+      if (stays) {
+        next.push({ id: `${Date.now()}-n`, role: "assistant", text: `${target.title} stays on ${stays}.` });
+        localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+        setBubbles(next);
+        setDraft("");
+        return;
+      }
+      replyAfter(
+        apiRequest("PATCH", `/api/events/${target.id}`, { profileIds: people.profileIds }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        }),
+        people.reply,
+      );
+      return;
+    }
+    if (assigned) {
       next.push({ id: `${Date.now()}-n`, role: "assistant", text: assigned.reply });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
       setBubbles(next);

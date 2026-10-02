@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -96,6 +96,15 @@ test("move names the event and the clock", () => {
   assert.deepEqual(moveEventWhen("move Soccer to Friday", thursday), { title: "Soccer", on: new Date(2026, 9, 2) });
   assert.deepEqual(moveEventWhen("move Soccer to October 8 at 4:30 pm", thursday), { title: "Soccer", hours: 16, minutes: 30, on: new Date(2026, 9, 8) });
   assert.equal(moveEventWhen("assign Buy milk to Liam"), null);
+});
+
+test("an event can be for one person or several", () => {
+  const profiles = [{ id: "liam", name: "Liam" }, { id: "ava", name: "Ava" }];
+  assert.deepEqual(eventPeople("Soccer is for Liam", profiles), { title: "Soccer", profileIds: ["liam"], reply: "Soccer is for Liam." });
+  assert.deepEqual(eventPeople("Soccer is for Liam and Ava", profiles), { title: "Soccer", profileIds: ["liam", "ava"], reply: "Soccer is for Liam and Ava." });
+  assert.deepEqual(eventPeople("assign Soccer to Liam", profiles), { title: "Soccer", profileIds: ["liam"], reply: "Soccer is for Liam." });
+  assert.equal(eventPeople("what is for dinner", profiles), null);
+  assert.deepEqual(eventPeople("Soccer is for Noah", profiles), { title: "Soccer", reply: "I don't see Noah." });
 });
 
 test("assign names the to-do and the person", () => {

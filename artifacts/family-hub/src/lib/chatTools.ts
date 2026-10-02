@@ -41,6 +41,35 @@ export function pointsProfileId(profileIds: string[], profileKey: string): strin
   return profileIds[0] ?? null;
 }
 
+/** Who an event is for. A missing person is named. "what is for …" is not an event. */
+export function eventPeople(
+  text: string,
+  profiles: { id: string; name: string }[],
+): { title: string; profileIds: string[]; reply: string } | { title: string; reply: string } | null {
+  const trimmed = text.trim();
+  const named = trimmed.match(/^(.+?)\s+is for\s+(.+?)\.?$/i);
+  const assigned = trimmed.match(/^assign\s+(.+?)\s+to\s+(.+?)\.?$/i);
+  const title = (named?.[1] ?? assigned?.[1])?.trim();
+  const who = (named?.[2] ?? assigned?.[2])?.trim();
+  if (!title || !who || /^(?:what|who|where|when)$/i.test(title)) return null;
+  if (/^(?:everyone|everybody|the family|all family)$/i.test(who)) {
+    return { title, profileIds: [], reply: `${title} is for everyone.` };
+  }
+  const parts = who.split(/\s*,\s*|\s+and\s+/i).map((part) => part.trim()).filter(Boolean);
+  const chosen: { id: string; name: string }[] = [];
+  for (const part of parts) {
+    const profile = profiles.find((person) => person.name.toLowerCase() === part.toLowerCase());
+    if (!profile) return { title, reply: `I don't see ${part}.` };
+    if (!chosen.some((person) => person.id === profile.id)) chosen.push(profile);
+  }
+  if (chosen.length === 0) return null;
+  const names = chosen.map((person) => person.name);
+  const pretty = names.length <= 2
+    ? names.join(" and ")
+    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return { title, profileIds: chosen.map((person) => person.id), reply: `${title} is for ${pretty}.` };
+}
+
 export function assignChange(
   text: string,
   chores: { id: string; title: string }[],
