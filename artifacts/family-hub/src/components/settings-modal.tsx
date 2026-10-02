@@ -26,6 +26,7 @@ import { confirmDialog } from "@/lib/confirmDialog";
 import { Profile, InsertProfile, LocationSettings, insertLocationSettingsSchema, CustomProfileGroup, RewardSettings } from "@workspace/shared-types";
 import { regionToTimezone, deviceTimezone, guessCountry, countryFromName, regionLabel, COUNTRIES, type CountryCode } from "@/lib/regions";
 import { familyCalendarSelectValue, parseFamilyCalendarOption, familyCalendarOptionValue } from "@/lib/familyCalendarChoice";
+import { personRecordLines } from "@/lib/slipMail";
 import { ObjectUploader } from "./ObjectUploader";
 import { motion, AnimatePresence } from "framer-motion";
 import { Settings, Plus, Edit, X, Upload, User, Users, UserPlus, MapPin, Calendar, ChevronDown, ChevronUp, Lock, LogOut, Trash2, AlertTriangle, Bell, LayoutDashboard, GripVertical, Gift, ShieldCheck, CheckCircle, XCircle, Sun, Moon, Monitor, Camera, Save, Compass, Search, Share2, KeyRound, Star, HelpCircle, Link2, Bug, Sparkles, Home, ListTodo, UtensilsCrossed, MessageCircle } from "lucide-react";
@@ -3682,6 +3683,9 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                       {profile.email && (
                         <p className="text-xs text-muted-foreground truncate">{profile.email}</p>
                       )}
+                      {personRecordLines(profile).map((line, index) => (
+                        <p key={`${profile.id}-${index}`} data-testid="profile-memory" className="text-xs text-muted-foreground truncate">{line}</p>
+                      ))}
                     </div>
                     <div className="flex gap-1">
                       <Button

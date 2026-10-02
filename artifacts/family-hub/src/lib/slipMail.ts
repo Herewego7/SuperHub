@@ -23,6 +23,19 @@ export function openEmailHref(
   return null;
 }
 
+export function personRecordLines(person: { school?: string | null; facts?: string[] | null }): string[] {
+  const lines: string[] = [];
+  const school = person.school?.trim();
+  if (school) lines.push(school);
+  const facts: string[] = [];
+  for (const fact of person.facts ?? []) {
+    const trimmed = fact.trim();
+    if (trimmed && !facts.includes(trimmed)) facts.push(trimmed);
+  }
+  if (facts.length > 0) lines.push(facts.join(" · "));
+  return lines;
+}
+
 export function suggestedSchool(text: string): string | null {
   const match = text.match(/\b([A-Z][\w'.-]*(?:\s+[A-Z][\w'.-]*){0,4}\s+(?:School|Academy|Elementary|Middle|High))\b/);
   return match?.[1] ?? null;
