@@ -4,7 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonWithoutChecked, mailVisibleToKid, openTodos, schoolEmailNames, schoolHomeTitle, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonWithoutChecked, mailVisibleToKid, openTodos, plainEventDetail, schoolEmailNames, schoolHomeTitle, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { appendPlace, eventClockLine, planEventTitle, pointsProfileId } from "@/lib/chatTools";
 import { openEmailHref, schoolSaveTarget, slipQuote, slipSender } from "@/lib/slipMail";
@@ -177,7 +177,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
 
   const coming: { key: string; title: string; startTime: Date | string; allDay: boolean; source: string | null; location: string | null; drivers: string[]; calendarName: string | null; detail: string | null }[] = [
     ...horizonBirthdays(celebrations, day).map((row) => ({ key: row.id, title: row.title, startTime: row.startTime, allDay: true, source: null as string | null, location: null as string | null, drivers: [] as string[], calendarName: null as string | null, detail: null as string | null })),
-    ...horizon.map((event) => ({ key: event.id, title: event.title, startTime: event.startTime, allDay: event.isAllDay === true, source: event.source ?? null, location: event.location ?? null, drivers: driverNamesFor(event.drivingProfileIds, people), calendarName: event.calendarName ?? null, detail: event.description ?? null })),
+    ...horizon.map((event) => ({ key: event.id, title: event.title, startTime: event.startTime, allDay: event.isAllDay === true, source: event.source ?? null, location: event.location ?? null, drivers: driverNamesFor(event.drivingProfileIds, people), calendarName: event.calendarName ?? null, detail: plainEventDetail(event.description) })),
   ].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   const earlier = earlierForHome(completions, selectedIds, familyIds, day);
 

@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, horizonWithoutChecked, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, horizonWithoutChecked, mailVisibleToKid, openTodos, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
+
+test("a calendar note loses its HTML and the HoneyBook footer", () => {
+  const raw = `<hr><b>NOTE:</b> You can <b>only</b> edit/save changes to this calendar event via your <a href="https://www.honeybook.com/app/calendar">HoneyBook</a> account.<br>Project name: Miranda`;
+  assert.equal(plainEventDetail(raw), "Project name: Miranda");
+  assert.equal(plainEventDetail("<p>School pictures for Eagan.</p>"), "School pictures for Eagan.");
+  assert.equal(plainEventDetail(null), null);
+});
 
 test("a shared to-do with two people is one record", () => {
   const both = todosForHome([shared], ["liam", "parent"], ["liam", "parent"]);

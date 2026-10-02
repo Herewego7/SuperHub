@@ -451,6 +451,30 @@ export function homeBirthdayLine(
   return `${lines.join(". ")}.`;
 }
 
+/** Calendar notes often arrive as HTML. Key Dates should show the words, not the tags. */
+export function plainEventDetail(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  const text = raw
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h\d|tr)>/gi, "\n")
+    .replace(/<hr\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{2,}/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/NOTE:\s*You can only edit\/save changes[\s\S]*?HoneyBook account\.?\s*/i, "")
+    .trim();
+  return text || null;
+}
+
 export function dinnerName(meals: Array<{ date: string; slot: string; name: string }>, day: Date): string | null {
   const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
   return meals.find((meal) => meal.date === key && meal.slot === "dinner")?.name ?? null;
