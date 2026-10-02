@@ -65,6 +65,16 @@ test("horizon skips a weekly routine and keeps a one-off next week", () => {
     today,
   );
   assert.deepEqual(rows.map((row) => row.id), ["recital"]);
+  const copied = horizonEvents(
+    [
+      { id: "p1", title: "Practice", startTime: new Date(2026, 9, 3), recurringEventId: "series-practice" },
+      { id: "p2", title: "Practice", startTime: new Date(2026, 9, 10), recurringEventId: "series-practice" },
+      { id: "b1", title: "Liam's birthday", startTime: new Date(2026, 9, 8), recurringEventId: "series-birthday" },
+      { id: "b2", title: "Liam's birthday", startTime: new Date(2027, 9, 8), recurringEventId: "series-birthday" },
+    ],
+    today,
+  );
+  assert.deepEqual(copied.map((row) => row.id), ["b1"]);
 });
 
 test("a kid does not see a school email that does not name them", () => {

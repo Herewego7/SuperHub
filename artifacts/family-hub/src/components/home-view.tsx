@@ -929,6 +929,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           calendarId: oe.calendar?.name || 'Outlook Calendar',
           calendarName: oe.calendar?.name || 'Outlook Calendar',
           outlookCalendarId: oe.calendar?.id ?? null,
+          recurringEventId: oe.seriesMasterId ?? null,
           createdAt: new Date(),
           updatedAt: new Date(),
         } as any);

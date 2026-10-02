@@ -120,7 +120,38 @@ export type HorizonEvent = {
   title: string;
   startTime: Date | string;
   recurrenceType?: string | null;
+  recurringEventId?: string | null;
 };
+
+const SPECIAL_DAY = /\b(birthday|bday|anniversary|holiday|graduation|recital|tournament|picture day)\b/i;
+
+/** A series that comes around at least weekly is a routine. A birthday is not. */
+export function routineSeriesIds(events: HorizonEvent[]): Set<string> {
+  const bySeries = new Map<string, number[]>();
+  for (const event of events) {
+    const series = event.recurringEventId;
+    if (!series || SPECIAL_DAY.test(event.title)) continue;
+    const at = new Date(event.startTime);
+    at.setHours(0, 0, 0, 0);
+    if (Number.isNaN(at.getTime())) continue;
+    const days = bySeries.get(series) ?? [];
+    if (!days.includes(at.getTime())) days.push(at.getTime());
+    bySeries.set(series, days);
+  }
+  const routine = new Set<string>();
+  for (const [series, days] of bySeries) {
+    const ordered = [...days].sort((a, b) => a - b);
+    const gaps: number[] = [];
+    for (let i = 1; i < ordered.length; i++) {
+      const gap = Math.round((ordered[i] - ordered[i - 1]) / 86400000);
+      if (gap > 0) gaps.push(gap);
+    }
+    gaps.sort((a, b) => a - b);
+    const median = gaps.length ? gaps[Math.floor((gaps.length - 1) / 2)] : Infinity;
+    if (median <= 8) routine.add(series);
+  }
+  return routine;
+}
 
 /** Open school mail stays on the to-do. One checked off today stays off Today so it does not reappear. */
 export function schoolSlipsHeldOnHome<T extends { id: string; title: string; category?: string | null }>(
@@ -197,8 +228,10 @@ export function horizonEvents<T extends HorizonEvent>(events: T[], day: Date): T
   from.setDate(from.getDate() + 1);
   const until = new Date(start);
   until.setDate(until.getDate() + 8);
+  const routine = routineSeriesIds(events);
   return events.filter((event) => {
     if (event.recurrenceType === "daily" || event.recurrenceType === "weekly") return false;
+    if (event.recurringEventId && routine.has(event.recurringEventId)) return false;
     const at = new Date(event.startTime);
     return at >= from && at < until;
   });
