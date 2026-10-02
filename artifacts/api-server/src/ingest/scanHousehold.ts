@@ -1,5 +1,6 @@
 import { GoogleCalendarService } from "../googleCalendar";
 import { OutlookCalendarService } from "../outlookCalendar";
+import { getFreshOutlookAccessToken } from "../calendarSync";
 import { storage } from "../storage";
 import { applyIngestedMail } from "./saveMail";
 import { inboxScanEnabled } from "./process";
@@ -30,7 +31,7 @@ export async function scanConnectedInboxes(userId: string) {
     if (tokens?.accessToken) {
       connected += 1;
       try {
-        messages.push(...await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id));
+        messages.push(...await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry));
       } catch (err) {
         if (denied(err)) needsReconnect = true;
         else console.warn("Inbox scan failed:", err instanceof Error ? err.message : err);
@@ -40,7 +41,8 @@ export async function scanConnectedInboxes(userId: string) {
     if (outlookTokens?.accessToken && outlookTokens.isActive !== false) {
       connected += 1;
       try {
-        messages.push(...await outlook.listInbox(outlookTokens.accessToken, outlookTokens.email || owner.id));
+        const access = (await getFreshOutlookAccessToken(owner.id)) ?? outlookTokens.accessToken;
+        messages.push(...await outlook.listInbox(access, outlookTokens.email || owner.id));
       } catch (err) {
         if (denied(err)) needsReconnect = true;
         else console.warn("Outlook inbox scan failed:", err instanceof Error ? err.message : err);

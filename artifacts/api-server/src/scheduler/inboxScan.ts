@@ -35,15 +35,12 @@ const TICK_MS = 30 * 60_000;
 
 export function startInboxScanScheduler(): void {
   if (timer) return;
-  const align = (TICK_MS / 1000 - (Date.now() / 1000) % (TICK_MS / 1000)) * 1000;
   const run = () => {
     if (!gate.shouldRun()) return;
     runInboxScanTick()
       .then((foundWork) => gate.record(foundWork))
       .catch((err) => logger.error({ err }, "Inbox scan tick failed"));
   };
-  setTimeout(() => {
-    run();
-    timer = setInterval(run, TICK_MS);
-  }, align);
+  run();
+  timer = setInterval(run, TICK_MS);
 }

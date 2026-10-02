@@ -1,5 +1,6 @@
 import { google, calendar_v3 } from 'googleapis';
 import { toInbound, type InboundMessage } from './ingest/parse';
+import { inboxTokenExpiry } from './ingest/process';
 
 // Calendar plus read-only mail. No userinfo.email/userinfo.profile. Those
 // identity scopes are what makes Google's consent screen read as
@@ -262,7 +263,7 @@ export class GoogleCalendarService {
     }
   }
 
-  async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string): Promise<InboundMessage[]> {
+  async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string, tokenExpiry?: Date | string | null): Promise<InboundMessage[]> {
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
@@ -270,6 +271,7 @@ export class GoogleCalendarService {
     oauth2Client.setCredentials({
       access_token: accessToken,
       refresh_token: refreshToken,
+      expiry_date: inboxTokenExpiry(tokenExpiry, !!refreshToken),
     });
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
     const listed = await gmail.users.messages.list({

@@ -11,6 +11,14 @@ export function inboxScanEnabled(scanInbox: boolean | null | undefined): boolean
   return scanInbox !== false;
 }
 
+export function inboxTokenExpiry(tokenExpiry: Date | string | null | undefined, hasRefresh: boolean): number | undefined {
+  if (tokenExpiry) {
+    const ms = new Date(tokenExpiry).getTime();
+    if (!Number.isNaN(ms)) return ms;
+  }
+  return hasRefresh ? 0 : undefined;
+}
+
 export type HouseholdMail = {
   mutedSenders: string[];
   dismissedSlipKeys: string[];

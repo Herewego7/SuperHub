@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, inboxScanEnabled, ingestMessages, muteSender, schoolEventStart, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, inboxScanEnabled, inboxTokenExpiry, ingestMessages, muteSender, schoolEventStart, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
 import { outlookToInbound, toInbound } from "../src/ingest/parse.ts";
+
+test("a stored Google token is refreshed once it has expired", () => {
+  assert.equal(inboxTokenExpiry("2020-01-01T00:00:00.000Z", true), Date.parse("2020-01-01T00:00:00.000Z"));
+  assert.equal(inboxTokenExpiry(null, true), 0);
+  assert.equal(inboxTokenExpiry(null, false), undefined);
+});
 
 test("scan stays on until someone turns it off", () => {
   assert.equal(inboxScanEnabled(undefined), true);
