@@ -58,11 +58,14 @@ export function dinnerReply(
   const days = when ? [/^today$/i.test(when) ? day : moveDay(when, day)] : [day, nextDay(day)];
   const named = days[0];
   if (when && !named) return "I don't know that day.";
-  const name = days
-    .filter((date): date is Date => !!date)
-    .map((date) => meals.find((meal) => meal.date === dayKey(date) && meal.slot === "dinner")?.name)
-    .find((found) => found);
-  return name ? `Dinner. ${name}` : "Nothing planned for dinner.";
+  for (const date of days) {
+    if (!date) continue;
+    const name = meals.find((meal) => meal.date === dayKey(date) && meal.slot === "dinner")?.name;
+    if (!name) continue;
+    if (!when && dayKey(date) !== dayKey(day)) return `Dinner tomorrow. ${name}`;
+    return `Dinner. ${name}`;
+  }
+  return "Nothing planned for dinner.";
 }
 
 function nextDay(day: Date): Date {
