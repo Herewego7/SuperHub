@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dinnerCopyRange, dinnerReply, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, groceryListAfterHave, mealEvents } from "../../src/lib/mealCalendar";
+import { dinnerCopyRange, dinnerPlanReply, dinnerReply, dinnersFromSaved, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, groceryListAfterHave, mealEvents, statedDinners, wantsDinnerPlan, withSavedMeals } from "../../src/lib/mealCalendar";
 
 test("turning dinners on copies the weeks ahead, not only the week on screen", () => {
   const range = dinnerCopyRange("2026-10-05", "2026-10-11", new Date(2026, 9, 1));
@@ -69,4 +69,36 @@ test("chat names tonight's dinner and does not mention the inbox", () => {
   assert.equal(dinnerReply("what's for dinner?", [
     { date: "2026-10-02", slot: "dinner", name: "Pasta" },
   ], new Date(2026, 9, 1)), "Dinner tomorrow. Pasta");
+});
+
+test("named nights become dinners, and a question does not", () => {
+  const friday = new Date(2026, 9, 2);
+  assert.deepEqual(statedDinners("tacos tonight and pasta tomorrow", friday), [
+    { date: "2026-10-02", name: "tacos" },
+    { date: "2026-10-03", name: "pasta" },
+  ]);
+  assert.deepEqual(statedDinners("Monday tacos, Wednesday soup", friday), [
+    { date: "2026-10-05", name: "tacos" },
+    { date: "2026-10-07", name: "soup" },
+  ]);
+  assert.deepEqual(statedDinners("what's for dinner tonight", friday), []);
+  assert.equal(wantsDinnerPlan("plan dinners for the week"), true);
+  assert.equal(wantsDinnerPlan("what's for dinner"), false);
+});
+
+test("a week of dinners uses saved meals and skips a night that already has one", () => {
+  const friday = new Date(2026, 9, 2);
+  const picks = dinnersFromSaved(
+    [{ id: "a", name: "Tacos" }, { id: "b", name: "Pasta" }],
+    [{ date: "2026-10-02", slot: "dinner" }],
+    friday,
+  );
+  assert.deepEqual(picks, [
+    { date: "2026-10-03", name: "Tacos" },
+    { date: "2026-10-04", name: "Pasta" },
+  ]);
+  const named = withSavedMeals([{ date: "2026-10-02", name: "pasta" }], [{ name: "Pasta" }], [{ date: "2026-10-02", slot: "dinner", name: "Soup" }]);
+  assert.equal(named[0].name, "Pasta");
+  assert.equal(named[0].replaces, "Soup");
+  assert.match(dinnerPlanReply(named), /Reply yes to put these on the meal plan/);
 });

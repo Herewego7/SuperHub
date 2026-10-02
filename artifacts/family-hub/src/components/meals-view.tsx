@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
 import { Switch } from "@/components/ui/switch";
-import { dinnerCopyRange } from "@/lib/mealCalendar";
+import { dinnerCopyRange, dismissGroceryPrompt, peekGroceryPrompt } from "@/lib/mealCalendar";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format, addDays, addWeeks, startOfWeek } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -198,6 +198,13 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
   const nativeDragDroppedRef = useRef(false);
   // After dropping a saved meal we ask which ingredients to add to the grocery list
   const [groceryPrompt, setGroceryPrompt] = useState<MealWithIngredients | null>(null);
+  const closeGroceryPrompt = () => {
+    if (groceryPrompt && peekGroceryPrompt()?.id === groceryPrompt.id) dismissGroceryPrompt();
+    setGroceryPrompt(peekGroceryPrompt() as MealWithIngredients | null);
+  };
+  useEffect(() => {
+    setGroceryPrompt(peekGroceryPrompt() as MealWithIngredients | null);
+  }, []);
 
   // Today's column should be the first thing visible next to the sticky
   // Breakfast/Lunch/Dinner label column, not buried wherever it falls in the
@@ -992,7 +999,7 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
       {groceryPrompt && (
         <GroceryPromptDialog
           meal={groceryPrompt}
-          onClose={() => setGroceryPrompt(null)}
+          onClose={closeGroceryPrompt}
         />
       )}
 

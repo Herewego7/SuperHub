@@ -7,6 +7,8 @@ import { replyWithChat, type ChatHistory } from "../chatReply";
 import type { ChatAction, ChatSnapshot } from "../chatBrain";
 import { choresDismissedBySlip, dismissSlip, muteSender } from "../ingest/process";
 import { slipKey } from "../ingest/parse";
+import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp } from "../meals/dinnerEvent";
+import { syncEventCreate, syncEventDelete, syncEventUpdate } from "../calendarSync";
 
 function ownerId(req: any): string {
   return req.familyOwnerId ?? req.user?.claims?.sub;
@@ -21,7 +23,74 @@ function historyOf(body: unknown): ChatHistory {
   }).slice(-12);
 }
 
-async function applyAction(userId: string, action: ChatAction): Promise<void> {
+type PlacedDinner = { id: string; name: string; date: string; slot: string; ingredients: { id: string; item: string; quantity?: string | null }[] };
+type DinnerRow = { id: string; date: string; slot: string; name: string; notes?: string | null; recipeUrl?: string | null; directions?: string | null; sourceName?: string | null };
+type SavedDinner = DinnerRow;
+type SavedIngredient = { savedMealId: string; item: string; quantity?: string | null; displayOrder?: number | null };
+
+async function placeDinners(userId: string, dinners: { date: string; name: string }[]): Promise<PlacedDinner[]> {
+  const [settings, location, events] = await Promise.all([
+    storage.getCalendarSettingsByUser(userId),
+    storage.getLocationSettingsByUser(userId),
+    storage.getEventsByUser(userId),
+  ]);
+  const existing = await storage.getMealsByUser(userId) as DinnerRow[];
+  const saved = await storage.getSavedMealsByUser(userId) as SavedDinner[];
+  const ideas = saved.length > 0
+    ? await storage.getSavedMealIngredients(saved.map((meal) => meal.id)) as SavedIngredient[]
+    : [];
+  const timeZone = location?.timezone || "America/Chicago";
+  const enabled = settings?.mealsOnCalendar === true;
+  const byDate = new Map(existing.filter((meal) => meal.slot === "dinner").map((meal) => [meal.date, meal]));
+  const placed: PlacedDinner[] = [];
+  for (const dinner of dinners) {
+    const idea = saved.find((meal) => meal.name.trim().toLowerCase() === dinner.name.trim().toLowerCase());
+    const ingredients = idea
+      ? ideas.filter((row) => row.savedMealId === idea.id).map((row, index) => ({ item: row.item, quantity: row.quantity, displayOrder: row.displayOrder ?? index }))
+      : [];
+    const fields = {
+      name: (idea?.name ?? dinner.name).trim(),
+      notes: idea?.notes ?? null,
+      recipeUrl: idea?.recipeUrl && /^https?:\/\//i.test(idea.recipeUrl) ? idea.recipeUrl : null,
+      directions: idea?.directions ?? null,
+      sourceName: idea?.sourceName ?? null,
+      importedAt: idea ? new Date() : null,
+    };
+    const previous = byDate.get(dinner.date);
+    const meal = (previous
+      ? await storage.updateMeal(previous.id, fields, userId)
+      : await storage.createMeal({ userId, date: dinner.date, slot: "dinner", ...fields })) as DinnerRow | undefined;
+    if (!meal) continue;
+    const savedIngredients = await storage.replaceMealIngredients(meal.id, ingredients);
+    if (previous) {
+      const change = dinnerCalendarChange(previous, meal, events, settings?.familyCalendarId, enabled, timeZone);
+      if (change.updateId && change.create) {
+        const updated = await storage.updateEvent(change.updateId, change.create, userId);
+        if (updated && dinnerLeavesTheApp(updated)) void syncEventUpdate(updated).catch(() => undefined);
+      }
+      for (const id of change.deleteIds) {
+        const links = await storage.getEventCalendarSyncs(id).catch(() => []);
+        await storage.deleteEvent(id, userId);
+        void syncEventDelete(links).catch(() => undefined);
+      }
+      if (!change.updateId && change.create) {
+        const created = await storage.createEvent({ ...change.create, userId });
+        if (dinnerLeavesTheApp(created)) void syncEventCreate(created).catch(() => undefined);
+      }
+    } else {
+      const dinnerEvent = dinnerEventInsert(meal, settings?.familyCalendarId, enabled, timeZone);
+      if (dinnerEvent) {
+        const created = await storage.createEvent({ ...dinnerEvent, userId });
+        if (dinnerLeavesTheApp(created)) void syncEventCreate(created).catch(() => undefined);
+      }
+    }
+    byDate.set(dinner.date, meal);
+    placed.push({ id: meal.id, name: meal.name, date: meal.date, slot: meal.slot, ingredients: savedIngredients });
+  }
+  return placed;
+}
+
+async function applyAction(userId: string, action: ChatAction): Promise<PlacedDinner[]> {
   if (action.kind === "create_task") {
     await storage.createChore({
       userId,
@@ -33,7 +102,7 @@ async function applyAction(userId: string, action: ChatAction): Promise<void> {
       recurrenceType: "daily",
       isActive: true,
     });
-    return;
+    return [];
   }
   if (action.kind === "complete_task") {
     const chore = (await storage.getChoresByUser(userId)).find((item) => item.id === action.choreId);
@@ -42,12 +111,12 @@ async function applyAction(userId: string, action: ChatAction): Promise<void> {
       profileId: action.profileId,
       points: chore?.points ?? 0,
     });
-    return;
+    return [];
   }
   if (action.kind === "create_event") {
     const start = new Date(action.start);
     const end = new Date(action.end);
-    if (Number.isNaN(start.getTime())) return;
+    if (Number.isNaN(start.getTime())) return [];
     await storage.createEvent({
       userId,
       title: action.title.slice(0, 200),
@@ -57,47 +126,48 @@ async function applyAction(userId: string, action: ChatAction): Promise<void> {
       profileIds: action.profileIds,
       source: "app",
     });
-    return;
+    return [];
   }
   if (action.kind === "update_event") {
     const patch = { ...action.patch };
     if (typeof patch.startTime === "string") patch.startTime = new Date(patch.startTime);
     if (typeof patch.endTime === "string") patch.endTime = new Date(patch.endTime);
     await storage.updateEvent(action.eventId, patch as Parameters<typeof storage.updateEvent>[1], userId);
-    return;
+    return [];
   }
   if (action.kind === "delete_event") {
     await storage.deleteEvent(action.eventId, userId);
-    return;
+    return [];
   }
   if (action.kind === "remember_fact") {
     await storage.updateProfile(action.profileId, { facts: action.facts }, userId);
-    return;
+    return [];
   }
   if (action.kind === "set_school") {
     await storage.updateProfile(action.profileId, { school: action.school }, userId);
-    return;
+    return [];
   }
   if (action.kind === "assign") {
     await storage.updateChore(action.choreId, { profileIds: action.profileIds }, userId);
-    return;
+    return [];
   }
+  if (action.kind === "plan_dinners") return placeDinners(userId, action.dinners);
   if (action.kind === "grocery_have") {
     const items = await storage.getGroceryItemsByUser(userId);
     const found = items.find((item) => item.name.toLowerCase() === action.name.toLowerCase());
     if (found) await storage.updateGroceryItem(found.id, { alreadyHave: true }, userId);
     else await storage.createGroceryItem({ userId, name: action.name, alreadyHave: true });
-    return;
+    return [];
   }
   if (action.kind === "mute_sender") {
     const settings = await storage.getCalendarSettingsByUser(userId);
     const next = muteSender({ mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] }, action.address);
     await storage.updateCalendarSettings({ mutedSenders: next.mutedSenders, userId });
-    return;
+    return [];
   }
   if (action.kind === "not_relevant") {
     const key = slipKey(action.title);
-    if (!key) return;
+    if (!key) return [];
     const settings = await storage.getCalendarSettingsByUser(userId);
     const next = dismissSlip({ mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] }, key);
     for (const id of choresDismissedBySlip(await storage.getChoresByUser(userId), key)) {
@@ -105,6 +175,7 @@ async function applyAction(userId: string, action: ChatAction): Promise<void> {
     }
     await storage.updateCalendarSettings({ dismissedSlipKeys: next.dismissedSlipKeys, userId });
   }
+  return [];
 }
 
 function changedKeys(actions: ChatAction[]): string[] {
@@ -114,6 +185,10 @@ function changedKeys(actions: ChatAction[]): string[] {
     if (action.kind === "create_event" || action.kind === "update_event" || action.kind === "delete_event") keys.add("events");
     if (action.kind === "remember_fact" || action.kind === "set_school") keys.add("profiles");
     if (action.kind === "grocery_have") keys.add("groceries");
+    if (action.kind === "plan_dinners") {
+      keys.add("meals");
+      keys.add("events");
+    }
     if (action.kind === "mute_sender" || action.kind === "not_relevant") keys.add("mail");
   }
   return [...keys];
@@ -133,12 +208,13 @@ export function registerChatRoutes(app: Express): void {
         return;
       }
       const isChild = req.body?.isChild === true;
-      const [profiles, events, chores, completions, meals, celebrations, groceries, location, account] = await Promise.all([
+      const [profiles, events, chores, completions, meals, savedMeals, celebrations, groceries, location, account] = await Promise.all([
         storage.getProfilesByUser(userId),
         storage.getEventsByUser(userId),
         storage.getChoresByUser(userId),
         storage.getChoreCompletionsByUser(userId),
         storage.getMealsByUser(userId),
+        storage.getSavedMealsByUser(userId),
         storage.getCelebrationsByUser(userId),
         storage.getGroceryItemsByUser(userId),
         storage.getLocationSettingsByUser(userId),
@@ -180,6 +256,7 @@ export function registerChatRoutes(app: Express): void {
         })),
         doneIds: completions.map((completion: { choreId: string }) => completion.choreId),
         meals: meals.map((meal: { name: string; date: string; slot?: string | null }) => ({ name: meal.name, date: meal.date, mealType: meal.slot })),
+        savedMeals: savedMeals.map((meal: { id: string; name: string }) => ({ id: meal.id, name: meal.name })),
         celebrations: celebrations.map((row: { name: string; monthDay: string; type?: string | null; year?: number | null }) => ({ name: row.name, monthDay: row.monthDay, type: row.type, year: row.year })),
         groceries: groceries.filter((item: { alreadyHave?: boolean | null }) => !item.alreadyHave).map((item: { name: string }) => ({ name: item.name })),
       };
@@ -188,8 +265,14 @@ export function registerChatRoutes(app: Express): void {
         res.json({ fallback: true });
         return;
       }
-      for (const action of brain.actions) await applyAction(userId, action);
-      res.json({ fallback: false, text: brain.text, changed: changedKeys(brain.actions) });
+      const groceryMeals: PlacedDinner[] = [];
+      for (const action of brain.actions) groceryMeals.push(...await applyAction(userId, action));
+      res.json({
+        fallback: false,
+        text: brain.text,
+        changed: changedKeys(brain.actions),
+        groceryMeals: groceryMeals.filter((meal) => meal.ingredients.length > 0),
+      });
     } catch (error) {
       req.log?.error?.({ error }, "Chat reply failed");
       res.json({ fallback: true });

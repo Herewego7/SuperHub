@@ -6,7 +6,7 @@ import type { Chore } from "@workspace/shared-types";
 import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, feedbackNotesFrom, feedbackStored, FEEDBACK_KEY, forgetFact, forgetSchool, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
-import { dinnerReply, groceryAlreadyHave, groceryHaveAction, groceryHaveReply } from "@/lib/mealCalendar";
+import { dinnerPlanReply, dinnerReply, dinnersFromSaved, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, queueGroceryPrompts, statedDinners, wantsDinnerPlan, withSavedMeals, type GroceryPromptMeal } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, noteChatUnread, pendingAfterPlan, readPendingConfirm, readThread, savePendingConfirm, threadWithPlan, type ChatBubble, type PendingConfirm } from "@/lib/chatThread";
 
@@ -43,11 +43,13 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(storedConfirm?.kind === "delete" ? storedConfirm.id : null);
   const [pendingDeletePath, setPendingDeletePath] = useState<string | null>(storedConfirm?.kind === "delete" ? storedConfirm.path ?? null : null);
   const [pendingMove, setPendingMove] = useState<Extract<PendingConfirm, { kind: "move" }> | null>(storedConfirm?.kind === "move" ? storedConfirm : null);
+  const [pendingMeals, setPendingMeals] = useState<{ date: string; name: string }[] | null>(storedConfirm?.kind === "meals" ? storedConfirm.dinners : null);
   const storePending = (pending: PendingConfirm | null) => {
     savePendingConfirm(profileKey, pending);
     setPendingDeleteId(pending?.kind === "delete" ? pending.id : null);
     setPendingDeletePath(pending?.kind === "delete" ? pending.path ?? null : null);
     setPendingMove(pending?.kind === "move" ? pending : null);
+    setPendingMeals(pending?.kind === "meals" ? pending.dinners : null);
   };
   const [bubbles, setBubbles] = useState<ChatBubble[]>(() => readThread(profileKey));
   const sentPending = useRef(false);
@@ -149,6 +151,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       return res.json();
     },
   });
+  const { data: savedMeals = [] } = useQuery<{ id: string; name: string; notes?: string | null; recipeUrl?: string | null; directions?: string | null; sourceName?: string | null; ingredients?: { item: string; quantity?: string | null }[] }[]>({ queryKey: ["/api/saved-meals"] });
 
   useEffect(() => {
     if (!profileReady || !choresFetched || !eventsFetched || !mealsFetched || !celebrationsFetched || sentPending.current) return;
@@ -182,18 +185,91 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     },
   });
 
+  function say(next: ChatBubble[], text: string) {
+    const saved = [...next, { id: `${Date.now()}-m`, role: "assistant" as const, text }];
+    localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(saved));
+    setBubbles(saved);
+    setDraft("");
+  }
+
+  function handleDinnerPlan(text: string, next: ChatBubble[]): boolean {
+    const today = new Date();
+    if (pendingMeals && declinedReply(text)) {
+      storePending(null);
+      say(next, "Left the meal plan as it is.");
+      return true;
+    }
+    if (pendingMeals && confirmedReply(text)) {
+      const picks = pendingMeals;
+      storePending(null);
+      setBubbles(next);
+      setDraft("");
+      void writeDinners(picks)
+        .then((written) => {
+          const lines = dinnerPlanReply(picks).split("\n").slice(0, -1).join("\n");
+          const grocery = written.some((meal) => meal.ingredients.length > 0);
+          say(next, `On the meal plan.\n${lines}${grocery ? "\nOpen Meals to add the ingredients to the grocery list." : ""}`);
+        })
+        .catch(() => say(next, "I couldn't save those dinners yet."));
+      return true;
+    }
+    if (dinnerReply(text, meals, today)) return false;
+    const stated = statedDinners(text, today);
+    const week = wantsDinnerPlan(text) && stated.length === 0;
+    if (stated.length === 0 && !week) return false;
+    const picks = stated.length > 0 ? withSavedMeals(stated, savedMeals, meals) : dinnersFromSaved(savedMeals, meals, today);
+    if (picks.length === 0) {
+      say(next, savedMeals.length === 0
+        ? "Save a meal first, or name the nights. For example: tacos tonight and pasta tomorrow."
+        : "This week already has a dinner every night. Name a night to replace one.");
+      return true;
+    }
+    storePending({ kind: "meals", dinners: picks.map((pick) => ({ date: pick.date, name: pick.name })) });
+    say(next, dinnerPlanReply(picks));
+    return true;
+  }
+
+  async function writeDinners(picks: { date: string; name: string }[]): Promise<GroceryPromptMeal[]> {
+    const placed = new Map(meals.filter((meal) => meal.slot === "dinner").map((meal) => [meal.date, meal.id]));
+    const written: GroceryPromptMeal[] = [];
+    for (const pick of picks) {
+      const idea = savedMeals.find((meal) => meal.name.trim().toLowerCase() === pick.name.trim().toLowerCase());
+      const body = {
+        name: idea?.name ?? pick.name,
+        notes: idea?.notes ?? null,
+        recipeUrl: idea?.recipeUrl && /^https?:\/\//i.test(idea.recipeUrl) ? idea.recipeUrl : null,
+        directions: idea?.directions ?? null,
+        sourceName: idea?.sourceName ?? null,
+        importedAt: idea ? new Date().toISOString() : null,
+        ingredients: (idea?.ingredients ?? []).map((row, index) => ({ item: row.item, quantity: row.quantity ?? null, displayOrder: index })),
+      };
+      const existingId = placed.get(pick.date);
+      const res = existingId
+        ? await apiRequest("PATCH", `/api/meals/${existingId}`, body)
+        : await apiRequest("POST", "/api/meals", { date: pick.date, slot: "dinner", ...body });
+      const created = await res.json() as GroceryPromptMeal;
+      placed.set(pick.date, created.id);
+      written.push(created);
+    }
+    queueGroceryPrompts(written);
+    await queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    return written;
+  }
+
   function send(text: string, alreadyAppended = false) {
     const next = alreadyAppended ? readThread(profileKey) : appendUserMessage(profileKey, text);
     if (!next || thinking) return;
     setBubbles(next);
     setDraft("");
+    if (handleDinnerPlan(text, next)) return;
     setThinking(true);
     void apiRequest("POST", "/api/chat", {
       text,
       isChild,
       history: next.slice(0, -1).slice(-12).map((bubble) => ({ role: bubble.role, text: bubble.text })),
     }).then(async (res) => {
-      const body = await res.json() as { fallback?: boolean; text?: string; changed?: string[] };
+      const body = await res.json() as { fallback?: boolean; text?: string; changed?: string[]; groceryMeals?: GroceryPromptMeal[] };
       setThinking(false);
       if (body.fallback || !body.text) {
         replyFromRules(text, next);
@@ -214,6 +290,11 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         void queryClient.invalidateQueries({ queryKey: ["/api/grocery-list/aggregate"] });
       }
       if (changed.includes("mail")) void queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+      if (changed.includes("meals")) {
+        void queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
+        void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      }
+      if (body.groceryMeals?.length) queueGroceryPrompts(body.groceryMeals);
     }).catch(() => {
       setThinking(false);
       replyFromRules(text, next);

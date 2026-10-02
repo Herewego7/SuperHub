@@ -105,3 +105,138 @@ function nextDay(day: Date): Date {
   tomorrow.setDate(day.getDate() + 1);
   return tomorrow;
 }
+
+export type DinnerPick = { date: string; name: string; replaces?: string };
+
+const DINNER_DAY = "today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday";
+
+/** "Plan dinners" or "meals for the week", not "what's for dinner". */
+export function wantsDinnerPlan(text: string): boolean {
+  return /\b(?:plan|pick|choose)\b[\s\S]{0,48}\b(?:dinners?|meals?)\b/i.test(text)
+    || /\b(?:dinners?|meals?) for (?:the|this) week\b/i.test(text)
+    || /\bhelp me (?:plan|pick|choose) (?:the )?(?:dinners?|meals?|week)\b/i.test(text);
+}
+
+function mealName(raw: string): string | null {
+  const name = raw
+    .trim()
+    .replace(/[.!?]+$/g, "")
+    .replace(/^(?:please\s+|let's\s+|lets\s+|we should (?:eat|have|do)\s+|i want\s+|eat\s+|have\s+|do\s+|for\s+|the\s+|dinner\s+|meal\s+)+/i, "")
+    .trim();
+  if (!name || name.length > 60 || name.split(/\s+/).length > 6) return null;
+  if (/\b(?:what|when|who|where|why|how)\b/i.test(name)) return null;
+  if (/^(?:plan|pick|choose|week|the week|dinners?|meals?)$/i.test(name)) return null;
+  return name;
+}
+
+function dayFromWord(word: string, today: Date): Date | null {
+  const key = word.toLowerCase();
+  const at = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if (key === "today" || key === "tonight") return at;
+  if (key === "tomorrow") {
+    at.setDate(at.getDate() + 1);
+    return at;
+  }
+  const names = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const index = names.indexOf(key);
+  if (index < 0) return null;
+  at.setDate(at.getDate() + ((index - at.getDay() + 7) % 7));
+  return at;
+}
+
+/** "Tacos tonight and pasta tomorrow", or "Monday tacos, Wednesday soup". */
+export function statedDinners(text: string, today: Date): { date: string; name: string }[] {
+  const found = new Map<string, { date: string; name: string }>();
+  for (const chunk of text.split(/\s*(?:,|\band\b)\s*/i)) {
+    const lead = chunk.match(new RegExp(`(?:^|\\b)(${DINNER_DAY})\\s+(?:is\\s+|as\\s+|:\\s*)?(.+)$`, "i"));
+    const trail = chunk.match(new RegExp(`^(.+?)\\s+(?:on\\s+|for\\s+)?(${DINNER_DAY})\\s*$`, "i"));
+    const word = lead?.[1] || trail?.[2];
+    const raw = lead?.[2] || trail?.[1];
+    if (!word || !raw) continue;
+    const day = dayFromWord(word, today);
+    const name = mealName(raw);
+    if (!day || !name) continue;
+    const date = dayKey(day);
+    found.set(date, { date, name });
+  }
+  return [...found.values()];
+}
+
+/** Open nights this week, one saved meal each, without repeating a recipe. */
+export function dinnersFromSaved(
+  saved: { id: string; name: string }[],
+  existing: { date: string; slot?: string | null }[],
+  today: Date,
+): DinnerPick[] {
+  const open: string[] = [];
+  for (let i = 0; i < 7; i += 1) {
+    const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
+    const date = dayKey(day);
+    if (existing.some((meal) => meal.date === date && (meal.slot === "dinner" || !meal.slot))) continue;
+    open.push(date);
+  }
+  return open.slice(0, saved.length).map((date, index) => ({ date, name: saved[index].name }));
+}
+
+export function withSavedMeals(
+  picks: { date: string; name: string }[],
+  saved: { name: string }[],
+  existing: { date: string; slot?: string | null; name: string }[],
+): DinnerPick[] {
+  return picks.map((pick) => {
+    const idea = saved.find((meal) => meal.name.trim().toLowerCase() === pick.name.trim().toLowerCase());
+    const current = existing.find((meal) => meal.date === pick.date && (meal.slot === "dinner" || !meal.slot));
+    const name = idea?.name ?? pick.name;
+    const replaces = current && current.name.trim().toLowerCase() !== name.trim().toLowerCase() ? current.name : undefined;
+    return { date: pick.date, name, replaces };
+  });
+}
+
+export function dinnerPlanReply(picks: DinnerPick[]): string {
+  const lines = picks.map((pick) => {
+    const [year, month, day] = pick.date.split("-").map(Number);
+    const label = new Date(year, month - 1, day).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    return pick.replaces ? `${label}: ${pick.name} (replaces ${pick.replaces})` : `${label}: ${pick.name}`;
+  });
+  return `${lines.join("\n")}\nReply yes to put these on the meal plan.`;
+}
+
+export const GROCERY_PROMPT_KEY = "superhub_grocery_prompt_queue";
+
+export type GroceryPromptMeal = {
+  id: string;
+  name: string;
+  date?: string;
+  slot?: string;
+  ingredients: { id: string; item: string; quantity?: string | null }[];
+};
+
+export function queueGroceryPrompts(meals: GroceryPromptMeal[]) {
+  if (typeof sessionStorage === "undefined") return;
+  const next = meals.filter((meal) => meal.ingredients.length > 0);
+  if (next.length === 0) return;
+  const current = readGroceryQueue();
+  sessionStorage.setItem(GROCERY_PROMPT_KEY, JSON.stringify([...current, ...next]));
+}
+
+export function peekGroceryPrompt(): GroceryPromptMeal | null {
+  if (typeof sessionStorage === "undefined") return null;
+  return readGroceryQueue()[0] ?? null;
+}
+
+export function dismissGroceryPrompt() {
+  if (typeof sessionStorage === "undefined") return;
+  const [, ...rest] = readGroceryQueue();
+  if (rest.length > 0) sessionStorage.setItem(GROCERY_PROMPT_KEY, JSON.stringify(rest));
+  else sessionStorage.removeItem(GROCERY_PROMPT_KEY);
+}
+
+function readGroceryQueue(): GroceryPromptMeal[] {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(GROCERY_PROMPT_KEY) || "[]") as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((meal): meal is GroceryPromptMeal => !!meal && typeof meal === "object" && typeof (meal as GroceryPromptMeal).id === "string" && Array.isArray((meal as GroceryPromptMeal).ingredients));
+  } catch {
+    return [];
+  }
+}
