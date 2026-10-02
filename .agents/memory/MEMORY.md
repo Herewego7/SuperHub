@@ -1,0 +1,2 @@
+- [SuperHub isolation](superhub-isolation.md) — SuperHub must remain independent from Family Hub resources.
+- [Imported artifact registration](imported-artifact-registration.md) — validate imported manifests to register their existing services without scaffolding.
