@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { horizonEvents } from "../../src/lib/homeDay";
-import { dropSchoolTodoTwins, eventSourceChip, recurringIdFromIcal, recurringIdFromOutlook, schoolEventKind, upcomingClock, upcomingKindForMail, upcomingRows, upcomingTitle } from "../../src/lib/upcoming";
+import { dropSchoolTodoTwins, eventSourceChip, recurringIdFromIcal, recurringIdFromOutlook, schoolEventKind, timeGridDetail, upcomingClock, upcomingKindForMail, upcomingRows, upcomingTitle } from "../../src/lib/upcoming";
+
+test("a tall week block names the place under the time", () => {
+  assert.equal(timeGridDetail("4:00 PM – 5:00 PM", "Field 2"), "4:00 PM – 5:00 PM · Field 2");
+  assert.equal(timeGridDetail("4:00 PM – 5:00 PM", "  "), "4:00 PM – 5:00 PM");
+  assert.equal(timeGridDetail("4:00 PM – 5:00 PM at Field 2", "Field 2"), "4:00 PM – 5:00 PM at Field 2");
+});
 
 test("upcoming names a saved place once", () => {
   assert.equal(upcomingTitle({ title: "Soccer", location: "Field 2" }), "Soccer, Field 2");

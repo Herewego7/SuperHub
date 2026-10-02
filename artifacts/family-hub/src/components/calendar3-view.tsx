@@ -1,6 +1,6 @@
 import { mailVisibleToKid, openTodos, todosForHome } from "@/lib/homeDay";
 import { assignmentProfileIds, outlookEventProfileIds, withoutUnwatched } from "@/lib/outlookAttribution";
-import { dropSchoolTodoTwins, UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, recurringIdFromIcal, recurringIdFromOutlook, schoolEventKind, upcomingClock, upcomingKindForMail, upcomingRows, upcomingTitle, type UpcomingKind } from "@/lib/upcoming";
+import { dropSchoolTodoTwins, UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, recurringIdFromIcal, recurringIdFromOutlook, schoolEventKind, timeGridDetail, upcomingClock, upcomingKindForMail, upcomingRows, upcomingTitle, type UpcomingKind } from "@/lib/upcoming";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Profile, Event, InsertEvent, CalendarAssignment, Chore } from "@workspace/shared-types";
@@ -506,8 +506,8 @@ function TimeGridEvent({
         </span>
       </div>
       {height > 3 && (
-        <div className="opacity-80 text-[10px] leading-tight" data-testid={`event-time-${ev.id}`}>
-          {format(displayStart, "h:mm a")} – {format(displayEnd, "h:mm a")}
+        <div className="opacity-80 text-[10px] leading-tight truncate" data-testid={`event-time-${ev.id}`}>
+          {timeGridDetail(`${format(displayStart, "h:mm a")} – ${format(displayEnd, "h:mm a")}`, ev.location)}
         </div>
       )}
     </div>

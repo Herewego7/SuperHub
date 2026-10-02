@@ -55,6 +55,13 @@ export function upcomingTitle(row: { title: string; location?: string | null }):
   return appendPlace(row.title, row.location);
 }
 
+/** The week grid's second line. A short block never renders this. */
+export function timeGridDetail(clock: string, location?: string | null): string {
+  const place = location?.trim();
+  if (!place || clock.toLowerCase().includes(place.toLowerCase())) return clock;
+  return `${clock} · ${place}`;
+}
+
 export function upcomingClock(row: { startTime: Date | string; kind?: string | null; isAllDay?: boolean | null }): string | null {
   if (row.kind === "todo" || row.isAllDay) return null;
   return eventClockLine("", row.startTime) || null;
