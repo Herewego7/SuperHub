@@ -38,6 +38,7 @@ type Props = {
 
 export function ChatView({ profileKey, isChild, revision, profileReady, onSent }: Props) {
   const [draft, setDraft] = useState("");
+  const [thinking, setThinking] = useState(false);
   const storedConfirm = readPendingConfirm(profileKey);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(storedConfirm?.kind === "delete" ? storedConfirm.id : null);
   const [pendingDeletePath, setPendingDeletePath] = useState<string | null>(storedConfirm?.kind === "delete" ? storedConfirm.path ?? null : null);
@@ -183,7 +184,43 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
 
   function send(text: string, alreadyAppended = false) {
     const next = alreadyAppended ? readThread(profileKey) : appendUserMessage(profileKey, text);
-    if (!next) return;
+    if (!next || thinking) return;
+    setBubbles(next);
+    setDraft("");
+    setThinking(true);
+    void apiRequest("POST", "/api/chat", {
+      text,
+      isChild,
+      history: next.slice(0, -1).slice(-12).map((bubble) => ({ role: bubble.role, text: bubble.text })),
+    }).then(async (res) => {
+      const body = await res.json() as { fallback?: boolean; text?: string; changed?: string[] };
+      setThinking(false);
+      if (body.fallback || !body.text) {
+        replyFromRules(text, next);
+        return;
+      }
+      const saved = [...next, { id: `${Date.now()}-b`, role: "assistant" as const, text: body.text }];
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(saved));
+      setBubbles(saved);
+      const changed = body.changed ?? [];
+      if (changed.includes("chores") || changed.includes("mail")) {
+        void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+        void queryClient.invalidateQueries({ queryKey: ["/api/chore-completions"] });
+      }
+      if (changed.includes("events") || changed.includes("mail")) void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      if (changed.includes("profiles")) void queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
+      if (changed.includes("groceries")) {
+        void queryClient.invalidateQueries({ queryKey: ["/api/grocery-items"] });
+        void queryClient.invalidateQueries({ queryKey: ["/api/grocery-list/aggregate"] });
+      }
+      if (changed.includes("mail")) void queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+    }).catch(() => {
+      setThinking(false);
+      replyFromRules(text, next);
+    });
+  }
+
+  function replyFromRules(text: string, next: ChatBubble[]) {
     const replyAfter = (request: Promise<unknown>, ok: string, remount = false) => {
       setBubbles(next);
       setDraft("");
@@ -885,26 +922,55 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   }
 
   const shown = bubbles;
+  const viewerName = profiles.find((profile) => profileKey.split(",").includes(profile.id))?.name || "there";
+  const hour = new Date().getHours();
+  const part = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+  const suggestions = isChild
+    ? ["What's going on tomorrow?", "What's for dinner?", "What chores do I have?"]
+    : ["What's going on tomorrow — and later this week?", "What's for dinner?", "Am I forgetting anything?", "What's in this week's newsletters?"];
+
+  function clearThread() {
+    localStorage.removeItem(`superhub_chat_thread_${profileKey}`);
+    setBubbles([]);
+  }
 
   return (
     <div data-testid="chat-panel" className="flex flex-col gap-3 pb-4" data-revision={revision}>
-      {shown.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">Ask or change the day</p>
-      ) : (
+      <div className="flex items-center justify-end">
+        <button type="button" className="text-xs font-medium text-[#6e6e78]" data-testid="chat-clear" disabled={shown.length === 0} onClick={clearThread}>
+          Clear conversation
+        </button>
+      </div>
+      <div className="max-w-[85%] rounded-2xl bg-white px-3 py-2 text-sm shadow-[0_2px_10px_rgba(42,24,80,0.07)]" data-testid="chat-greeting">
+        {`Good ${part}, ${viewerName}. What can I take off your plate?`}
+      </div>
+      {shown.length === 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {suggestions.map((prompt) => (
+            <button key={prompt} type="button" data-testid="chat-suggestion" className="shrink-0 rounded-full bg-[#E7F1F6] px-3 py-1.5 text-sm font-medium text-[#5E8FAD]" onClick={() => send(prompt)}>
+              {prompt}
+            </button>
+          ))}
+        </div>
+      )}
+      {shown.length > 0 && (
         <ul className="flex flex-col gap-2">
           {shown.map((bubble) => (
             <li
               key={bubble.id}
               data-testid={bubble.role === "user" ? "chat-user-bubble" : "chat-assistant-bubble"}
-              className={bubble.role === "user" ? "ml-auto max-w-[80%] rounded-2xl bg-[#5E8FAD] px-3 py-2 text-sm text-white" : "max-w-[80%] rounded-2xl bg-card px-3 py-2 text-sm"}
+              className={bubble.role === "user" ? "ml-auto max-w-[80%] whitespace-pre-wrap rounded-2xl bg-[#5E8FAD] px-3 py-2 text-sm text-white" : "max-w-[85%] whitespace-pre-wrap rounded-2xl bg-white px-3 py-2 text-sm shadow-[0_2px_10px_rgba(42,24,80,0.07)]"}
             >
-              {bubble.text}
+              {chatRichText(bubble.text)}
             </li>
           ))}
         </ul>
       )}
+      {thinking && (
+        <p data-testid="chat-typing" className="text-sm text-[#6e6e78]">Thinking…</p>
+      )}
       <form
-        className="flex gap-2"
+        className="flex items-end gap-2"
         onSubmit={(event) => {
           event.preventDefault();
           send(draft);
@@ -914,11 +980,19 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
           data-testid="chat-composer"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Ask or change the day"
-          className="min-w-0 flex-1 rounded-full border border-border bg-background px-3 py-2 text-sm"
+          placeholder="Ask or tell SuperHub anything"
+          className="min-w-0 flex-1 rounded-full border border-border bg-white px-4 py-2.5 text-sm"
         />
-        <button type="submit" className="rounded-full bg-[#5E8FAD] px-3 text-sm text-white">Send</button>
+        <button type="submit" aria-label="Send" disabled={thinking || !draft.trim()} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#5E8FAD] text-sm text-white disabled:opacity-40">↑</button>
       </form>
     </div>
   );
+}
+
+function chatRichText(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => (
+    part.startsWith("**") && part.endsWith("**")
+      ? <strong key={index}>{part.slice(2, -2)}</strong>
+      : <span key={index}>{part}</span>
+  ));
 }
