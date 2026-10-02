@@ -45,6 +45,7 @@ export type ChatSnapshot = {
   chores: ChatChore[];
   doneIds: string[];
   meals: { name: string; date: string; mealType?: string | null }[];
+  savedMeals?: { id: string; name: string }[];
   celebrations: { name: string; monthDay: string; type?: string | null; year?: number | null }[];
   groceries: { name: string }[];
   weather?: { temperature?: number; condition?: string; location?: string } | null;
@@ -61,10 +62,11 @@ export type ChatAction =
   | { kind: "assign"; choreId: string; profileIds: string[] }
   | { kind: "grocery_have"; name: string }
   | { kind: "mute_sender"; address: string }
-  | { kind: "not_relevant"; title: string };
+  | { kind: "not_relevant"; title: string }
+  | { kind: "plan_dinners"; dinners: { date: string; name: string }[] };
 
 const ADULT_ONLY = new Set(["mute_sender", "mark_not_relevant", "search_mail"]);
-const NEEDS_YES = new Set(["delete_event", "remember_fact", "forget_school", "mute_sender", "mark_not_relevant"]);
+const NEEDS_YES = new Set(["delete_event", "remember_fact", "forget_school", "mute_sender", "mark_not_relevant", "plan_dinners"]);
 
 export function userSaidYes(text: string): boolean {
   return /^(yes|yeah|yep|yup|sure|ok|okay|do it|confirm|please do|go ahead)\b/i.test(text.trim());
@@ -135,6 +137,7 @@ export function chatBriefing(snap: ChatSnapshot): string {
     `Open to-dos:\n${todos.join("\n") || "(none)"}`,
     `Chores:\n${chores.join("\n") || "(none)"}`,
     `Dinners:\n${dinners.join("\n") || "(none planned)"}`,
+    `Saved meals:\n${(snap.savedMeals ?? []).map((meal) => meal.name).slice(0, 40).join(", ") || "(none saved)"}`,
     `Birthdays and anniversaries:\n${days.join("\n") || "(none saved)"}`,
     `Groceries still on the list:\n${snap.groceries.map((item) => item.name).slice(0, 30).join(", ") || "(none)"}`,
     snap.weather?.condition ? `Weather now: ${snap.weather.temperature ?? ""} ${snap.weather.condition}${snap.weather.location ? ` in ${snap.weather.location}` : ""}.` : "",
@@ -155,8 +158,9 @@ export function chatSystemPrompt(snap: ChatSnapshot): string {
     "- For a day or a week, write two or three short paragraphs and no headings: what they need to do, where the family needs to be, then one heads-up.",
     "- Say who each thing is for. Leave out someone's job unless they asked about work.",
     "- Mention weather only when it changes the plan.",
-    "- Change the calendar, to-dos, chores, or groceries only when they ask in this conversation.",
-    "- Before delete_event, remember_fact, forget_school, mute_sender, or mark_not_relevant, ask first. Call the tool with confirmed=true only after they say yes.",
+    "- Change the calendar, to-dos, chores, meals, or groceries only when they ask in this conversation.",
+    "- To plan dinners, call plan_dinners with a date (YYYY-MM-DD) and a name for each night. Prefer a saved meal name when one fits. Ask first, then call again with confirmed=true after they say yes. That writes the Meals tab.",
+    "- Before delete_event, remember_fact, forget_school, mute_sender, mark_not_relevant, or plan_dinners, ask first. Call the tool with confirmed=true only after they say yes.",
     "- Events that live on Google, Outlook, or an iCal feed cannot be deleted or moved here. The tool will say to hand that off.",
     "- Tonight means 8:00 PM unless they name a time.",
     "- Keep replies under about 80 words, or 120 for a week. Bold a few key words with ** at most.",
@@ -187,6 +191,7 @@ export function toolDeclarations(isChild: boolean): { name: string; description:
     { name: "grocery_have", description: "Take an item off the grocery list because the family already has it.", parameters: obj({ name: str }, ["name"]) },
     { name: "mute_sender", description: "Stop mail from an address after they say yes.", parameters: obj({ address: str, confirmed: { type: "boolean" } }, ["address"]) },
     { name: "mark_not_relevant", description: "Remove a school-email to-do after they say yes.", parameters: obj({ title: str, confirmed: { type: "boolean" } }, ["title"]) },
+    { name: "plan_dinners", description: "Put dinners on the meal plan after they say yes. Prefer saved meal names.", parameters: obj({ meals: { type: "array", items: obj({ date: str, name: str }, ["date", "name"]) }, confirmed: { type: "boolean" } }, ["meals"]) },
   ];
   return isChild ? all.filter((tool) => !ADULT_ONLY.has(tool.name)) : all;
 }
@@ -300,6 +305,19 @@ export function handleToolCall(
     const title = textArg(input, "title");
     if (!title) return { output: { error: "Name the item." }, action: null, handoff: false };
     return { output: { ok: true }, action: { kind: "not_relevant", title }, handoff: false };
+  }
+  if (name === "plan_dinners") {
+    const raw = input.meals;
+    const dinners = (Array.isArray(raw) ? raw : []).flatMap((row) => {
+      if (!row || typeof row !== "object") return [];
+      const date = typeof (row as { date?: unknown }).date === "string" ? (row as { date: string }).date.trim() : "";
+      const meal = typeof (row as { name?: unknown }).name === "string" ? (row as { name: string }).name.trim() : "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !meal) return [];
+      return [{ date, name: meal.slice(0, 80) }];
+    }).slice(0, 14);
+    if (dinners.length === 0) return { output: { error: "Name a date and a dinner." }, action: null, handoff: false };
+    if (!confirmed) return ask(dinners.map((dinner) => `${dinner.date}: ${dinner.name}`).join(", "));
+    return { output: { ok: true }, action: { kind: "plan_dinners", dinners }, handoff: false };
   }
   return { output: { error: `Unknown tool ${name}` }, action: null, handoff: false };
 }

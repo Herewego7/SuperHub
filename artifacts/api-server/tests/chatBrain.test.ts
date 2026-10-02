@@ -60,6 +60,15 @@ describe("chat brain", () => {
     assert.deepEqual(made.action, { kind: "create_task", title: "Pack the bag", profileIds: ["liam"] });
   });
 
+  it("asks before writing dinners", () => {
+    const args = { meals: [{ date: "2026-10-05", name: "Tacos" }, { date: "bad", name: "" }], confirmed: true };
+    const blocked = handleToolCall("plan_dinners", args, snap, false);
+    assert.equal(blocked.action, null);
+    const allowed = handleToolCall("plan_dinners", args, snap, true);
+    assert.deepEqual(allowed.action, { kind: "plan_dinners", dinners: [{ date: "2026-10-05", name: "Tacos" }] });
+    assert.match(chatBriefing({ ...snap, savedMeals: [{ id: "a", name: "Pasta" }] }), /Pasta/);
+  });
+
   it("refuses mail tools for a child", () => {
     const child = { ...snap, isChild: true };
     const muted = handleToolCall("mute_sender", { address: "a@b.com", confirmed: true }, child, true);

@@ -4970,7 +4970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Fetch weather from Open-Meteo API (free, no API key required)
       const weatherResponse = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min&timezone=auto&temperature_unit=${tempUnit}`
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&temperature_unit=${tempUnit}`
       );
       
       if (!weatherResponse.ok) {
@@ -5012,6 +5012,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const weatherCondition = getWeatherCondition(weatherData.current_weather?.weathercode || 0);
       
+      const daily = weatherData.daily ?? {};
+      const days = (daily.time ?? []).map((date: string, index: number) => {
+        const code = getWeatherCondition(daily.weathercode?.[index] || 0);
+        return {
+          date,
+          high: Math.round(daily.temperature_2m_max?.[index] || 0),
+          low: Math.round(daily.temperature_2m_min?.[index] || 0),
+          condition: code.condition,
+        };
+      });
       const result = {
         location: locationName,
         temperature: Math.round(weatherData.current_weather?.temperature || 70),
@@ -5019,6 +5029,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         low: Math.round(weatherData.daily?.temperature_2m_min?.[0] || 65),
         condition: weatherCondition.condition,
         description: weatherCondition.description,
+        days,
       };
       
       res.json(result);
