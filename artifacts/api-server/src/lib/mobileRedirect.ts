@@ -39,5 +39,5 @@ export function isSafeMobileRedirect(url: string): boolean {
   } catch {
     return false;
   }
-  return parsed.protocol.toLowerCase() === "familyhub:";
+  return parsed.protocol.toLowerCase() === "superhub:";
 }

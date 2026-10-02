@@ -8,8 +8,9 @@ import { isSafeMobileRedirect } from "../src/lib/mobileRedirect.ts";
 
 test("the Capacitor app's own scheme is accepted", () => {
   // The one real destination. If this ever fails, nobody can sign in on iOS.
-  assert.equal(isSafeMobileRedirect("familyhub://auth"), true);
-  assert.equal(isSafeMobileRedirect("FAMILYHUB://auth"), true);
+  assert.equal(isSafeMobileRedirect("superhub://auth"), true);
+  assert.equal(isSafeMobileRedirect("SUPERHUB://auth"), true);
+  assert.equal(isSafeMobileRedirect("familyhub://auth"), false);
 });
 
 test("a public Expo tunnel can never receive a token", () => {

@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Family Hub</string>
+        <string>SuperHub</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -57,23 +57,23 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.hubforfamilies.app</string>
+			<string>com.herewego7.superhub</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>familyhub</string>
+				<string>superhub</string>
 			</array>
 		</dict>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Family Hub uses the camera to let you add a photo to your profile.</string>
+	<string>SuperHub uses the camera to let you add a photo to your profile.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Family Hub reads your photo library so you can choose a profile picture.</string>
+	<string>SuperHub reads your photo library so you can choose a profile picture.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Family Hub saves photos to your library when you export content.</string>
+	<string>SuperHub saves photos to your library when you export content.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Family Hub can use your location to show local weather on the home screen.</string>
+	<string>SuperHub can use your location to show local weather on the home screen.</string>
 	<key>NSUserNotificationsUsageDescription</key>
-	<string>Family Hub sends reminders for chores, health events, and family announcements.</string>
+	<string>SuperHub sends reminders for chores, health events, and family announcements.</string>
 	<!-- The app uses only HTTPS/TLS provided by the operating system, which is
 	     exempt under the US export regulations Apple asks about. Declaring it
 	     here answers the question once, at build time; without this key Xcode

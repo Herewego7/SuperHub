@@ -13,8 +13,8 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * before the first real submission if you use a different domain.
  */
 const config: CapacitorConfig = {
-  appId: "com.hubforfamilies.app",
-  appName: "Family Hub",
+  appId: "com.herewego7.superhub",
+  appName: "SuperHub",
   // Matches vite's build.outDir (dist/public), relative to this package root.
   webDir: "dist/public",
   ios: {

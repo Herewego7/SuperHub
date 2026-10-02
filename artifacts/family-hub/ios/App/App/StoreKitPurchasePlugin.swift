@@ -40,7 +40,7 @@ public class StoreKitPurchasePlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     // ⚠️ Must exactly match the Product ID configured in App Store Connect.
-    static let productId = "com.hubforfamilies.app.premium.monthly"
+    static let productId = "com.herewego7.superhub.premium.monthly"
 
     @objc func getProduct(_ call: CAPPluginCall) {
         Task {

@@ -23,7 +23,7 @@ import { WebAuth } from "@/lib/webAuth";
  */
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").toString().replace(/\/+$/, "");
-const CALLBACK_SCHEME = "familyhub";
+const CALLBACK_SCHEME = "superhub";
 const REDIRECT = `${CALLBACK_SCHEME}://auth`;
 
 export function isNativeAuth(): boolean {

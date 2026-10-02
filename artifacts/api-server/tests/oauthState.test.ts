@@ -21,11 +21,11 @@ test("the deep-link target is derived from the provider, never from a client", (
   // This used to travel inside the state and get written straight into
   // window.location, with an allowlist as the only thing between it and an
   // open redirect. Now there is nothing for a client to influence.
-  assert.equal(nativeRedirectFor("google"), "familyhub://google-auth");
-  assert.equal(nativeRedirectFor("outlook"), "familyhub://outlook-auth");
+  assert.equal(nativeRedirectFor("google"), "superhub://google-auth");
+  assert.equal(nativeRedirectFor("outlook"), "superhub://outlook-auth");
   // Both must use the scheme the app actually registers.
   for (const p of ["google", "outlook"] as const) {
-    assert.ok(nativeRedirectFor(p).startsWith("familyhub://"));
+    assert.ok(nativeRedirectFor(p).startsWith("superhub://"));
   }
 });
 

@@ -41,8 +41,8 @@ export type OAuthRedirectMode = "web" | "native";
  * between it and an open redirect. Now there is nothing to allowlist.
  */
 const NATIVE_REDIRECTS: Record<OAuthProvider, string> = {
-  google: "familyhub://google-auth",
-  outlook: "familyhub://outlook-auth",
+  google: "superhub://google-auth",
+  outlook: "superhub://outlook-auth",
 };
 
 export function nativeRedirectFor(provider: OAuthProvider): string {
