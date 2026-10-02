@@ -1297,7 +1297,7 @@ export default function FamilyHub() {
               whatever's already centered on top; the group below has been
               trimmed (label/gaps) so it stays clear of both buttons even
               when they show together on a typical phone width. */}
-          <div ref={dateNavRowRef} className="relative flex items-center mb-1 h-9">
+          <div ref={dateNavRowRef} className={`relative flex items-center ${activeTab === "home" && navHistory.length === 0 && isToday(selectedDate) ? "h-0 overflow-hidden" : "mb-1 h-9"}`}>
             {/* Back — no longer paired with a "Customize" gear here (that's
                 now a "Customize Page" card at the bottom of the Home/Chores
                 card stack instead, matching the requested pattern). Back is
@@ -1329,7 +1329,7 @@ export default function FamilyHub() {
               </Button>
             )}
 
-            <div ref={dateNavMiddleRef} className="absolute left-1/2 -translate-x-1/2 flex items-center gap-0.5 sm:gap-3">
+            <div ref={dateNavMiddleRef} className={`absolute left-1/2 -translate-x-1/2 flex items-center gap-0.5 sm:gap-3 ${activeTab === "home" ? "invisible pointer-events-none" : ""}`}>
               <Button
                 variant="ghost"
                 size="sm"
@@ -1480,7 +1480,7 @@ export default function FamilyHub() {
       <main
         className="w-full max-w-screen-2xl mx-auto px-3 sm:px-6 pt-3 overflow-x-hidden"
         style={{
-          paddingBottom: "calc(8.5rem + env(safe-area-inset-bottom, 0px))",
+          paddingBottom: "calc(10.5rem + env(safe-area-inset-bottom, 0px))",
           ...(activeTab === "calendar" ? {} : { minHeight: `calc(100vh - ${stickyHeaderH}px)` }),
         }}
       >
@@ -1522,6 +1522,7 @@ export default function FamilyHub() {
             onNotesSpotlightHandled={() => setNotesSpotlightTrigger(0)}
             celebrationDeepLinkId={pendingCelebrationId}
             onAddTodo={() => openCreateTask("todo")}
+            onShiftDay={(by) => setSelectedDate(addDays(selectedDate, by))}
           />
         )}
         
@@ -1987,7 +1988,7 @@ export default function FamilyHub() {
           CSS selector to match — without it, bg-primary/ring-primary here
           resolve to hearth-theme's bare "H S% L%" var and render invisible in
           dark mode. See index.css's "hearth-theme opaque-vars fix" comment. */}
-      <div className="hearth-theme opaque-vars fixed right-5 z-[41]" style={{ bottom: "calc(4.25rem + env(safe-area-inset-bottom, 0px))" }}>
+      <div className="hearth-theme opaque-vars fixed right-5 z-[41]" style={{ bottom: "calc(6.25rem + env(safe-area-inset-bottom, 0px))" }}>
         <DropdownMenu open={plusOpen} onOpenChange={setPlusOpen}>
           <DropdownMenuTrigger asChild>
             <Button

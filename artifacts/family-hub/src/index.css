@@ -541,14 +541,19 @@
 
 .hearth-theme .superhub-tabbar {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 50%;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   z-index: 40;
   display: flex;
-  background: hsl(var(--card));
-  border-top: 1px solid hsl(var(--border));
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  align-items: stretch;
+  gap: 2px;
+  width: min(560px, calc(100% - 24px));
+  transform: translateX(-50%);
+  padding: 5px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  box-shadow: 0 10px 28px rgba(30, 30, 36, 0.16), 0 1px 2px rgba(30, 30, 36, 0.06);
+  backdrop-filter: blur(18px);
 }
 
 .hearth-theme .superhub-tabbar-item {
@@ -558,11 +563,32 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-height: 52px;
-  color: hsl(var(--muted-foreground));
+  min-height: 50px;
+  min-width: 0;
+  color: #6e6e78;
   background: transparent;
   border: 0;
-  padding: 6px 0;
+  border-radius: 999px;
+  padding: 6px 2px;
+}
+
+.hearth-theme .superhub-tabbar-item[data-active="true"] {
+  background: #e7f1f6;
+  color: #5e8fad;
+}
+
+.hearth-theme .plan-card {
+  background: #ffffff;
+  border: 0;
+  border-radius: 20px;
+  box-shadow: 0 2px 12px rgba(42, 24, 80, 0.07);
+  padding: 16px;
+}
+
+.hearth-theme .plan-card h2 {
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 /* ── Hearth dark mode ── */
@@ -591,6 +617,25 @@
 
 .dark .hearth-theme .progress-bar-fill {
   background: #6FA0BE;
+}
+
+.dark .hearth-theme .superhub-tabbar {
+  background: rgba(28, 28, 33, 0.92);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.dark .hearth-theme .superhub-tabbar-item {
+  color: #a6a6b0;
+}
+
+.dark .hearth-theme .superhub-tabbar-item[data-active="true"] {
+  background: rgba(94, 143, 173, 0.28);
+  color: #9ec4d6;
+}
+
+.dark .hearth-theme .plan-card {
+  background: #1c1c21;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
 }
 
 /* ── hearth-theme opaque-vars fix ──

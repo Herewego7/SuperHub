@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Calendar, CalendarPlus, CheckCheck, ClipboardList, ListTodo, Newspaper, Plus } from "lucide-react";
+import { Calendar, CalendarPlus, CheckCheck, ChevronLeft, ChevronRight, ClipboardList, ListTodo, Newspaper, Plus } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
@@ -22,9 +22,10 @@ type Props = {
   onAddTodo?: () => void;
   onOpenCalendar?: () => void;
   onOpenEvent?: (eventId: string) => void;
+  onShiftDay?: (by: number) => void;
 };
 
-export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, kidName, personId, people = [], onOpenChores, onAddTodo, onOpenCalendar, onOpenEvent }: Props) {
+export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, kidName, personId, people = [], onOpenChores, onAddTodo, onOpenCalendar, onOpenEvent, onShiftDay }: Props) {
   const [earlierOpen, setEarlierOpen] = useState(false);
   const [showAllTodos, setShowAllTodos] = useState(false);
   const dayKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
@@ -127,16 +128,27 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   const namesFor = (ids: string[]) => ids.map((id) => people.find((person) => person.id === id)?.name).filter(Boolean).join(", ");
 
   return (
-    <div className="flex flex-col gap-3" data-testid="home-day">
-      <section className="rounded-2xl border border-border bg-card px-4 py-3">
-        <div className="text-2xl font-display leading-tight">{day.toLocaleDateString("en-US", { weekday: "long" })}</div>
-        <div className="text-sm text-muted-foreground">{day.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+    <div className="flex flex-col gap-3.5" data-testid="home-day">
+      <section className="plan-card flex items-center gap-1">
+        <button type="button" aria-label="Previous day" className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[#6e6e78]" onClick={() => onShiftDay?.(-1)}>
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="text-[22px] font-semibold leading-tight tracking-tight">{day.toLocaleDateString("en-US", { weekday: "long" })}</div>
+          <div className="text-sm text-[#6e6e78]">{day.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+          {daysOut !== 0 && (
+            <button type="button" className="mt-1 text-xs font-semibold text-[#5E8FAD]" onClick={() => onShiftDay?.(-daysOut)}>Today</button>
+          )}
+        </div>
+        <button type="button" aria-label="Next day" className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[#6e6e78]" onClick={() => onShiftDay?.(1)}>
+          <ChevronRight className="h-5 w-5" />
+        </button>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card px-4 py-3">
-        <div className="mb-2 flex items-center gap-2">
-          <ListTodo className="h-5 w-5 text-[#5E8FAD]" aria-hidden="true" />
-          <h2 className="font-display text-lg">{todosTitle}</h2>
+      <section className="plan-card">
+        <div className="mb-1 flex items-center gap-2.5">
+          <ListTodo className="h-5 w-5 shrink-0 text-[#5E8FAD]" aria-hidden="true" />
+          <h2 className="text-[17px] font-medium">{todosTitle}</h2>
           {onAddTodo && (
             <button type="button" aria-label="Add a to-do" className="ml-auto grid h-8 w-8 place-items-center rounded-full border border-border" onClick={onAddTodo}>
               <Plus className="h-4 w-4" />
@@ -210,10 +222,10 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
         )}
       </section>
 
-      <section className="rounded-2xl border border-border bg-card px-4 py-3">
+      <section className="plan-card">
         <div className="mb-2 flex items-center gap-2">
           <CalendarPlus className="h-5 w-5 text-[#5E8FAD]" aria-hidden="true" />
-          <h2 className="font-display text-lg">Key Dates to Add</h2>
+          <h2 className="text-[17px] font-medium">Key Dates to Add</h2>
         </div>
         {keyDates.length === 0 ? (
           <p className="text-sm text-muted-foreground">No new dates to add.</p>
@@ -233,17 +245,17 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
         type="button"
         data-testid="home-chore-count"
         onClick={onOpenChores}
-        className="flex w-full items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-left"
+        className="flex w-full items-center gap-2 plan-card text-left"
       >
         <ClipboardList className="h-5 w-5 text-[#5E8FAD]" aria-hidden="true" />
-        <span className="font-display text-lg">Chores</span>
+        <span className="text-[17px] font-medium">Chores</span>
         <span className="ml-auto text-sm text-muted-foreground">{progress.done} of {progress.total}</span>
       </button>
 
-      <section className="rounded-2xl border border-border bg-card px-4 py-3">
+      <section className="plan-card">
         <div className="mb-2 flex items-center gap-2">
           <Newspaper className="h-5 w-5 text-[#5E8FAD]" aria-hidden="true" />
-          <h2 className="font-display text-lg">School Newsletter</h2>
+          <h2 className="text-[17px] font-medium">School Newsletter</h2>
         </div>
         {newsletters.length === 0 ? (
           <p className="text-sm text-muted-foreground">No school newsletters yet.</p>
@@ -265,10 +277,10 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
         )}
       </section>
 
-      <section className="rounded-2xl border border-border bg-card px-4 py-3" data-testid="home-today-events">
+      <section className="plan-card" data-testid="home-today-events">
         <div className="mb-2 flex items-center gap-2">
           <Calendar className="h-5 w-5 text-[#5E8FAD]" aria-hidden="true" />
-          <h2 className="font-display text-lg">{scheduleTitle}</h2>
+          <h2 className="text-[17px] font-medium">{scheduleTitle}</h2>
         </div>
         {todayEvents.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing on the calendar.</p>
@@ -307,8 +319,8 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
       </section>
 
       {drives.length > 0 && (
-        <section data-testid="home-driving" className="rounded-2xl border border-border bg-card px-4 py-3">
-          <h2 className="mb-2 font-display text-lg">Driving</h2>
+        <section data-testid="home-driving" className="plan-card">
+          <h2 className="mb-2 text-[17px] font-medium">Driving</h2>
           <ul className="flex flex-col gap-1">
             {drives.map((event) => (
               <li key={event.id} className="text-sm">
@@ -319,8 +331,8 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
         </section>
       )}
 
-      <section data-testid="home-horizon" className="rounded-2xl border border-border bg-card px-4 py-3">
-        <h2 className="mb-2 font-display text-lg">On the Horizon</h2>
+      <section data-testid="home-horizon" className="plan-card">
+        <h2 className="mb-2 text-[17px] font-medium">On the Horizon</h2>
         {horizonRows.length === 0 ? (
           <p className="text-sm text-muted-foreground">A quiet week ahead.</p>
         ) : (
@@ -343,7 +355,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
         )}
       </section>
 
-      <section className="rounded-2xl border border-border bg-card px-4 py-3">
+      <section className="plan-card">
         <button
           type="button"
           data-testid="home-earlier-toggle"
@@ -352,7 +364,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           onClick={() => setEarlierOpen((open) => !open)}
         >
           <CheckCheck className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-          <span className="font-display text-lg">Completed Actions</span>
+          <span className="text-[17px] font-medium">Completed Actions</span>
           <span className="ml-auto rounded-full bg-[#5E8FAD] px-2 py-0.5 text-xs font-semibold text-white">{earlier.length}</span>
         </button>
         {earlierOpen && (
