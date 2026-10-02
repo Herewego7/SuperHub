@@ -2368,10 +2368,13 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           const picked = profiles.filter((p) => !p.isAllFamilyProfile && selectedProfiles.includes(p.id));
           return picked.length === 1 ? picked[0].id : null;
         })()}
-        personSchool={(() => {
-          const picked = profiles.filter((p) => !p.isAllFamilyProfile && selectedProfiles.includes(p.id));
-          return picked.length === 1 ? picked[0].school ?? null : null;
-        })()}
+        people={profiles.filter((p) => !p.isAllFamilyProfile).map((p) => ({
+          id: p.id,
+          name: p.name,
+          school: p.school ?? null,
+          isChild: p.isChild,
+          role: p.role,
+        }))}
         onOpenChores={() => setActiveTab("chores")}
       />
 

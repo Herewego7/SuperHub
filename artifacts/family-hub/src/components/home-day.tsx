@@ -5,7 +5,7 @@ import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-type
 import { choreProgress, choresForCount, dinnerName, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { eventClockLine } from "@/lib/chatTools";
-import { openEmailHref, schoolFromSlip, slipQuote, slipSender } from "@/lib/slipMail";
+import { openEmailHref, schoolSaveTarget, slipQuote, slipSender } from "@/lib/slipMail";
 
 type Props = {
   chores: Chore[];
@@ -16,11 +16,11 @@ type Props = {
   day: Date;
   kidName?: string | null;
   personId?: string | null;
-  personSchool?: string | null;
+  people?: { id: string; name: string; school?: string | null; isChild?: boolean | null; role?: string | null }[];
   onOpenChores: () => void;
 };
 
-export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, kidName, personId, personSchool, onOpenChores }: Props) {
+export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, kidName, personId, people = [], onOpenChores }: Props) {
   const [earlierOpen, setEarlierOpen] = useState(false);
   const dayKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
   const { data: calendarSettings } = useQuery<{ shareOriginals?: boolean | null }>({
@@ -41,9 +41,8 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   });
 
   const saveSchool = useMutation({
-    mutationFn: async (school: string) => {
-      if (!personId) return;
-      await apiRequest("POST", "/api/ingest/school", { profileId: personId, school });
+    mutationFn: async (offer: { profileId: string; school: string }) => {
+      await apiRequest("POST", "/api/ingest/school", offer);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
@@ -99,8 +98,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
             {todos.map((todo) => {
               const quote = slipQuote(todo.description);
               const sender = slipSender(todo.description);
-              const school = schoolFromSlip(todo.title, todo.description);
-              const offerSchool = Boolean(school && personId && !personSchool);
+              const offer = schoolSaveTarget(todo.title, todo.description, people, personId ?? null);
               const emailHref = openEmailHref(calendarSettings?.shareOriginals === true, sender);
               return (
               <li key={todo.id} data-testid={`home-todo-${todo.id}`} className="flex items-start gap-3 rounded-2xl border border-border bg-card px-3 py-2">
@@ -128,9 +126,9 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
                         {emailHref && (
                           <a data-testid="home-todo-open-email" className="underline" href={emailHref}>Open email</a>
                         )}
-                        {offerSchool && (
-                          <button type="button" data-testid="home-todo-save-school" className="underline" onClick={() => saveSchool.mutate(school)}>
-                            Save {school}
+                        {offer && (
+                          <button type="button" data-testid="home-todo-save-school" className="underline" onClick={() => saveSchool.mutate(offer)}>
+                            Save {offer.school}{offer.profileId === personId ? "" : ` for ${offer.name}`}
                           </button>
                         )}
                       </>
