@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
@@ -480,9 +480,14 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       }
     }
     const createdTitle = createEventTitle(text);
-    const created = createdTitle ? createEventClock(createdTitle) : null;
-    if (created && tools.includes("create_event")) {
+    const cast = createdTitle ? createEventCast(createdTitle, profiles) : null;
+    const created = cast ? createEventClock(cast.title) : null;
+    if (created && cast && tools.includes("create_event")) {
       const placed = createEventPlace(created.title);
+      const named = cast.profileIds.map((id) => profiles.find((person) => person.id === id)?.name).filter((name): name is string => !!name);
+      const drivers = cast.drivingProfileIds.map((id) => profiles.find((person) => person.id === id)?.name).filter((name): name is string => !!name);
+      const peopleLabel = named.length <= 2 ? named.join(" and ") : `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
+      const driverLabel = drivers.length <= 2 ? drivers.join(" and ") : `${drivers.slice(0, -1).join(", ")} and ${drivers[drivers.length - 1]}`;
       const calendarId = familyCalendarOffer(calendarSettings?.familyCalendarId);
       const start = new Date();
       if (created.on) start.setFullYear(created.on.getFullYear(), created.on.getMonth(), created.on.getDate());
@@ -498,17 +503,15 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
           title: placed.title,
           startTime: start.toISOString(),
           endTime: end.toISOString(),
-          profileIds: selectedProfileIds(profileKey),
-          drivingProfileIds: [],
+          profileIds: cast.profileIds.length > 0 ? cast.profileIds : selectedProfileIds(profileKey),
+          drivingProfileIds: cast.drivingProfileIds,
           ...(placed.location ? { location: placed.location } : {}),
           calendarId,
           source: "app",
         }).then(() => {
           void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
         }),
-        calendarId
-          ? `Added ${placed.title}${placed.location ? ` at ${placed.location}` : ""} on the family calendar.`
-          : `Added ${placed.title}${placed.location ? ` at ${placed.location}` : ""}.`,
+        `${calendarId ? `Added ${placed.title}${placed.location ? ` at ${placed.location}` : ""} on the family calendar` : `Added ${placed.title}${placed.location ? ` at ${placed.location}` : ""}`}${named.length ? ` for ${peopleLabel}` : ""}${drivers.length ? `, ${driverLabel} driving` : ""}.`,
       );
       return;
     }

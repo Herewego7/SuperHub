@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -128,6 +128,30 @@ test("assign names the to-do and the person", () => {
 test("add a to-do names the task", () => {
   assert.equal(createTodoTitle("add a to-do Buy milk"), "Buy milk");
   assert.equal(createTodoTitle("add event Soccer"), null);
+});
+
+test("a new event can name who it is for and who is driving", () => {
+  const profiles = [{ id: "liam", name: "Liam" }, { id: "ava", name: "Ava" }];
+  assert.deepEqual(createEventCast("Soccer for Liam tomorrow at 4 pm", profiles), {
+    title: "Soccer tomorrow at 4 pm",
+    profileIds: ["liam"],
+    drivingProfileIds: [],
+  });
+  assert.deepEqual(createEventCast("Soccer at Field 2 for Liam and Ava tomorrow at 4 pm", profiles), {
+    title: "Soccer at Field 2 tomorrow at 4 pm",
+    profileIds: ["liam", "ava"],
+    drivingProfileIds: [],
+  });
+  assert.deepEqual(createEventCast("Soccer tomorrow at 4 pm Liam is driving", profiles), {
+    title: "Soccer tomorrow at 4 pm",
+    profileIds: [],
+    drivingProfileIds: ["liam"],
+  });
+  assert.deepEqual(createEventCast("Soccer tomorrow at 4 pm", profiles), {
+    title: "Soccer tomorrow at 4 pm",
+    profileIds: [],
+    drivingProfileIds: [],
+  });
 });
 
 test("add event at 4:30 uses that clock", () => {

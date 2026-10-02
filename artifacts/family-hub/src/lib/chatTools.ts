@@ -170,6 +170,41 @@ function clock24(hours: number, minutes: number, suffix: string): { hours: numbe
   return { hours: next, minutes };
 }
 
+/** People and a driver named in a new event. The clock and the place stay in the title. */
+export function createEventCast(
+  title: string,
+  profiles: { id: string; name: string }[],
+): { title: string; profileIds: string[]; drivingProfileIds: string[] } {
+  const named = profiles
+    .map((person) => person.name.trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  if (named.length === 0) return { title, profileIds: [], drivingProfileIds: [] };
+  const group = `(?:${named.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`;
+  const list = (spoken: string) => {
+    const ids: string[] = [];
+    for (const part of spoken.split(/\s+and\s+/i)) {
+      const profile = profiles.find((person) => person.name.toLowerCase() === part.trim().toLowerCase());
+      if (profile && !ids.includes(profile.id)) ids.push(profile.id);
+    }
+    return ids;
+  };
+  let rest = title;
+  const drivingProfileIds: string[] = [];
+  const drive = rest.match(new RegExp(`\\s+(${group}(?:\\s+and\\s+${group})*)\\s+(?:is|are) driving\\b`, "i"));
+  if (drive?.[1]) {
+    drivingProfileIds.push(...list(drive[1]));
+    rest = rest.replace(drive[0], " ");
+  }
+  const profileIds: string[] = [];
+  const assigned = rest.match(new RegExp(`\\s+for\\s+(${group}(?:\\s+and\\s+${group})*)\\b`, "i"));
+  if (assigned?.[1]) {
+    profileIds.push(...list(assigned[1]));
+    rest = rest.replace(assigned[0], " ");
+  }
+  return { title: rest.replace(/\s+/g, " ").trim(), profileIds, drivingProfileIds };
+}
+
 /** A place in the title is not a clock. "at 4 pm" stays a time. */
 export function createEventPlace(title: string): { title: string; location?: string } {
   const match = title.match(/^(.*?)\s+at\s+(?!\d)(.+)$/i);
