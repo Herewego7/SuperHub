@@ -279,8 +279,11 @@ test("an event added in chat belongs to the selected person", () => {
 
 test("deleting an imported event asks first", () => {
   assert.equal(confirmedReply("ok"), true);
+  assert.equal(confirmedReply("yes please"), true);
+  assert.equal(confirmedReply("ok what's the plan"), false);
   assert.equal(confirmedReply("yes"), true);
   assert.equal(declinedReply("no"), true);
+  assert.equal(declinedReply("cancel the soccer game"), false);
   assert.equal(confirmedReply("no"), false);
   assert.equal(deleteEventTitle("delete the soccer game"), "soccer game");
   assert.equal(importedEventNeedsConfirm("ics"), true);

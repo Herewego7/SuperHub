@@ -487,8 +487,8 @@ export function moveDay(dayPart: string, from: Date): Date | undefined {
   return eventOn(`event ${dayPart}`, from)?.on;
 }
 
-const CONFIRM_YES = /^\s*(yes|yep|yeah|yup|sure|ok|okay|confirm|confirmed|do it|go ahead|please do|sounds good|correct|that's right)\b/i;
-const CONFIRM_NO = /^\s*(no|nope|nah|cancel|don't|do not)\b/i;
+const CONFIRM_YES = /^\s*(yes|yep|yeah|yup|sure|ok|okay|confirm|confirmed|do it|go ahead|please do|sounds good|correct|that's right)(?:\s+please)?[.!]?$/i;
+const CONFIRM_NO = /^\s*(no|nope|nah|cancel|don't|do not)(?:\s+thanks)?[.!]?$/i;
 
 export function confirmedReply(text: string): boolean {
   return CONFIRM_YES.test(text.trim());
