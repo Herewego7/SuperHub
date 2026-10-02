@@ -1,4 +1,4 @@
-import { eventClockLine } from "./chatTools";
+import { appendPlace, eventClockLine } from "./chatTools";
 import { routineSeriesIds } from "./homeDay";
 
 export const UPCOMING_KINDS = ["all", "todos", "keyDates", "events", "newsletters"] as const;
@@ -49,6 +49,10 @@ function kindOf(row: Row): "todo" | "keyDate" | "event" | "newsletter" {
   if (row.kind) return row.kind;
   if (row.isAllDay) return "keyDate";
   return "event";
+}
+
+export function upcomingTitle(row: { title: string; location?: string | null }): string {
+  return appendPlace(row.title, row.location);
 }
 
 export function upcomingClock(row: { startTime: Date | string; kind?: string | null; isAllDay?: boolean | null }): string | null {

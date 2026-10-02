@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { horizonEvents } from "../../src/lib/homeDay";
-import { dropSchoolTodoTwins, eventSourceChip, recurringIdFromIcal, recurringIdFromOutlook, schoolEventKind, upcomingClock, upcomingKindForMail, upcomingRows } from "../../src/lib/upcoming";
+import { dropSchoolTodoTwins, eventSourceChip, recurringIdFromIcal, recurringIdFromOutlook, schoolEventKind, upcomingClock, upcomingKindForMail, upcomingRows, upcomingTitle } from "../../src/lib/upcoming";
+
+test("upcoming names a saved place once", () => {
+  assert.equal(upcomingTitle({ title: "Soccer", location: "Field 2" }), "Soccer, Field 2");
+  assert.equal(upcomingTitle({ title: "Soccer at Field 2", location: "Field 2" }), "Soccer at Field 2");
+  assert.equal(upcomingTitle({ title: "Buy milk" }), "Buy milk");
+});
 
 test("horizon skips a weekly routine and keeps a one-off in the next week", () => {
   const today = new Date(2026, 9, 1);
