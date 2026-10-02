@@ -137,7 +137,11 @@ export function planBody(input: {
   for (const event of input.events) {
     if (event.source === "meal" && input.dinner) continue;
     if (input.isChild && event.source === "school" && !namesPerson(`${event.title}\n${event.description ?? ""}`, input.kidName)) continue;
-    lines.push(event.movedFrom ? `${event.title}, moved from ${event.movedFrom}` : event.title);
+    const line = event.movedFrom ? `${event.title}, moved from ${event.movedFrom}` : event.title;
+    const bare = event.title.replace(/, \d{1,2}:\d{2} [AP]M$/i, "");
+    const sameSlip = event.source === "school" ? lines.findIndex((item) => item.toLowerCase() === bare.toLowerCase()) : -1;
+    if (sameSlip >= 0) lines[sameSlip] = line;
+    else lines.push(line);
   }
   const dinnerLine = input.dinner ? `Dinner. ${input.dinner}` : null;
   const room = dinnerLine ? 5 : 6;

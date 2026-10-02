@@ -153,6 +153,15 @@ test("a plan event names its clock in the family timezone", () => {
   assert.equal(eventClockTitle("Picture day", new Date("2026-10-02T00:00:00Z"), "America/Chicago", true), "Picture day");
 });
 
+test("a school email with a time is one line", () => {
+  const body = planBody({
+    isChild: false,
+    chores: [{ title: "Picture day", category: "school_email", taskType: "todo" }],
+    events: [{ title: "Picture day, 3:30 PM", source: "school" }],
+  });
+  assert.equal(body, "Picture day, 3:30 PM");
+});
+
 test("a moved event names the old time", () => {
   const body = planBody({
     isChild: false,
