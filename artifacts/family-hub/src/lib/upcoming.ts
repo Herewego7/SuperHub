@@ -41,6 +41,15 @@ export function eventSourceChip(source: string | null | undefined): string | nul
   return null;
 }
 
+export function dropSchoolTodoTwins<T extends { title: string; category?: string | null }>(
+  todos: T[],
+  events: { title: string; source?: string | null }[],
+): T[] {
+  const titled = new Set(events.filter((event) => event.source === "school").map((event) => event.title.toLowerCase()));
+  if (titled.size === 0) return todos;
+  return todos.filter((todo) => todo.category !== "school_email" || !titled.has(todo.title.toLowerCase()));
+}
+
 export function upcomingRows<T extends Row>(rows: T[], kind: UpcomingKind, day: Date): T[] {
   const start = new Date(day);
   start.setHours(0, 0, 0, 0);

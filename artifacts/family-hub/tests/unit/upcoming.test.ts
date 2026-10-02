@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { horizonEvents } from "../../src/lib/homeDay";
-import { eventSourceChip, upcomingClock, upcomingKindForMail, upcomingRows } from "../../src/lib/upcoming";
+import { dropSchoolTodoTwins, eventSourceChip, upcomingClock, upcomingKindForMail, upcomingRows } from "../../src/lib/upcoming";
 
 test("horizon skips a weekly routine and keeps a one-off in the next week", () => {
   const today = new Date(2026, 9, 1);
@@ -13,6 +13,17 @@ test("horizon skips a weekly routine and keeps a one-off in the next week", () =
     today,
   );
   assert.deepEqual(rows.map((row) => row.id), ["recital"]);
+});
+
+test("a timed school email is not also an undated newsletter row", () => {
+  const kept = dropSchoolTodoTwins(
+    [
+      { id: "slip", title: "Picture day", category: "school_email" },
+      { id: "milk", title: "Buy milk", category: null },
+    ],
+    [{ title: "Picture day", source: "school" }],
+  );
+  assert.deepEqual(kept.map((row) => row.id), ["milk"]);
 });
 
 test("key dates hides timed events", () => {

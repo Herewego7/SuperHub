@@ -1,6 +1,6 @@
 import { mailVisibleToKid, openTodos, todosForHome } from "@/lib/homeDay";
 import { assignmentProfileIds, outlookEventProfileIds, withoutUnwatched } from "@/lib/outlookAttribution";
-import { UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, upcomingClock, upcomingKindForMail, upcomingRows, type UpcomingKind } from "@/lib/upcoming";
+import { dropSchoolTodoTwins, UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, upcomingClock, upcomingKindForMail, upcomingRows, type UpcomingKind } from "@/lib/upcoming";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Profile, Event, InsertEvent, CalendarAssignment, Chore } from "@workspace/shared-types";
@@ -1715,7 +1715,13 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
     const familyIds = profiles.filter((profile) => !profile.isAllFamilyProfile).map((profile) => profile.id);
     const picked = profiles.filter((profile) => !profile.isAllFamilyProfile && selectedProfiles.includes(profile.id));
     const kidName = picked.length === 1 && (picked[0].role === "child" || picked[0].isChild) ? picked[0].name : null;
-    const todos = openTodos(todosForHome(chores, selectedProfiles, familyIds), completions).filter((todo) => mailVisibleToKid(todo, kidName)).map((todo) => ({
+    const events = visibleEvents.filter((event) => mailVisibleToKid(event, kidName)).map((event) => (
+      event.source === "school" ? { ...event, kind: "newsletter" as const } : event
+    ));
+    const todos = dropSchoolTodoTwins(
+      openTodos(todosForHome(chores, selectedProfiles, familyIds), completions).filter((todo) => mailVisibleToKid(todo, kidName)),
+      events,
+    ).map((todo) => ({
       id: todo.id,
       title: todo.title,
       startTime: currentDate,
@@ -1723,9 +1729,6 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
       profileIds: todo.profileIds,
       source: null,
     }));
-    const events = visibleEvents.filter((event) => mailVisibleToKid(event, kidName)).map((event) => (
-      event.source === "school" ? { ...event, kind: "newsletter" as const } : event
-    ));
     return [...events, ...todos];
   }, [chores, completions, currentDate, profiles, selectedProfiles, visibleEvents]);
 
