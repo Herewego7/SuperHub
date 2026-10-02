@@ -79,7 +79,7 @@ test("dinner stays in the plan when the list is long", () => {
 test("a birthday stays in the plan when the list is long", () => {
   assert.equal(planBirthdayLine([{ name: "Liam", monthDay: "10-03", year: 2018, type: "birthday" }], "2026-10-03"), "Liam turns 8.");
   assert.equal(planBirthdayLine([{ name: "Liam", monthDay: "10-04", year: 2018 }], "2026-10-03"), null);
-  assert.equal(planBirthdayLine([{ name: "Us", monthDay: "10-03", type: "anniversary" }], "2026-10-03"), null);
+  assert.equal(planBirthdayLine([{ name: "Us", monthDay: "10-03", year: 2013, type: "anniversary" }], "2026-10-03"), "Us, 13-year anniversary.");
   assert.equal(planBirthdayLine([{ name: "Liam", monthDay: "02-29", year: 2016 }], "2027-02-28"), "Liam turns 11.");
   const body = planBody({
     isChild: false,

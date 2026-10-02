@@ -160,7 +160,14 @@ function birthdayOnDay(monthDay: string, day: string): boolean {
   return !leapYear(Number(day.slice(0, 4)));
 }
 
-/** The birthday line for the plan's day. An anniversary is not a birthday. */
+function celebrationPhrase(row: { name: string; year?: number | null; type?: string | null }, year: number): string | null {
+  const age = row.year ? year - row.year : null;
+  if (row.type === "anniversary") return age && age > 0 ? `${row.name}, ${age}-year anniversary` : `${row.name}'s anniversary`;
+  if (row.type && row.type !== "birthday") return null;
+  return age && age > 0 ? `${row.name} turns ${age}` : `${row.name}'s birthday`;
+}
+
+/** The birthday or anniversary line for the plan's day. */
 export function planBirthdayLine(
   rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[],
   day: string,
@@ -168,11 +175,9 @@ export function planBirthdayLine(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
   const year = Number(day.slice(0, 4));
   const lines = rows
-    .filter((row) => (!row.type || row.type === "birthday") && birthdayOnDay(row.monthDay, day))
-    .map((row) => {
-      const age = row.year ? year - row.year : null;
-      return age && age > 0 ? `${row.name} turns ${age}` : `${row.name}'s birthday`;
-    });
+    .filter((row) => birthdayOnDay(row.monthDay, day))
+    .map((row) => celebrationPhrase(row, year))
+    .filter((line): line is string => !!line);
   if (lines.length === 0) return null;
   return `${lines.join(". ")}.`;
 }

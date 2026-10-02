@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
@@ -250,9 +250,9 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       );
       return;
     }
-    if (/^when(?:'s| is)\s+(?:the next birthday|.+?['’]s birthday)\??$/i.test(text.trim())) {
+    if (/^when(?:'s| is)\s+(?:the next birthday|.+?['’]s birthday|our anniversary|the next anniversary|.+?['’]s anniversary)\??$/i.test(text.trim())) {
       const sayBirthday = (rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[]) =>
-        birthdayReply(text, rows, new Date()) ?? "I don't have any birthdays saved.";
+        birthdayReply(text, rows, new Date()) ?? anniversaryReply(text, rows, new Date()) ?? "I don't have that saved.";
       if (celebrationsFetched) {
         next.push({ id: `${Date.now()}-b`, role: "assistant", text: sayBirthday(celebrations) });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));

@@ -233,10 +233,10 @@ test("horizon lists a birthday in the next week", () => {
   const rows = horizonBirthdays([
     { name: "Liam", monthDay: "10-03", year: 2018, type: "birthday" },
     { name: "Ava", monthDay: "10-01", year: 2016, type: "birthday" },
-    { name: "Us", monthDay: "10-04", type: "anniversary" },
+    { name: "Us", monthDay: "10-04", year: 2013, type: "anniversary" },
     { name: "Noah", monthDay: "11-01", year: 2014 },
   ], day);
-  assert.deepEqual(rows.map((row) => row.title), ["Liam turns 8"]);
+  assert.deepEqual(rows.map((row) => row.title), ["Liam turns 8", "Us, 13-year anniversary"]);
   assert.equal(rows[0]?.startTime.getDate(), 3);
   const observed = horizonBirthdays([{ name: "Liam", monthDay: "02-29", year: 2016 }], new Date(2027, 1, 27));
   assert.deepEqual(observed.map((row) => row.title), ["Liam turns 11"]);
@@ -246,7 +246,8 @@ test("horizon lists a birthday in the next week", () => {
 test("home names a birthday on the day being viewed", () => {
   assert.equal(homeBirthdayLine([{ name: "Liam", monthDay: "10-01", year: 2018, type: "birthday" }], new Date(2026, 9, 1)), "Liam turns 8.");
   assert.equal(homeBirthdayLine([{ name: "Liam", monthDay: "10-02", year: 2018 }], new Date(2026, 9, 1)), null);
-  assert.equal(homeBirthdayLine([{ name: "Us", monthDay: "10-01", type: "anniversary" }], new Date(2026, 9, 1)), null);
+  assert.equal(homeBirthdayLine([{ name: "Us", monthDay: "10-01", year: 2013, type: "anniversary" }], new Date(2026, 9, 1)), "Us, 13-year anniversary.");
+  assert.equal(homeBirthdayLine([{ name: "Us", monthDay: "10-01", type: "anniversary" }], new Date(2026, 9, 1)), "Us's anniversary.");
   assert.equal(homeBirthdayLine([{ name: "Liam", monthDay: "02-29", year: 2016 }], new Date(2027, 1, 28)), "Liam turns 11.");
 });
 

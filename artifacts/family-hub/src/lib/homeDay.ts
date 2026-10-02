@@ -325,14 +325,14 @@ export function horizonBirthdays(
   const until = new Date(start);
   until.setDate(until.getDate() + 8);
   const found: { id: string; title: string; startTime: Date }[] = [];
-  for (const row of rows) {
-    if (row.type && row.type !== "birthday") continue;
+    for (const row of rows) {
+    if (row.type && row.type !== "birthday" && row.type !== "anniversary") continue;
     let date = celebrationDate(from.getFullYear(), row.monthDay);
     if (!date) continue;
     if (date < from) date = celebrationDate(from.getFullYear() + 1, row.monthDay);
     if (!date || date < from || date >= until) continue;
-    const age = row.year ? date.getFullYear() - row.year : null;
-    const title = age && age > 0 ? `${row.name} turns ${age}` : `${row.name}'s birthday`;
+    const title = celebrationPhrase(row, date.getFullYear());
+    if (!title) continue;
     found.push({ id: `birthday-${row.name}-${row.monthDay}`, title, startTime: date });
   }
   return found.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
@@ -387,7 +387,14 @@ function birthdayOnDay(monthDay: string, key: string): boolean {
   return !leapYear(Number(key.slice(0, 4)));
 }
 
-/** The same birthday line the evening plan uses, for the day Home is showing. */
+function celebrationPhrase(row: { name: string; year?: number | null; type?: string | null }, year: number): string | null {
+  const age = row.year ? year - row.year : null;
+  if (row.type === "anniversary") return age && age > 0 ? `${row.name}, ${age}-year anniversary` : `${row.name}'s anniversary`;
+  if (row.type && row.type !== "birthday") return null;
+  return age && age > 0 ? `${row.name} turns ${age}` : `${row.name}'s birthday`;
+}
+
+/** The birthday or anniversary line for the day Home is showing. */
 export function homeBirthdayLine(
   rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[],
   day: Date,
@@ -395,11 +402,9 @@ export function homeBirthdayLine(
   const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
   const year = day.getFullYear();
   const lines = rows
-    .filter((row) => (!row.type || row.type === "birthday") && birthdayOnDay(row.monthDay, key))
-    .map((row) => {
-      const age = row.year ? year - row.year : null;
-      return age && age > 0 ? `${row.name} turns ${age}` : `${row.name}'s birthday`;
-    });
+    .filter((row) => birthdayOnDay(row.monthDay, key))
+    .map((row) => celebrationPhrase(row, year))
+    .filter((line): line is string => !!line);
   if (lines.length === 0) return null;
   return `${lines.join(". ")}.`;
 }

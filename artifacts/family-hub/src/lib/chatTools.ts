@@ -451,6 +451,44 @@ export function birthdayReply(
     .join("\n");
 }
 
+function anniversaryLine(name: string, date: Date, days: number, year: number | null | undefined): string {
+  const age = year ? date.getFullYear() - year : null;
+  const what = age && age > 0 ? `${name}, ${age}-year anniversary` : `${name}'s anniversary`;
+  const label = `${BIRTHDAY_MONTHS[date.getMonth()]} ${date.getDate()}`;
+  if (days === 0) return `${what} is today.`;
+  if (days === 1) return `${what} is tomorrow.`;
+  return `${what} is ${label}.`;
+}
+
+export function anniversaryReply(
+  text: string,
+  rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[],
+  now = new Date(),
+): string | null {
+  const trimmed = text.trim();
+  const named = trimmed.match(/^when(?:'s| is)\s+(.+?)['’]s anniversary\??$/i);
+  const next = /^when(?:'s| is) (?:our|the next) anniversary\??$/i.test(trimmed);
+  if (!named && !next) return null;
+  const anniversaries = rows.filter((row) => row.type === "anniversary");
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  if (named) {
+    const who = named[1].trim();
+    const row = anniversaries.find((item) => item.name.trim().toLowerCase() === who.toLowerCase());
+    if (!row) return `I don't have an anniversary for ${who}.`;
+    const date = nextBirthday(row.monthDay, now);
+    if (!date) return `I don't have an anniversary for ${who}.`;
+    return anniversaryLine(row.name, date, Math.round((date.getTime() - start.getTime()) / 86400000), row.year);
+  }
+  const upcoming = anniversaries
+    .map((row) => ({ row, date: nextBirthday(row.monthDay, now) }))
+    .filter((item): item is { row: (typeof anniversaries)[number]; date: Date } => !!item.date)
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  if (upcoming.length === 0) return "I don't have an anniversary saved.";
+  const soonest = upcoming[0];
+  return anniversaryLine(soonest.row.name, soonest.date, Math.round((soonest.date.getTime() - start.getTime()) / 86400000), soonest.row.year);
+}
+
 export function schoolReply(
   text: string,
   profiles: { name: string; school?: string | null }[],
