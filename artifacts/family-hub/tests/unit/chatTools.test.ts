@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -269,6 +269,12 @@ test("a home event names its clock, and the horizon names the day", () => {
   assert.equal(eventClockLine("Picture day", new Date(2026, 9, 2, 0, 0)), "Picture day");
   assert.equal(eventClockLine("Picture day", new Date(2026, 9, 1, 19, 0), false, true), "Picture day");
   assert.match(eventClockLine("Soccer", at, true), /^Soccer, .+, 4:00 PM$/);
+});
+
+test("an event added in chat belongs to the selected person", () => {
+  assert.deepEqual(selectedProfileIds("ava"), ["ava"]);
+  assert.deepEqual(selectedProfileIds("ava,dad"), ["ava", "dad"]);
+  assert.deepEqual(selectedProfileIds("family"), []);
 });
 
 test("deleting an imported event asks first", () => {

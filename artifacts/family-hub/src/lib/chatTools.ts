@@ -172,6 +172,11 @@ export function createEventClock(title: string, from = new Date()): { title: str
   };
 }
 
+/** The people selected in chat. All Family is everyone, so the event stays unassigned. */
+export function selectedProfileIds(profileKey: string): string[] {
+  return profileKey.split(",").filter((id) => id && id !== "family");
+}
+
 export function familyCalendarOffer(familyCalendarId: string | null | undefined): string | null {
   const id = familyCalendarId?.trim();
   if (!id || id === "none") return null;
