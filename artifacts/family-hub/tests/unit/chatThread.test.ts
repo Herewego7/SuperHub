@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bumpUnread, clearedUnread, threadWithPlan, unreadCount, unreadFor } from "../../src/lib/chatThread";
+import { bumpUnread, clearedUnread, pendingConfirmFrom, threadWithPlan, unreadCount, unreadFor } from "../../src/lib/chatThread";
 
 test("a notification reply sits under the plan", () => {
   const thread = threadWithPlan(
@@ -21,6 +21,13 @@ test("unread stays on the person it was sent to", () => {
   assert.equal(unreadFor(raw, "chad"), 0);
   assert.equal(unreadFor(clearedUnread(raw, "liam"), "liam"), 0);
   assert.equal(unreadFor("2", "chad"), 2);
+});
+
+test("a yes still knows which outside event after chat closes", () => {
+  assert.deepEqual(pendingConfirmFrom(JSON.stringify({ kind: "delete", id: "soccer" })), { kind: "delete", id: "soccer" });
+  assert.deepEqual(pendingConfirmFrom(JSON.stringify({ kind: "move", id: "soccer", start: "a", end: "b" })), { kind: "move", id: "soccer", start: "a", end: "b" });
+  assert.equal(pendingConfirmFrom("nope"), null);
+  assert.equal(pendingConfirmFrom(null), null);
 });
 
 test("a seeded unread reply is a badge count", () => {

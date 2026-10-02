@@ -1,5 +1,42 @@
 export type ChatBubble = { id: string; role: "user" | "assistant"; text: string };
 
+export type PendingConfirm =
+  | { kind: "delete"; id: string }
+  | { kind: "move"; id: string; start: string; end: string };
+
+export function pendingConfirmFrom(raw: string | null): PendingConfirm | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { kind?: string; id?: string; start?: string; end?: string };
+    if (parsed.kind === "delete" && parsed.id) return { kind: "delete", id: parsed.id };
+    if (parsed.kind === "move" && parsed.id && parsed.start && parsed.end) {
+      return { kind: "move", id: parsed.id, start: parsed.start, end: parsed.end };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+const confirmKey = (profileKey: string) => `superhub_chat_confirm_${profileKey}`;
+
+export function readPendingConfirm(profileKey: string): PendingConfirm | null {
+  try {
+    return pendingConfirmFrom(localStorage.getItem(confirmKey(profileKey)));
+  } catch {
+    return null;
+  }
+}
+
+export function savePendingConfirm(profileKey: string, pending: PendingConfirm | null) {
+  try {
+    if (!pending) localStorage.removeItem(confirmKey(profileKey));
+    else localStorage.setItem(confirmKey(profileKey), JSON.stringify(pending));
+  } catch {
+    // The question still shows. A reload just asks again.
+  }
+}
+
 const keyFor = (profileKey: string) => `superhub_chat_thread_${profileKey}`;
 
 export function readThread(profileKey: string): ChatBubble[] {

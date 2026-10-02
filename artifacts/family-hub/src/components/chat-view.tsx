@@ -7,7 +7,7 @@ import { chatVisibleEvents, eventsForDrivingQuestion, openTodos, schoolEmailName
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
-import { appendUserMessage, noteChatUnread, readThread, threadWithPlan, type ChatBubble } from "@/lib/chatThread";
+import { appendUserMessage, noteChatUnread, readPendingConfirm, readThread, savePendingConfirm, threadWithPlan, type ChatBubble, type PendingConfirm } from "@/lib/chatThread";
 
 const PLAN_KEY = "superhub_evening_plan";
 const PENDING_KEY = "superhub_chat_pending";
@@ -37,8 +37,14 @@ type Props = {
 
 export function ChatView({ profileKey, isChild, revision, profileReady, onSent }: Props) {
   const [draft, setDraft] = useState("");
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const [pendingMove, setPendingMove] = useState<{ id: string; start: string; end: string } | null>(null);
+  const storedConfirm = readPendingConfirm(profileKey);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(storedConfirm?.kind === "delete" ? storedConfirm.id : null);
+  const [pendingMove, setPendingMove] = useState<Extract<PendingConfirm, { kind: "move" }> | null>(storedConfirm?.kind === "move" ? storedConfirm : null);
+  const storePending = (pending: PendingConfirm | null) => {
+    savePendingConfirm(profileKey, pending);
+    setPendingDeleteId(pending?.kind === "delete" ? pending.id : null);
+    setPendingMove(pending?.kind === "move" ? pending : null);
+  };
   const [bubbles, setBubbles] = useState<ChatBubble[]>(() => readThread(profileKey));
   const sentPending = useRef(false);
   useEffect(() => {
@@ -140,8 +146,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         });
     };
     if ((pendingDeleteId || pendingMove) && declinedReply(text)) {
-      setPendingDeleteId(null);
-      setPendingMove(null);
+      storePending(null);
       next.push({ id: `${Date.now()}-n`, role: "assistant", text: "Left it where it is." });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
       setBubbles(next);
@@ -150,7 +155,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     }
     if (pendingDeleteId && confirmedReply(text)) {
       const id = pendingDeleteId;
-      setPendingDeleteId(null);
+      storePending(null);
       replyAfter(
         apiRequest("DELETE", `/api/events/${id}`).then(() => {
           void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
@@ -162,7 +167,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     }
     if (pendingMove && confirmedReply(text)) {
       const move = pendingMove;
-      setPendingMove(null);
+      storePending(null);
       replyAfter(
         apiRequest("PATCH", `/api/events/${move.id}`, { startTime: move.start, endTime: move.end }).then(() => {
           void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
@@ -310,15 +315,14 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         setDraft("");
         return;
       } else if (action === "confirm") {
-        setPendingMove(null);
-        setPendingDeleteId(target.id);
+        storePending({ kind: "delete", id: target.id });
         next.push({ id: `${Date.now()}-c`, role: "assistant", text: `Delete ${target.title}? It came from outside the app. Reply yes to delete it.` });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
         setBubbles(next);
         setDraft("");
         return;
       } else {
-        setPendingDeleteId(null);
+        storePending(null);
         replyAfter(
           apiRequest("DELETE", `/api/events/${target.id}`).then(() => {
             void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
@@ -352,15 +356,14 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         if (moving.hours != null && moving.minutes != null) start.setHours(moving.hours, moving.minutes, 0, 0);
         const finish = new Date(start.getTime() + duration);
         if (action === "confirm") {
-          setPendingDeleteId(null);
-          setPendingMove({ id: moved.id, start: start.toISOString(), end: finish.toISOString() });
+          storePending({ kind: "move", id: moved.id, start: start.toISOString(), end: finish.toISOString() });
           next.push({ id: `${Date.now()}-m`, role: "assistant", text: `Move ${moved.title}? It came from outside the app. Reply yes to move it.` });
           localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
           setBubbles(next);
           setDraft("");
           return;
         } else {
-          setPendingMove(null);
+          storePending(null);
           replyAfter(
             apiRequest("PATCH", `/api/events/${moved.id}`, { startTime: start.toISOString(), endTime: finish.toISOString() }).then(() => {
               void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
