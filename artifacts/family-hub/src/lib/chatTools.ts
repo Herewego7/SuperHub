@@ -331,6 +331,15 @@ export function planMoveLabel(movedFrom: string | null | undefined, now: Date): 
   return clock;
 }
 
+export function planEventTitle(title: string, drivers?: string[] | null): string {
+  const names = (drivers ?? []).map((name) => name.trim()).filter(Boolean);
+  if (names.length === 0) return title;
+  const pretty = names.length <= 2 ? names.join(" and ") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const line = `${pretty} driving`;
+  if (title.toLowerCase().includes(line.toLowerCase())) return title;
+  return `${title}, ${line}`;
+}
+
 export function dayReply(
   text: string,
   input: {
@@ -345,7 +354,7 @@ export function dayReply(
       endDate?: Date | string | null;
       category?: string | null;
     }[];
-    events: { title: string; startTime: Date | string; isAllDay?: boolean | null; source?: string | null; movedFrom?: string | null; location?: string | null }[];
+    events: { title: string; startTime: Date | string; isAllDay?: boolean | null; source?: string | null; movedFrom?: string | null; location?: string | null; drivers?: string[] | null }[];
     completions?: { choreId: string; completedAt?: Date | string | null }[];
     dinner?: string | null;
     meals?: { date: string; slot: string; name: string }[];
@@ -401,7 +410,9 @@ export function dayReply(
     if (at < start || at >= end) continue;
     const moved = planMoveLabel(event.movedFrom, input.day);
     const clock = eventClockLine(event.title, at, false, event.isAllDay === true);
-    const line = moved ? `${appendPlace(clock, event.location)}, moved from ${moved}` : appendPlace(clock, event.location);
+    const placed = appendPlace(clock, event.location);
+    const named = planEventTitle(placed, event.drivers);
+    const line = moved ? `${named}, moved from ${moved}` : named;
     const bare = clock.replace(/, \d{1,2}:\d{2} [AP]M$/i, "");
     const same = event.source === "school" ? rows.findIndex((item) => item.text.toLowerCase() === bare.toLowerCase()) : -1;
     const row = { text: line, change: Boolean(moved) };

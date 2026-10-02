@@ -206,7 +206,7 @@ export function planBody(input: {
     const unnamedSchool = input.isChild && event.source === "school" && !namesPerson(`${event.title}\n${event.description ?? ""}`, input.kidName);
     if (unnamedSchool && !event.driving) continue;
     const line = event.movedFrom ? `${event.title}, moved from ${event.movedFrom}` : event.title;
-    const bare = event.title.replace(/, \d{1,2}:\d{2} [AP]M$/i, "");
+    const bare = event.title.replace(/, [^,]+ driving$/i, "").replace(/, \d{1,2}:\d{2} [AP]M$/i, "");
     const sameSlip = event.source === "school" ? rows.findIndex((item) => item.text.toLowerCase() === bare.toLowerCase()) : -1;
     const row = { text: line, change: Boolean(event.movedFrom) };
     if (sameSlip >= 0) rows[sameSlip] = row;
@@ -218,6 +218,15 @@ export function planBody(input: {
   const kept = lines.slice(0, room);
   if (dinnerLine) kept.push(dinnerLine);
   return kept.join("\n") || "Nothing on the plan.";
+}
+
+export function planEventTitle(title: string, drivers?: string[] | null): string {
+  const names = (drivers ?? []).map((name) => name.trim()).filter(Boolean);
+  if (names.length === 0) return title;
+  const pretty = names.length <= 2 ? names.join(" and ") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const line = `${pretty} driving`;
+  if (title.toLowerCase().includes(line.toLowerCase())) return title;
+  return `${title}, ${line}`;
 }
 
 export function appendPlace(line: string, location?: string | null): string {
@@ -316,12 +325,16 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
       new Date(`${target}T12:00:00`),
     );
     const assignments = await storage.getCalendarAssignmentsByUser(profile.userId);
+    const family = new Map((await loadProfiles(eq(profiles.userId, profile.userId))).map((person) => [person.id, person.name]));
     const dayEvents = eventsForPlan(
       eventsOnWatchedCalendars(planDayEvents(withoutDismissedSlips(events, settings?.dismissedSlipKeys ?? []), target, tz), assignments),
       profile.id,
     )
       .map((event) => ({
-        title: appendPlace(eventClockTitle(event.title, new Date(event.startTime), tz, event.isAllDay === true), event.location),
+        title: planEventTitle(
+          appendPlace(eventClockTitle(event.title, new Date(event.startTime), tz, event.isAllDay === true), event.location),
+          driverIdsOf(event).map((id) => family.get(id)).filter((name): name is string => !!name),
+        ),
         description: event.description,
         movedFrom: moveLabel(event.movedFrom, now),
         source: event.source,

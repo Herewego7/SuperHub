@@ -346,7 +346,19 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     });
     const planEvents = eventsForDayPlan(events, calendarAssignments, selectedIds, kid?.name ?? null);
     const plan = tools.includes("get_plan")
-      ? dayReply(text, { chores: planChores, events: planEvents, completions, meals, celebrations, day: new Date() })
+      ? dayReply(text, {
+          chores: planChores,
+          events: planEvents.map((event) => ({
+            ...event,
+            drivers: (event.drivingProfileIds ?? [])
+              .map((id) => profiles.find((person) => person.id === id)?.name)
+              .filter((name): name is string => !!name),
+          })),
+          completions,
+          meals,
+          celebrations,
+          day: new Date(),
+        })
       : null;
     if (plan) {
       next.push({ id: `${Date.now()}-p`, role: "assistant", text: plan });

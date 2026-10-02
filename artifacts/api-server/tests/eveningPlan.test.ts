@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Event } from "@workspace/db";
-import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, moveClock, moveLabel, planBirthdayLine, planBody, planDayEvents, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
+import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, moveClock, moveLabel, planBirthdayLine, planBody, planDayEvents, planEventTitle, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
+
+test("the evening plan names who is driving", () => {
+  assert.equal(planEventTitle("Soccer, 4:00 PM, Field 2", ["Liam"]), "Soccer, 4:00 PM, Field 2, Liam driving");
+  assert.equal(planEventTitle("Soccer, 4:00 PM", ["Liam", "Ava"]), "Soccer, 4:00 PM, Liam and Ava driving");
+  assert.equal(planEventTitle("Soccer, 4:00 PM", []), "Soccer, 4:00 PM");
+});
 
 test("a morning plan is titled for today", () => {
   assert.equal(planTitle(false, "morningOf"), "Today's plan");

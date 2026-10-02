@@ -312,6 +312,20 @@ test("what's the plan names a recent move and keeps it when the day is full", ()
   assert.equal(bare, "Soccer, 3:00 PM");
 });
 
+test("what's the plan names who is driving", () => {
+  const day = new Date(2026, 9, 1, 10);
+  assert.equal(dayReply("what's the plan?", {
+    chores: [],
+    events: [{ title: "Soccer", startTime: new Date(2026, 9, 1, 16), drivers: ["Liam"] }],
+    day,
+  }), "Soccer, 4:00 PM, Liam driving");
+  assert.equal(dayReply("what's the plan?", {
+    chores: [],
+    events: [{ title: "Soccer", startTime: new Date(2026, 9, 1, 16), drivers: ["Liam", "Ava"] }],
+    day,
+  }), "Soccer, 4:00 PM, Liam and Ava driving");
+});
+
 test("what's the plan lists a timed school email once", () => {
   const day = new Date(2026, 9, 1, 15, 30);
   const reply = dayReply("what's the plan?", {
