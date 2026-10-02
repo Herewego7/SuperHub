@@ -1521,6 +1521,7 @@ export default function FamilyHub() {
             notesSpotlightTrigger={notesSpotlightTrigger}
             onNotesSpotlightHandled={() => setNotesSpotlightTrigger(0)}
             celebrationDeepLinkId={pendingCelebrationId}
+            onAddTodo={() => openCreateTask("todo")}
           />
         )}
         
