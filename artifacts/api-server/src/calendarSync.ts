@@ -88,11 +88,22 @@ export async function getFreshOutlookAccessToken(profileId: string): Promise<str
 
   if (tokens.refreshToken && process.env.OUTLOOK_CLIENT_ID && process.env.OUTLOOK_CLIENT_SECRET) {
     try {
-      const refreshed = await outlookCalendarService.refreshAccessToken(
-        process.env.OUTLOOK_CLIENT_ID,
-        process.env.OUTLOOK_CLIENT_SECRET,
-        tokens.refreshToken,
-      );
+      const mailScope = "https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Read offline_access";
+      let refreshed;
+      try {
+        refreshed = await outlookCalendarService.refreshAccessToken(
+          process.env.OUTLOOK_CLIENT_ID,
+          process.env.OUTLOOK_CLIENT_SECRET,
+          tokens.refreshToken,
+          mailScope,
+        );
+      } catch {
+        refreshed = await outlookCalendarService.refreshAccessToken(
+          process.env.OUTLOOK_CLIENT_ID,
+          process.env.OUTLOOK_CLIENT_SECRET,
+          tokens.refreshToken,
+        );
+      }
       await storage.saveOutlookCalendarTokens({
         profileId,
         accessToken: refreshed.access_token,

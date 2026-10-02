@@ -85,6 +85,23 @@ export interface InboundMessage {
   accountId: string;
 }
 
+export function outlookToInbound(
+  row: {
+    subject?: string | null;
+    bodyPreview?: string | null;
+    from?: { emailAddress?: { address?: string | null } | null } | null;
+  },
+  accountId: string,
+): InboundMessage {
+  const address = row.from?.emailAddress?.address?.trim();
+  return {
+    accountId,
+    subject: row.subject?.trim() ?? "",
+    snippet: decodeEntities(row.bodyPreview ?? ""),
+    ...(address ? { fromAddress: normalizeAddress(address) } : {}),
+  };
+}
+
 export function toInbound(msg: GmailMessage, accountId: string): InboundMessage {
   const from = parseAddress(header(msg, "From"));
   return {

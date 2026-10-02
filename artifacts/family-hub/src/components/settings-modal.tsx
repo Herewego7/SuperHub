@@ -1506,7 +1506,7 @@ export function CalendarConnectionsSection({
       void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       if (data.scanOff) setScanNote("Scan is off.");
-      else if (data.needsReconnect) setScanNote("Reconnect Google to read mail.");
+      else if (data.needsReconnect) setScanNote("Reconnect the account to read mail.");
       else if (!data.connected) setScanNote("Connect Google first.");
       else setScanNote(data.todos.length ? `Added ${data.todos.length}.` : "No new school mail.");
     },

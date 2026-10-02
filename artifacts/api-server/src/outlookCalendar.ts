@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { outlookInstancesToDelete } from "./lib/recurrenceRule";
+import { outlookToInbound, type InboundMessage } from "./ingest/parse";
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
 
@@ -178,10 +179,28 @@ export class OutlookCalendarService {
     }
   }
 
+  async listInbox(accessToken: string, accountId: string): Promise<InboundMessage[]> {
+    const since = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const response = await graph.get(`${GRAPH_API_BASE}/me/mailFolders/inbox/messages`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      params: {
+        $top: 20,
+        $select: "subject,from,bodyPreview,receivedDateTime",
+        $orderby: "receivedDateTime desc",
+      },
+    });
+    const rows = Array.isArray(response.data?.value) ? response.data.value : [];
+    return rows
+      .filter((row: { receivedDateTime?: string }) => !row.receivedDateTime || row.receivedDateTime >= since)
+      .map((row: { subject?: string | null; bodyPreview?: string | null; from?: { emailAddress?: { address?: string | null } | null } | null }) =>
+        outlookToInbound(row, accountId),
+      );
+  }
+
   // Generate OAuth URL for Microsoft Graph.
   // Calendars.ReadWrite (write access) + offline_access (refresh tokens) are
   // required for two-way sync. Adding these forces existing users to re-consent.
-  generateAuthUrl(clientId: string, redirectUri: string, state?: string, scopes: string[] = ['https://graph.microsoft.com/Calendars.ReadWrite', 'https://graph.microsoft.com/User.Read', 'offline_access']): string {
+  generateAuthUrl(clientId: string, redirectUri: string, state?: string, scopes: string[] = ['https://graph.microsoft.com/Calendars.ReadWrite', 'https://graph.microsoft.com/Mail.Read', 'https://graph.microsoft.com/User.Read', 'offline_access']): string {
     const baseUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
     const params = new URLSearchParams({
       client_id: clientId,
@@ -197,7 +216,7 @@ export class OutlookCalendarService {
 
   // Exchange a refresh token for a fresh access token. Outlook access tokens
   // expire (~1h); writes must refresh first when the stored token is stale.
-  async refreshAccessToken(clientId: string, clientSecret: string, refreshToken: string) {
+  async refreshAccessToken(clientId: string, clientSecret: string, refreshToken: string, scope = 'https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/User.Read offline_access') {
     try {
       const response = await graph.post('https://login.microsoftonline.com/common/oauth2/v2.0/token',
         new URLSearchParams({
@@ -205,7 +224,7 @@ export class OutlookCalendarService {
           client_secret: clientSecret,
           refresh_token: refreshToken,
           grant_type: 'refresh_token',
-          scope: 'https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/User.Read offline_access',
+          scope,
         }),
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
       );
