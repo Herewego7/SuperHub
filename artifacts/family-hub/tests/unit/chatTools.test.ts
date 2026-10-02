@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -160,6 +160,11 @@ test("a new event is offered to the family calendar", () => {
   assert.deepEqual(placeChange("move Soccer to Field 2"), { title: "Soccer", location: "Field 2" });
   assert.equal(placeChange("move Soccer to 4 pm"), null);
   assert.equal(placeChange("where is Soccer"), null);
+  assert.deepEqual(titleChange("rename Soccer to Soccer practice"), { title: "Soccer", next: "Soccer practice" });
+  assert.deepEqual(titleChange("change the name of Soccer to Soccer practice"), { title: "Soccer", next: "Soccer practice" });
+  assert.equal(titleChange("rename Soccer to 4 pm"), null);
+  assert.equal(titleChange("rename Soccer to tomorrow"), null);
+  assert.equal(titleChange("move Soccer to Field 2"), null);
   assert.equal(familyCalendarOffer("family@group.calendar.google.com"), "family@group.calendar.google.com");
   assert.equal(familyCalendarOffer("none"), null);
 });

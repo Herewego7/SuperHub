@@ -606,6 +606,16 @@ export function notRelevantTitle(text: string): string | null {
   return title || null;
 }
 
+/** A new title. A clock or a day stays a time move. */
+export function titleChange(text: string): { title: string; next: string } | null {
+  const match = text.trim().match(/^(?:rename|change the name of)\s+(.+?)\s+to\s+(.+?)\.?$/i);
+  const title = match?.[1]?.trim();
+  const next = match?.[2]?.trim();
+  if (!title || !next || title.toLowerCase() === next.toLowerCase()) return null;
+  if (moveEventWhen(`move item to ${next}`)) return null;
+  return { title, next };
+}
+
 /** A place correction. A clock or a day stays a time move. */
 export function placeChange(text: string): { title: string; location: string } | null {
   const trimmed = text.trim();
