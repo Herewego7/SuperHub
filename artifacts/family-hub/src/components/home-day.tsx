@@ -5,7 +5,7 @@ import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-type
 import { choreProgress, choresForCount, dinnerName, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { eventClockLine } from "@/lib/chatTools";
-import { openEmailHref, slipQuote, slipSender, suggestedSchool } from "@/lib/slipMail";
+import { openEmailHref, schoolFromSlip, slipQuote, slipSender } from "@/lib/slipMail";
 
 type Props = {
   chores: Chore[];
@@ -99,7 +99,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
             {todos.map((todo) => {
               const quote = slipQuote(todo.description);
               const sender = slipSender(todo.description);
-              const school = suggestedSchool(quote);
+              const school = schoolFromSlip(todo.title, todo.description);
               const offerSchool = Boolean(school && personId && !personSchool);
               const emailHref = openEmailHref(calendarSettings?.shareOriginals === true, sender);
               return (

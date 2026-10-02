@@ -17,3 +17,7 @@ export function suggestedSchool(text: string): string | null {
   const match = text.match(/\b([A-Z][\w'.-]*(?:\s+[A-Z][\w'.-]*){0,4}\s+(?:School|Academy|Elementary|Middle|High))\b/);
   return match?.[1] ?? null;
 }
+
+export function schoolFromSlip(title: string, description: string | null | undefined): string | null {
+  return suggestedSchool(`${title}\n${slipQuote(description)}`);
+}
