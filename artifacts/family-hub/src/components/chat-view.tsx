@@ -76,7 +76,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       return res.json();
     },
   });
-  const { data: events = [], isFetched: eventsFetched } = useQuery<{ id: string; title: string; description?: string | null; location?: string | null; source?: string | null; drivingProfileIds?: string[] | null; profileIds?: string[] | null; startTime?: string | null; endTime?: string | null; googleCalendarId?: string | null; outlookCalendarId?: string | null; category?: string | null }[]>({ queryKey: ["/api/events"] });
+  const { data: events = [], isFetched: eventsFetched } = useQuery<{ id: string; title: string; description?: string | null; location?: string | null; source?: string | null; drivingProfileIds?: string[] | null; profileIds?: string[] | null; startTime?: string | null; endTime?: string | null; googleCalendarId?: string | null; outlookCalendarId?: string | null; category?: string | null; movedFrom?: string | null }[]>({ queryKey: ["/api/events"] });
   const { data: calendarAssignments = [] } = useQuery<{ calendarId: string; watched?: boolean | null; isActive?: boolean | null }[]>({ queryKey: ["/api/calendar-assignments"] });
   const { data: profiles = [] } = useQuery<{ id: string; name: string; school?: string | null; facts?: string[] | null; isAllFamilyProfile?: boolean | null }[]>({ queryKey: ["/api/profiles"] });
   const { data: weather } = useQuery<{ location?: string; temperature?: number; condition?: string }>({ queryKey: ["/api/weather"], retry: false });

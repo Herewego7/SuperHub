@@ -221,6 +221,21 @@ function dueOnDay(
   return (chore.daysOfWeek ?? []).includes(start.getDay());
 }
 
+const MOVE_WINDOW_MS = 36 * 60 * 60 * 1000;
+
+/** A move is news for a day and a half. Matches the evening plan. */
+export function planMoveLabel(movedFrom: string | null | undefined, now: Date): string | null {
+  if (!movedFrom) return null;
+  const [label, stamp] = movedFrom.split("\n");
+  const clock = label?.trim();
+  if (!clock || !stamp?.trim()) return null;
+  const at = new Date(stamp.trim());
+  if (Number.isNaN(at.getTime())) return null;
+  const age = now.getTime() - at.getTime();
+  if (age < 0 || age > MOVE_WINDOW_MS) return null;
+  return clock;
+}
+
 export function dayReply(
   text: string,
   input: {
@@ -235,7 +250,7 @@ export function dayReply(
       endDate?: Date | string | null;
       category?: string | null;
     }[];
-    events: { title: string; startTime: Date | string; isAllDay?: boolean | null; source?: string | null }[];
+    events: { title: string; startTime: Date | string; isAllDay?: boolean | null; source?: string | null; movedFrom?: string | null }[];
     completions?: { choreId: string; completedAt?: Date | string | null }[];
     dinner?: string | null;
     meals?: { date: string; slot: string; name: string }[];
@@ -275,23 +290,27 @@ export function dayReply(
   );
   const askedToday = start.toDateString() === new Date(input.day).toDateString();
   const dinner = input.meals ? dinnerName(input.meals, start) : askedToday ? input.dinner : null;
-  const lines: string[] = [];
+  const rows: { text: string; change: boolean }[] = [];
   for (const chore of input.chores) {
     if (chore.id && (done.has(chore.id) || finishedTodos.has(chore.id))) continue;
     if (!dueOnDay(chore, start)) continue;
-    lines.push(chore.title);
+    rows.push({ text: chore.title, change: false });
   }
   for (const event of input.events) {
     if (event.source === "meal" && dinner) continue;
     if (event.source === "school" && heldSchool.has(event.title.toLowerCase())) continue;
     const at = new Date(event.startTime);
     if (at < start || at >= end) continue;
-    const line = eventClockLine(event.title, at, false, event.isAllDay === true);
-    const bare = line.replace(/, \d{1,2}:\d{2} [AP]M$/i, "");
-    const same = event.source === "school" ? lines.findIndex((item) => item.toLowerCase() === bare.toLowerCase()) : -1;
-    if (same >= 0) lines[same] = line;
-    else lines.push(line);
+    const moved = planMoveLabel(event.movedFrom, input.day);
+    const clock = eventClockLine(event.title, at, false, event.isAllDay === true);
+    const line = moved ? `${clock}, moved from ${moved}` : clock;
+    const bare = clock.replace(/, \d{1,2}:\d{2} [AP]M$/i, "");
+    const same = event.source === "school" ? rows.findIndex((item) => item.text.toLowerCase() === bare.toLowerCase()) : -1;
+    const row = { text: line, change: Boolean(moved) };
+    if (same >= 0) rows[same] = row;
+    else rows.push(row);
   }
+  const lines = [...rows.filter((row) => row.change), ...rows.filter((row) => !row.change)].map((row) => row.text);
   const kept = lines.slice(0, 5);
   if (dinner) kept.push(`Dinner. ${dinner}`);
   return kept.join("\n") || "Nothing on the plan.";

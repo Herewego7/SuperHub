@@ -170,6 +170,35 @@ test("check off names the chore", () => {
   assert.equal(checkOffTitle("Who is driving soccer?"), null);
 });
 
+test("what's the plan names a recent move and keeps it when the day is full", () => {
+  const day = new Date(2026, 9, 1, 15, 0);
+  const recent = `4:00 PM\n${new Date(day.getTime() - 60 * 60 * 1000).toISOString()}`;
+  const chores = ["One", "Two", "Three", "Four", "Five"].map((title) => ({
+    title,
+    taskType: "chore" as const,
+    recurrenceType: "daily" as const,
+  }));
+  const reply = dayReply("what's the plan?", {
+    chores,
+    events: [{ title: "Soccer", startTime: day, movedFrom: recent }],
+    day,
+  });
+  assert.equal(reply?.split("\n")[0], "Soccer, 3:00 PM, moved from 4:00 PM");
+  assert.equal(reply?.includes("Five"), false);
+  const old = dayReply("what's the plan?", {
+    chores: [],
+    events: [{ title: "Soccer", startTime: day, movedFrom: `4:00 PM\n${new Date(day.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()}` }],
+    day,
+  });
+  assert.equal(old, "Soccer, 3:00 PM");
+  const bare = dayReply("what's the plan?", {
+    chores: [],
+    events: [{ title: "Soccer", startTime: day, movedFrom: "4:00 PM" }],
+    day,
+  });
+  assert.equal(bare, "Soccer, 3:00 PM");
+});
+
 test("what's the plan lists a timed school email once", () => {
   const day = new Date(2026, 9, 1, 15, 30);
   const reply = dayReply("what's the plan?", {
