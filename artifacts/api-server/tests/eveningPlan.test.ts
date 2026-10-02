@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Event } from "@workspace/db";
-import { choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, moveClock, planBody, planDayEvents, planKeysForClaim, planOpenPath, planTitle, pushesForProfile } from "../src/scheduler/eveningPlan.ts";
+import { choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, moveClock, planBody, planDayEvents, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
 
 test("a morning plan is titled for today", () => {
   assert.equal(planTitle(false, "morningOf"), "Today's plan");
@@ -160,6 +160,14 @@ test("a school email with a time is one line", () => {
     events: [{ title: "Picture day, 3:30 PM", source: "school" }],
   });
   assert.equal(body, "Picture day, 3:30 PM");
+});
+
+test("a school email checked off that day stays off the plan", () => {
+  const events = withoutSchoolEventsHeldToday(
+    [{ title: "Picture day, 3:30 PM", source: "school" }, { title: "Soccer, 4:00 PM", source: "app" }],
+    ["Picture day"],
+  );
+  assert.deepEqual(events.map((event) => event.title), ["Soccer, 4:00 PM"]);
 });
 
 test("a moved event names the old time", () => {

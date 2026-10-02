@@ -205,6 +205,7 @@ export function dayReply(
       recurrenceType?: string | null;
       targetCount?: number | null;
       endDate?: Date | string | null;
+      category?: string | null;
     }[];
     events: { title: string; startTime: Date | string; isAllDay?: boolean | null; source?: string | null }[];
     completions?: { choreId: string; completedAt?: Date | string | null }[];
@@ -239,6 +240,11 @@ export function dayReply(
       })
       .map((completion) => completion.choreId),
   );
+  const heldSchool = new Set(
+    input.chores
+      .filter((chore) => chore.category === "school_email" && chore.id && done.has(chore.id))
+      .map((chore) => chore.title.toLowerCase()),
+  );
   const askedToday = start.toDateString() === new Date(input.day).toDateString();
   const dinner = input.meals ? dinnerName(input.meals, start) : askedToday ? input.dinner : null;
   const lines: string[] = [];
@@ -249,6 +255,7 @@ export function dayReply(
   }
   for (const event of input.events) {
     if (event.source === "meal" && dinner) continue;
+    if (event.source === "school" && heldSchool.has(event.title.toLowerCase())) continue;
     const at = new Date(event.startTime);
     if (at < start || at >= end) continue;
     const line = eventClockLine(event.title, at, false, event.isAllDay === true);

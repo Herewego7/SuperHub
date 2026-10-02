@@ -174,6 +174,17 @@ test("what's the plan lists a timed school email once", () => {
   assert.equal(reply, "Picture day, 3:30 PM");
 });
 
+test("what's the plan leaves out a school email checked off that day", () => {
+  const day = new Date(2026, 9, 1, 15, 30);
+  const reply = dayReply("what's the plan?", {
+    chores: [{ id: "pic", title: "Picture day", taskType: "todo", category: "school_email" }],
+    completions: [{ choreId: "pic", completedAt: day }],
+    events: [{ title: "Picture day", startTime: day, source: "school" }, { title: "Soccer", startTime: new Date(2026, 9, 1, 16, 0) }],
+    day,
+  });
+  assert.equal(reply, "Soccer, 4:00 PM");
+});
+
 test("what's the plan names the day and dinner", () => {
   const day = new Date(2026, 9, 1, 15, 0);
   const reply = dayReply("what's the plan?", {
