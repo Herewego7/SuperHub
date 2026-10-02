@@ -19,6 +19,7 @@ type Row = {
   isAllDay?: boolean;
   recurrenceType?: string | null;
   recurringEventId?: string | null;
+  source?: string | null;
   kind?: "todo" | "keyDate" | "event" | "newsletter";
 };
 
@@ -77,6 +78,7 @@ export function upcomingRows<T extends Row>(rows: T[], kind: UpcomingKind, day: 
   until.setDate(until.getDate() + 30);
   const routine = routineSeriesIds(rows);
   return rows.filter((row) => {
+    if (row.source === "meal") return false;
     if (row.recurrenceType === "daily" || row.recurrenceType === "weekly") return false;
     if (row.recurringEventId && routine.has(row.recurringEventId)) return false;
     const at = new Date(row.startTime);

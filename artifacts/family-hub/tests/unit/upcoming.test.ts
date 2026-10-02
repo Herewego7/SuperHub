@@ -39,6 +39,19 @@ test("key dates hides timed events", () => {
   assert.deepEqual(rows.map((row) => row.id), ["picture"]);
 });
 
+test("upcoming leaves dinners off the agenda", () => {
+  const today = new Date(2026, 9, 1);
+  const rows = upcomingRows(
+    [
+      { id: "tacos", title: "Tacos", startTime: new Date(2026, 9, 2, 18, 0), source: "meal" },
+      { id: "game", title: "Game", startTime: new Date(2026, 9, 4, 16, 0), source: null },
+    ],
+    "all",
+    today,
+  );
+  assert.deepEqual(rows.map((row) => row.id), ["game"]);
+});
+
 test("the to-do chip keeps a to-do and hides a timed event", () => {
   const today = new Date(2026, 9, 1);
   const rows = upcomingRows(
