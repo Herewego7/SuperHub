@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, inboxFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
 import { gmailPayload, outlookToInbound, toInbound } from "../src/ingest/parse.ts";
 
 test("a stored Google token is refreshed once it has expired", () => {
@@ -31,6 +31,13 @@ test("a gmail message becomes a slip with the subject and sender", () => {
   assert.equal(message.subject, "Permission slip");
   assert.equal(message.fromAddress, "office@school.edu");
   assert.equal(message.snippet, "Please sign & return.");
+});
+
+test("one bad inbox message is skipped and a refused account reconnects", () => {
+  assert.equal(inboxFailure(new Error("parse")), "skip");
+  assert.equal(inboxFailure({ code: 404 }), "skip");
+  assert.equal(inboxFailure({ response: { status: 401 } }), "reconnect");
+  assert.equal(inboxFailure({ code: 403 }), "reconnect");
 });
 
 test("a gmail payload keeps the body the scan used to drop", () => {

@@ -21,6 +21,15 @@ export function inboxScanEnabled(scanInbox: boolean | null | undefined): boolean
   return scanInbox !== false;
 }
 
+export function inboxFailure(err: unknown): "reconnect" | "skip" {
+  if (!err || typeof err !== "object") return "skip";
+  const code = "code" in err ? (err as { code?: unknown }).code : undefined;
+  const status = "response" in err ? (err as { response?: { status?: number } }).response?.status : undefined;
+  const value = typeof code === "number" ? code : typeof code === "string" ? Number(code) : undefined;
+  if (value === 401 || value === 403 || status === 401 || status === 403) return "reconnect";
+  return "skip";
+}
+
 export function inboxTokenExpiry(tokenExpiry: Date | string | null | undefined, hasRefresh: boolean): number | undefined {
   if (tokenExpiry) {
     const ms = new Date(tokenExpiry).getTime();

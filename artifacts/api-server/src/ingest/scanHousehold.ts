@@ -3,17 +3,9 @@ import { OutlookCalendarService } from "../outlookCalendar";
 import { getFreshOutlookAccessToken } from "../calendarSync";
 import { storage } from "../storage";
 import { applyIngestedMail } from "./saveMail";
-import { inboxScanEnabled, shareScan } from "./process";
+import { inboxFailure, inboxScanEnabled, shareScan } from "./process";
 
 const inflight = new Map<string, Promise<Awaited<ReturnType<typeof scanOnce>>>>();
-
-function denied(err: unknown): boolean {
-  if (!err || typeof err !== "object") return false;
-  const code = "code" in err ? (err as { code?: unknown }).code : undefined;
-  const status = "response" in err ? (err as { response?: { status?: number } }).response?.status : undefined;
-  const value = typeof code === "number" ? code : typeof code === "string" ? Number(code) : undefined;
-  return value === 401 || value === 403 || status === 401 || status === 403;
-}
 
 export function scanConnectedInboxes(userId: string) {
   return shareScan(inflight, userId, () => scanOnce(userId));
@@ -39,7 +31,7 @@ async function scanOnce(userId: string) {
       try {
         messages.push(...await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry));
       } catch (err) {
-        if (denied(err)) needsReconnect = true;
+        if (inboxFailure(err) === "reconnect") needsReconnect = true;
         else console.warn("Inbox scan failed:", err instanceof Error ? err.message : err);
       }
     }
@@ -50,7 +42,7 @@ async function scanOnce(userId: string) {
         const access = (await getFreshOutlookAccessToken(owner.id)) ?? outlookTokens.accessToken;
         messages.push(...await outlook.listInbox(access, outlookTokens.email || owner.id));
       } catch (err) {
-        if (denied(err)) needsReconnect = true;
+        if (inboxFailure(err) === "reconnect") needsReconnect = true;
         else console.warn("Outlook inbox scan failed:", err instanceof Error ? err.message : err);
       }
     }

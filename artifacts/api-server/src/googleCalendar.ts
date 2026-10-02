@@ -1,6 +1,6 @@
 import { google, calendar_v3 } from 'googleapis';
 import { gmailPayload, INBOX_SCAN_LIMIT, toInbound, type InboundMessage } from './ingest/parse';
-import { inboxTokenExpiry } from './ingest/process';
+import { inboxFailure, inboxTokenExpiry } from './ingest/process';
 
 // Calendar plus read-only mail. No userinfo.email/userinfo.profile. Those
 // identity scopes are what makes Google's consent screen read as
@@ -292,16 +292,21 @@ export class GoogleCalendarService {
     }
     const out: InboundMessage[] = [];
     for (const id of ids) {
-      const full = await gmail.users.messages.get({
-        userId: "me",
-        id,
-        format: "full",
-      });
-      out.push(toInbound({
-        id,
-        snippet: full.data.snippet ?? undefined,
-        payload: gmailPayload(full.data.payload),
-      }, accountId));
+      try {
+        const full = await gmail.users.messages.get({
+          userId: "me",
+          id,
+          format: "full",
+        });
+        out.push(toInbound({
+          id,
+          snippet: full.data.snippet ?? undefined,
+          payload: gmailPayload(full.data.payload),
+        }, accountId));
+      } catch (err) {
+        if (inboxFailure(err) === "reconnect") throw err;
+        console.warn("Inbox message skipped:", err instanceof Error ? err.message : err);
+      }
     }
     return out;
   }
