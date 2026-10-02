@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, choresForCount, dinnerName, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, homeBirthdayLine, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { eventClockLine, pointsProfileId } from "@/lib/chatTools";
 import { openEmailHref, schoolSaveTarget, slipQuote, slipSender } from "@/lib/slipMail";
@@ -25,6 +25,9 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   const dayKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
   const { data: calendarSettings } = useQuery<{ shareOriginals?: boolean | null }>({
     queryKey: ["/api/calendar-settings"],
+  });
+  const { data: celebrations = [] } = useQuery<{ name: string; monthDay: string; year?: number | null; type?: string | null }[]>({
+    queryKey: ["/api/celebrations"],
   });
   const { data: meals = [] } = useQuery<Meal[]>({
     queryKey: ["/api/meals", dayKey, dayKey],
@@ -86,6 +89,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   const todos = openTodos(todosForHome(chores, selectedIds, familyIds), completions).filter((todo) => !kidName || schoolEmailNames(todo, kidName));
   const progress = choreProgress(choresForCount(chores, selectedIds, familyIds), completions, day);
   const dinner = dinnerName(meals, day);
+  const birthday = homeBirthdayLine(celebrations, day);
   const todayEvents = eventsOnHomeDay(
     visibleForProfiles(events, selectedIds),
     day,
@@ -217,6 +221,12 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           </ul>
         )}
       </section>
+
+      {birthday && (
+        <p data-testid="home-birthday" className="text-sm">
+          {birthday}
+        </p>
+      )}
 
       {dinner && (
         <p data-testid="home-dinner" className="text-sm">

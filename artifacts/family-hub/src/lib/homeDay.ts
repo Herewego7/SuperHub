@@ -341,6 +341,34 @@ export function schoolEmailNames(
   return new RegExp(`\\b${escaped}\\b`, "i").test(`${todo.title}\n${todo.description ?? ""}`);
 }
 
+function leapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+function birthdayOnDay(monthDay: string, key: string): boolean {
+  const monthAndDay = key.slice(5);
+  if (monthDay === monthAndDay) return true;
+  if (monthDay !== "02-29" || monthAndDay !== "02-28") return false;
+  return !leapYear(Number(key.slice(0, 4)));
+}
+
+/** The same birthday line the evening plan uses, for the day Home is showing. */
+export function homeBirthdayLine(
+  rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[],
+  day: Date,
+): string | null {
+  const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+  const year = day.getFullYear();
+  const lines = rows
+    .filter((row) => (!row.type || row.type === "birthday") && birthdayOnDay(row.monthDay, key))
+    .map((row) => {
+      const age = row.year ? year - row.year : null;
+      return age && age > 0 ? `${row.name} turns ${age}` : `${row.name}'s birthday`;
+    });
+  if (lines.length === 0) return null;
+  return `${lines.join(". ")}.`;
+}
+
 export function dinnerName(meals: Array<{ date: string; slot: string; name: string }>, day: Date): string | null {
   const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
   return meals.find((meal) => meal.date === key && meal.slot === "dinner")?.name ?? null;
