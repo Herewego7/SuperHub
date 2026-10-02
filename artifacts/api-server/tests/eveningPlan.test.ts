@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Event } from "@workspace/db";
-import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, googlePlanRows, icalPlanRows, moveClock, moveLabel, outlookPlanRows, planBirthdayLine, planBody, planDayEvents, planEventTitle, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
+import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, googlePlanRows, icalPlanRows, moveClock, moveLabel, outlookPlanRows, planBirthdayLine, planBody, planDayEvents, planEventTitle, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, uniqueExternalRows, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
 
 test("a Google event can be named on the evening plan", () => {
   const rows = googlePlanRows([
@@ -65,6 +65,18 @@ test("a subscribed calendar event can be named on the evening plan", () => {
   assert.equal(rows[0].source, "ical");
   assert.equal(rows[0].location, "Field 2");
   assert.deepEqual(rows[0].profileIds, ["dad"]);
+});
+
+test("the same outside event from two people is one plan line", () => {
+  const soccer = {
+    id: "abc",
+    summary: "Soccer",
+    start: { dateTime: "2026-10-02T16:00:00-05:00" },
+    end: { dateTime: "2026-10-02T17:00:00-05:00" },
+  };
+  const rows = uniqueExternalRows([...googlePlanRows([soccer], "dad"), ...googlePlanRows([soccer], "mom")]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].title, "Soccer");
 });
 
 test("the evening plan names who is driving", () => {

@@ -140,6 +140,18 @@ function outlookWhen(part: { dateTime?: string; timeZone?: string } | null | und
   return new Date(raw);
 }
 
+/** The same event seen through two connected accounts is one line. A saved app event has no external id and stays. */
+export function uniqueExternalRows<T extends { externalId?: string | null }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = row.externalId;
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** Subscribed calendar events the evening plan can name. They belong to the person who connected the feed. */
 export function icalPlanRows(events: unknown[], profileId: string): {
   id: string;
@@ -160,6 +172,7 @@ export function icalPlanRows(events: unknown[], profileId: string): {
   for (const item of events) {
     const event = item as {
       id?: string;
+      uid?: string;
       title?: string;
       description?: string | null;
       location?: string | null;
@@ -174,6 +187,7 @@ export function icalPlanRows(events: unknown[], profileId: string): {
     const end = event.end ? new Date(event.end) : start;
     rows.push({
       id: `ical-${profileId}-${event.id}`,
+      externalId: `ical:${event.uid || event.id}:${event.start}`,
       title: event.title?.trim() || "Untitled",
       description: event.description ?? null,
       location: event.location ?? null,
@@ -249,6 +263,7 @@ export function outlookPlanRows(events: unknown[], profileId: string, assignment
     const calendarId = event.calendar?.id ?? null;
     rows.push({
       id: `outlook-${profileId}-${event.id}`,
+      externalId: `outlook:${event.id}`,
       title: event.subject?.trim() || "Untitled",
       description: event.bodyPreview ?? null,
       location: event.location?.displayName ?? null,
@@ -331,6 +346,7 @@ export function googlePlanRows(events: unknown[], profileId: string, assignments
     const profileIds = assigned.length > 0 ? assigned : audience.length > 0 ? audience : assignment?.profileId ? [assignment.profileId] : [profileId];
     rows.push({
       id: `google-${profileId}-${event.id}`,
+      externalId: `google:${event.id}`,
       title: event.summary?.trim() || "Untitled",
       description: event.description ?? null,
       location: event.location ?? null,
@@ -581,9 +597,11 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const assignments = await storage.getCalendarAssignmentsByUser(profile.userId);
     const events = [
       ...await storage.getEventsByUser(profile.userId),
-      ...await googleEventsForPlan(profile.userId, assignments),
-      ...await outlookEventsForPlan(profile.userId, assignments),
-      ...await icalEventsForPlan(profile.userId),
+      ...uniqueExternalRows([
+        ...await googleEventsForPlan(profile.userId, assignments),
+        ...await outlookEventsForPlan(profile.userId, assignments),
+        ...await icalEventsForPlan(profile.userId),
+      ]),
     ];
     const meals = await storage.getMealsByUser(profile.userId);
     const celebrations = await storage.getCelebrationsByUser(profile.userId);
