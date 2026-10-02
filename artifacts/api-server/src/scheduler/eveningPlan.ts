@@ -275,6 +275,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
           body,
           url: planOpenPath(body, profile.id),
           tag: `evening-plan-${profile.id}`,
+          apnsCategory: "EVENING_PLAN",
           data: { kind: "evening-plan", profileId: profile.id, body },
         },
       );

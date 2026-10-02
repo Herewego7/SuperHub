@@ -52,6 +52,13 @@ test("buildApnsBody carries url and custom data at top level", () => {
   assert.ok(body.aps);
 });
 
+test("buildApnsBody sets the evening-plan reply category", () => {
+  const body = JSON.parse(buildApnsBody({ title: "Tomorrow's plan", body: "Soccer", category: "EVENING_PLAN" }));
+  assert.equal(body.aps.category, "EVENING_PLAN");
+  const plain = JSON.parse(buildApnsBody({ title: "a", body: "b" }));
+  assert.equal(plain.aps.category, undefined);
+});
+
 // ── isApnsConfigured ─────────────────────────────────────────────────────────
 
 const envKeys = [
