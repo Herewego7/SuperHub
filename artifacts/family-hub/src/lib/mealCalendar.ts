@@ -22,8 +22,15 @@ export function mealEvents<T extends { slot: string }>(meals: T[], writeToCalend
   return meals.filter((meal) => meal.slot === "dinner");
 }
 
+export function groceryHaveReply(name: string, action: GroceryHaveAction | null): string | null {
+  if (action) return null;
+  const item = name.trim();
+  if (!item) return null;
+  return `I don't see ${item} on the list.`;
+}
+
 export function groceryAlreadyHave(text: string): string | null {
-  const match = /^(?:(?:i|we)\s+)?(?:already have|have|got)\s+(.+?)\.?$/i.exec(text.trim());
+  const match = /^(?:(?:i|we)(?:\s+|['’]ve\s+))?(?:already\s+)?(?:have|got)\s+(.+?)\.?$/i.exec(text.trim());
   const name = match?.[1]?.trim().replace(/^(?:the|some|a|an)\s+/i, "");
   return name ? name : null;
 }

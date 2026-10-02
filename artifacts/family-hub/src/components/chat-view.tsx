@@ -6,7 +6,7 @@ import type { Chore } from "@workspace/shared-types";
 import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, feedbackNotesFrom, feedbackStored, FEEDBACK_KEY, forgetFact, forgetSchool, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
-import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
+import { dinnerReply, groceryAlreadyHave, groceryHaveAction, groceryHaveReply } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, noteChatUnread, pendingAfterPlan, readPendingConfirm, readThread, savePendingConfirm, threadWithPlan, type ChatBubble, type PendingConfirm } from "@/lib/chatThread";
 
@@ -854,6 +854,14 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     }
     const have = groceryAlreadyHave(text);
     const grocery = have ? groceryHaveAction(have, groceries, mealGroceries) : null;
+    const missing = have ? groceryHaveReply(have, grocery) : null;
+    if (missing) {
+      next.push({ id: `${Date.now()}-g`, role: "assistant", text: missing });
+      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+      setBubbles(next);
+      setDraft("");
+      return;
+    }
     if (grocery) {
       const request = grocery.kind === "delete"
         ? apiRequest("DELETE", `/api/grocery-items/${grocery.id}`)

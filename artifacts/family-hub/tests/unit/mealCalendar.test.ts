@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dinnerCopyRange, dinnerReply, groceryAlreadyHave, groceryHaveAction, groceryListAfterHave, mealEvents } from "../../src/lib/mealCalendar";
+import { dinnerCopyRange, dinnerReply, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, groceryListAfterHave, mealEvents } from "../../src/lib/mealCalendar";
 
 test("turning dinners on copies the weeks ahead, not only the week on screen", () => {
   const range = dinnerCopyRange("2026-10-05", "2026-10-11", new Date(2026, 9, 1));
@@ -23,7 +23,9 @@ test("the calendar switch on keeps the dinner", () => {
 test("chat hears that the family already has tortillas", () => {
   assert.equal(groceryAlreadyHave("We already have tortillas."), "tortillas");
   assert.equal(groceryAlreadyHave("we have the tortillas"), "tortillas");
+  assert.equal(groceryAlreadyHave("we've got the tortillas"), "tortillas");
   assert.equal(groceryAlreadyHave("the kids have milk"), null);
+  assert.equal(groceryHaveReply("tortillas", null), "I don't see tortillas on the list.");
 });
 
 test("already have matches a plural of the same item", () => {
