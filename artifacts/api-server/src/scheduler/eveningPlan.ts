@@ -153,7 +153,7 @@ export function planBody(input: {
   isChild: boolean;
   kidName?: string | null;
   chores: { title: string; description?: string | null; taskType?: string | null; category?: string | null }[];
-  events: { title: string; description?: string | null; movedFrom?: string | null; source?: string | null }[];
+  events: { title: string; description?: string | null; movedFrom?: string | null; source?: string | null; driving?: boolean }[];
   dinner?: string | null;
 }): string {
   const lines: string[] = [];
@@ -164,7 +164,8 @@ export function planBody(input: {
   }
   for (const event of input.events) {
     if (event.source === "meal" && input.dinner) continue;
-    if (input.isChild && event.source === "school" && !namesPerson(`${event.title}\n${event.description ?? ""}`, input.kidName)) continue;
+    const unnamedSchool = input.isChild && event.source === "school" && !namesPerson(`${event.title}\n${event.description ?? ""}`, input.kidName);
+    if (unnamedSchool && !event.driving) continue;
     const line = event.movedFrom ? `${event.title}, moved from ${event.movedFrom}` : event.title;
     const bare = event.title.replace(/, \d{1,2}:\d{2} [AP]M$/i, "");
     const sameSlip = event.source === "school" ? lines.findIndex((item) => item.toLowerCase() === bare.toLowerCase()) : -1;
@@ -275,6 +276,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
         description: event.description,
         movedFrom: moveLabel(event.movedFrom, now),
         source: event.source,
+        driving: driverIdsOf(event).includes(profile.id),
       }));
     const body = planBody({
       isChild,

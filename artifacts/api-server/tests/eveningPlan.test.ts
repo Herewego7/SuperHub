@@ -107,6 +107,23 @@ test("a kid plan leaves out a school email line", () => {
   assert.equal(body.includes("Tacos"), true);
 });
 
+test("a kid plan still names the school event they are driving", () => {
+  const body = planBody({
+    isChild: true,
+    kidName: "Ava",
+    chores: [
+      { title: "Picture day", description: "Wear blue", taskType: "todo", category: "school_email" },
+    ],
+    events: [
+      { title: "Picture day, 8:00 AM", description: "Wear blue", source: "school", driving: true },
+      { title: "Staff meeting", description: "Parents only", source: "school" },
+    ],
+  });
+  assert.equal(body.includes("Picture day, 8:00 AM"), true);
+  assert.equal(body.includes("Wear blue"), false);
+  assert.equal(body.includes("Staff meeting"), false);
+});
+
 test("a changed start keeps the old clock time", () => {
   const previous = new Date(2026, 9, 2, 16, 0);
   const next = new Date(2026, 9, 2, 17, 30);
