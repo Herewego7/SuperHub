@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite } from "../../src/lib/chatGoogle";
+import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleMoveBody } from "../../src/lib/chatGoogle";
 
 test("chat can see a Google event and who is driving it", () => {
   const rows = chatGoogleEvents([
@@ -67,4 +67,18 @@ test("a Google event chat can change has a write path", () => {
   );
   assert.equal(googleChatWrite({ source: "outlook", googleProfileId: "dad", googleCalendarId: "cal", googleEventId: "abc" }), null);
   assert.equal(googleChatWrite({ source: "google", googleProfileId: "dad", googleCalendarId: null, googleEventId: "abc" }), null);
+});
+
+test("chat can move a one-off Google event and leaves a series", () => {
+  const start = new Date(2026, 9, 3, 16, 0, 0);
+  const end = new Date(2026, 9, 3, 17, 0, 0);
+  const body = googleMoveBody({ source: "google", recurringEventId: null, isAllDay: false }, start, end, true);
+  assert.equal(body && typeof body === "object" && body.start, start.toISOString());
+  assert.equal(body && typeof body === "object" && body.isAllDay, false);
+  const day = new Date(2026, 9, 4, 0, 0, 0);
+  const allDay = googleMoveBody({ source: "google", recurringEventId: null, isAllDay: true }, day, end, false);
+  assert.equal(allDay && typeof allDay === "object" && allDay.isAllDay, true);
+  assert.equal(allDay && typeof allDay === "object" && allDay.end, day.toISOString());
+  assert.equal(googleMoveBody({ source: "google", recurringEventId: "series-1", isAllDay: false }, start, end, true), "series");
+  assert.equal(googleMoveBody({ source: "outlook", recurringEventId: null, isAllDay: false }, start, end, true), null);
 });

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
 import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
-import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite } from "@/lib/chatGoogle";
+import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleMoveBody } from "@/lib/chatGoogle";
 import type { Chore } from "@workspace/shared-types";
 import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
@@ -548,6 +548,32 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     const moved = moving ? talkEvents.find((event) => event.title.toLowerCase() === moving.title.toLowerCase()) : undefined;
     if (moved && moving && tools.includes("update_event")) {
       const action = moveEventAction(moved.source, moved.id);
+      const start = new Date(moved.startTime ?? Date.now());
+      const end = moved.endTime ? new Date(moved.endTime) : new Date(start.getTime() + 60 * 60 * 1000);
+      const duration = Math.max(end.getTime() - start.getTime(), 60 * 60 * 1000);
+      if (moving.on) start.setFullYear(moving.on.getFullYear(), moving.on.getMonth(), moving.on.getDate());
+      if (moving.hours != null && moving.minutes != null) start.setHours(moving.hours, moving.minutes, 0, 0);
+      const finish = new Date(start.getTime() + duration);
+      if (action === "keep-google") {
+        const path = googleChatWrite(moved);
+        const body = googleMoveBody(moved, start, finish, moving.hours != null);
+        if (body === "series") {
+          next.push({ id: `${Date.now()}-m`, role: "assistant", text: `${moved.title} repeats on Google Calendar, so I left the time.` });
+          localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+          setBubbles(next);
+          setDraft("");
+          return;
+        }
+        if (path && body) {
+          replyAfter(
+            apiRequest("PATCH", path, body).then(() => {
+              void queryClient.invalidateQueries({ queryKey: ["/api/google-calendar/events"] });
+            }),
+            `Moved ${moved.title}.`,
+          );
+          return;
+        }
+      }
       if (action === "keep-meal" || action === "keep-google" || action === "keep-outlook" || action === "keep-ical") {
         next.push({ id: `${Date.now()}-m`, role: "assistant", text: `${moved.title} stays on ${eventStaysPut(moved.source, moved.id) ?? "Google Calendar"}.` });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
@@ -555,12 +581,6 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         setDraft("");
         return;
       } else {
-        const start = new Date(moved.startTime ?? Date.now());
-        const end = moved.endTime ? new Date(moved.endTime) : new Date(start.getTime() + 60 * 60 * 1000);
-        const duration = Math.max(end.getTime() - start.getTime(), 60 * 60 * 1000);
-        if (moving.on) start.setFullYear(moving.on.getFullYear(), moving.on.getMonth(), moving.on.getDate());
-        if (moving.hours != null && moving.minutes != null) start.setHours(moving.hours, moving.minutes, 0, 0);
-        const finish = new Date(start.getTime() + duration);
         if (action === "confirm") {
           storePending({ kind: "move", id: moved.id, start: start.toISOString(), end: finish.toISOString() });
           next.push({ id: `${Date.now()}-m`, role: "assistant", text: `Move ${moved.title}? It came from outside the app. Reply yes to move it.` });

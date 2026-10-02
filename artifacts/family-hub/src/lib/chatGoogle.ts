@@ -132,6 +132,22 @@ export function chatIcalEvents(
   return rows;
 }
 
+/** A one-off Google event can take a new time. A series stays, because one instance is not the whole repeat. */
+export function googleMoveBody(
+  event: { source?: string | null; recurringEventId?: string | null; isAllDay?: boolean | null },
+  start: Date,
+  _end: Date,
+  timed: boolean,
+): { start: string; end: string; isAllDay: boolean } | "series" | null {
+  if (event.source !== "google") return null;
+  if (event.recurringEventId) return "series";
+  if (!timed && event.isAllDay) {
+    const day = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    return { start: day.toISOString(), end: day.toISOString(), isAllDay: true };
+  }
+  return { start: start.toISOString(), end: _end.toISOString(), isAllDay: false };
+}
+
 /** Where chat writes a change that belongs on Google. Outlook and a missing calendar stay null. */
 export function googleChatWrite(event: {
   source?: string | null;
