@@ -20,6 +20,7 @@ import { storage } from "../storage";
 import { GoogleCalendarService } from "../googleCalendar";
 import { getFreshOutlookAccessToken } from "../calendarSync";
 import { outlookCalendarService } from "../outlookCalendar";
+import { fetchIcalEvents } from "../icalCalendar";
 
 export type PlanPush = "evening-plan" | "daily-brief";
 
@@ -137,6 +138,78 @@ function outlookWhen(part: { dateTime?: string; timeZone?: string } | null | und
   const hasOffset = /[zZ]$|[+-]\d\d:?\d\d$/.test(raw);
   if (!hasOffset && (part.timeZone ?? "UTC") === "UTC") return new Date(`${raw}Z`);
   return new Date(raw);
+}
+
+/** Subscribed calendar events the evening plan can name. They belong to the person who connected the feed. */
+export function icalPlanRows(events: unknown[], profileId: string): {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  source: "ical";
+  startTime: string;
+  endTime: string;
+  isAllDay: boolean;
+  profileIds: string[];
+  drivingProfileIds: string[];
+  googleCalendarId: null;
+  outlookCalendarId: null;
+}[] {
+  const seen = new Set<string>();
+  const rows = [];
+  for (const item of events) {
+    const event = item as {
+      id?: string;
+      title?: string;
+      description?: string | null;
+      location?: string | null;
+      start?: string;
+      end?: string;
+      isAllDay?: boolean;
+    };
+    if (!event?.id || !event.start || seen.has(event.id)) continue;
+    const start = new Date(event.start);
+    if (Number.isNaN(start.getTime())) continue;
+    seen.add(event.id);
+    const end = event.end ? new Date(event.end) : start;
+    rows.push({
+      id: `ical-${profileId}-${event.id}`,
+      title: event.title?.trim() || "Untitled",
+      description: event.description ?? null,
+      location: event.location ?? null,
+      source: "ical" as const,
+      startTime: start.toISOString(),
+      endTime: Number.isNaN(end.getTime()) ? start.toISOString() : end.toISOString(),
+      isAllDay: event.isAllDay === true,
+      profileIds: [profileId],
+      drivingProfileIds: [],
+      googleCalendarId: null,
+      outlookCalendarId: null,
+    });
+  }
+  return rows;
+}
+
+async function icalEventsForPlan(userId: string) {
+  const rows = [];
+  const people = await loadProfiles(eq(profiles.userId, userId));
+  for (const person of people) {
+    if (!person.icalConnected) continue;
+    try {
+      const subs = await storage.getIcalSubscriptions(person.id);
+      for (const sub of subs) {
+        try {
+          const raw = await fetchIcalEvents(sub.feedUrl);
+          rows.push(...icalPlanRows(raw.map((event) => ({ ...event, id: `${sub.id}::${event.id}` })), person.id));
+        } catch (err) {
+          logger.warn({ err, profileId: person.id, subscriptionId: sub.id }, "Evening plan skipped a subscribed calendar");
+        }
+      }
+    } catch (err) {
+      logger.warn({ err, profileId: person.id }, "Evening plan skipped subscribed calendars");
+    }
+  }
+  return rows;
 }
 
 /** Outlook events the evening plan can name. */
@@ -510,6 +583,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
       ...await storage.getEventsByUser(profile.userId),
       ...await googleEventsForPlan(profile.userId, assignments),
       ...await outlookEventsForPlan(profile.userId, assignments),
+      ...await icalEventsForPlan(profile.userId),
     ];
     const meals = await storage.getMealsByUser(profile.userId);
     const celebrations = await storage.getCelebrationsByUser(profile.userId);

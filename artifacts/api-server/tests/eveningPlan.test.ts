@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Event } from "@workspace/db";
-import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, googlePlanRows, moveClock, moveLabel, outlookPlanRows, planBirthdayLine, planBody, planDayEvents, planEventTitle, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
+import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, googlePlanRows, icalPlanRows, moveClock, moveLabel, outlookPlanRows, planBirthdayLine, planBody, planDayEvents, planEventTitle, planKeysForClaim, planOpenPath, planTitle, pushesForProfile, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
 
 test("a Google event can be named on the evening plan", () => {
   const rows = googlePlanRows([
@@ -54,6 +54,17 @@ test("an Outlook event can be named on the evening plan", () => {
   assert.equal(rows[0].location, "Studio");
   assert.deepEqual(rows[0].profileIds, ["liam"]);
   assert.equal(rows[0].outlookCalendarId, "ocal");
+});
+
+test("a subscribed calendar event can be named on the evening plan", () => {
+  const rows = icalPlanRows([
+    { id: "i1", title: "Practice", start: "2026-10-02T16:00:00", end: "2026-10-02T17:00:00", location: "Field 2", isAllDay: false },
+  ], "dad");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].title, "Practice");
+  assert.equal(rows[0].source, "ical");
+  assert.equal(rows[0].location, "Field 2");
+  assert.deepEqual(rows[0].profileIds, ["dad"]);
 });
 
 test("the evening plan names who is driving", () => {
