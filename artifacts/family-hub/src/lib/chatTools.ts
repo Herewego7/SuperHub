@@ -198,6 +198,13 @@ export function checkOffTitle(text: string): string | null {
   return title ? title : null;
 }
 
+export function appendPlace(line: string, location?: string | null): string {
+  const place = location?.trim();
+  if (!place) return line;
+  if (line.toLowerCase().includes(place.toLowerCase())) return line;
+  return `${line}, ${place}`;
+}
+
 export function eventClockLine(title: string, startTime: Date | string, withDay = false, allDay = false): string {
   const at = new Date(startTime);
   if (Number.isNaN(at.getTime())) return title;
@@ -259,7 +266,7 @@ export function dayReply(
       endDate?: Date | string | null;
       category?: string | null;
     }[];
-    events: { title: string; startTime: Date | string; isAllDay?: boolean | null; source?: string | null; movedFrom?: string | null }[];
+    events: { title: string; startTime: Date | string; isAllDay?: boolean | null; source?: string | null; movedFrom?: string | null; location?: string | null }[];
     completions?: { choreId: string; completedAt?: Date | string | null }[];
     dinner?: string | null;
     meals?: { date: string; slot: string; name: string }[];
@@ -315,7 +322,7 @@ export function dayReply(
     if (at < start || at >= end) continue;
     const moved = planMoveLabel(event.movedFrom, input.day);
     const clock = eventClockLine(event.title, at, false, event.isAllDay === true);
-    const line = moved ? `${clock}, moved from ${moved}` : clock;
+    const line = moved ? `${appendPlace(clock, event.location)}, moved from ${moved}` : appendPlace(clock, event.location);
     const bare = clock.replace(/, \d{1,2}:\d{2} [AP]M$/i, "");
     const same = event.source === "school" ? rows.findIndex((item) => item.text.toLowerCase() === bare.toLowerCase()) : -1;
     const row = { text: line, change: Boolean(moved) };

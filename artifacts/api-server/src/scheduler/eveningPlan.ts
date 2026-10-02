@@ -220,6 +220,13 @@ export function planBody(input: {
   return kept.join("\n") || "Nothing on the plan.";
 }
 
+export function appendPlace(line: string, location?: string | null): string {
+  const place = location?.trim();
+  if (!place) return line;
+  if (line.toLowerCase().includes(place.toLowerCase())) return line;
+  return `${line}, ${place}`;
+}
+
 export function eventClockTitle(title: string, startTime: Date, tz: string, allDay = false): string {
   if (allDay) return title;
   const hhmm = localHHMM(startTime, tz);
@@ -314,7 +321,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
       profile.id,
     )
       .map((event) => ({
-        title: eventClockTitle(event.title, new Date(event.startTime), tz, event.isAllDay === true),
+        title: appendPlace(eventClockTitle(event.title, new Date(event.startTime), tz, event.isAllDay === true), event.location),
         description: event.description,
         movedFrom: moveLabel(event.movedFrom, now),
         source: event.source,

@@ -173,6 +173,25 @@ test("check off names the chore", () => {
   assert.equal(checkOffTitle("Who is driving soccer?"), null);
 });
 
+test("what's the plan names a saved place", () => {
+  const day = new Date(2026, 9, 1, 16, 0);
+  assert.equal(dayReply("what's the plan?", {
+    chores: [],
+    events: [{ title: "Soccer", startTime: day, location: "Field 2" }],
+    day,
+  }), "Soccer, 4:00 PM, Field 2");
+  assert.equal(dayReply("what's the plan?", {
+    chores: [],
+    events: [{ title: "Soccer at Field 2", startTime: day, location: "Field 2" }],
+    day,
+  }), "Soccer at Field 2, 4:00 PM");
+  assert.equal(dayReply("what's the plan?", {
+    chores: [],
+    events: [{ title: "Soccer", startTime: day, location: "  " }],
+    day,
+  }), "Soccer, 4:00 PM");
+});
+
 test("what's the plan names a birthday on that day", () => {
   const day = new Date(2026, 9, 1, 15, 0);
   const chores = ["One", "Two", "Three", "Four", "Five"].map((title) => ({
