@@ -22,6 +22,7 @@ test("the calendar switch on keeps the dinner", () => {
 
 test("chat hears that the family already has tortillas", () => {
   assert.equal(groceryAlreadyHave("We already have tortillas."), "tortillas");
+  assert.equal(groceryAlreadyHave("we have the tortillas"), "tortillas");
   assert.equal(groceryAlreadyHave("the kids have milk"), null);
 });
 
