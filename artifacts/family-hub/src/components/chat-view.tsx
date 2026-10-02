@@ -371,6 +371,10 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       else if (created.day !== "today") start.setDate(start.getDate() + 1);
       start.setHours(created.hours ?? 9, created.minutes ?? 0, 0, 0);
       const end = new Date(start.getTime() + 60 * 60 * 1000);
+      if (created.endHours != null) {
+        end.setHours(created.endHours, created.endMinutes ?? 0, 0, 0);
+        if (end.getTime() <= start.getTime()) end.setTime(start.getTime() + 60 * 60 * 1000);
+      }
       replyAfter(
         apiRequest("POST", "/api/events", {
           title: created.title,

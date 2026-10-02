@@ -133,20 +133,43 @@ function eventOn(name: string, from: Date): { title: string; on: Date } | null {
   return { title: numeric[1].trim(), on };
 }
 
-export function createEventClock(title: string, from = new Date()): { title: string; hours?: number; minutes?: number; day: "today" | "tomorrow"; on?: Date } {
-  const match = title.match(/^(.*?)(?:\s+(today|tonight|tomorrow|this (?:morning|afternoon|evening)))?(?:\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm))?$/i);
+function clock24(hours: number, minutes: number, suffix: string): { hours: number; minutes: number } | null {
+  if (hours < 1 || hours > 12 || minutes > 59) return null;
+  let next = hours;
+  if (suffix === "pm" && next !== 12) next += 12;
+  if (suffix === "am" && next === 12) next = 0;
+  return { hours: next, minutes };
+}
+
+export function createEventClock(title: string, from = new Date()): { title: string; hours?: number; minutes?: number; endHours?: number; endMinutes?: number; day: "today" | "tomorrow"; on?: Date } {
+  const match = title.match(/^(.*?)(?:\s+(today|tonight|tomorrow|this (?:morning|afternoon|evening)))?(?:\s+at\s+(\d{1,2})(?::(\d{2}))?(?:\s*(am|pm))?(?:\s*[-–]\s*(\d{1,2})(?::(\d{2}))?)?\s*(am|pm))?$/i);
   const placed = eventOn((match?.[1] ?? title).trim(), from);
   if (!match || (!match[2] && !match[3] && !placed)) return { title, day: "tomorrow" };
   const name = (placed?.title ?? match[1] ?? "").trim();
-  const day = match?.[2] && match[2].toLowerCase() !== "tomorrow" ? "today" : "tomorrow";
-  if (!match?.[3]) return name ? { title: name, day, ...(placed ? { on: placed.on } : {}) } : { title, day: "tomorrow" };
-  let hours = Number(match[3]);
-  const minutes = match[4] ? Number(match[4]) : 0;
-  const suffix = match[5].toLowerCase();
-  if (!name || hours < 1 || hours > 12 || minutes > 59) return { title, day: "tomorrow" };
-  if (suffix === "pm" && hours !== 12) hours += 12;
-  if (suffix === "am" && hours === 12) hours = 0;
-  return { title: name, hours, minutes, day, ...(placed ? { on: placed.on } : {}) };
+  if (!match[3]) {
+    const day = match[2] && match[2].toLowerCase() !== "tomorrow" ? "today" : "tomorrow";
+    return name ? { title: name, day, ...(placed ? { on: placed.on } : {}) } : { title, day: "tomorrow" };
+  }
+  const suffix = (match[5] || match[8] || "").toLowerCase();
+  const start = clock24(Number(match[3]), match[4] ? Number(match[4]) : 0, suffix);
+  if (!name || !suffix || !start) return { title, day: "tomorrow" };
+  const end = match[6] ? clock24(Number(match[6]), match[7] ? Number(match[7]) : 0, (match[8] || suffix).toLowerCase()) : null;
+  const ended = end && end.hours * 60 + end.minutes > start.hours * 60 + start.minutes ? end : null;
+  let day: "today" | "tomorrow";
+  if (match[2]) day = match[2].toLowerCase() === "tomorrow" ? "tomorrow" : "today";
+  else if (placed) day = "tomorrow";
+  else {
+    const passed = from.getHours() > start.hours || (from.getHours() === start.hours && from.getMinutes() > start.minutes);
+    day = passed ? "tomorrow" : "today";
+  }
+  return {
+    title: name,
+    hours: start.hours,
+    minutes: start.minutes,
+    ...(ended ? { endHours: ended.hours, endMinutes: ended.minutes } : {}),
+    day,
+    ...(placed ? { on: placed.on } : {}),
+  };
 }
 
 export function familyCalendarOffer(familyCalendarId: string | null | undefined): string | null {
