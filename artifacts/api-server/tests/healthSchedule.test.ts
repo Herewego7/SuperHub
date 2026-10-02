@@ -2,9 +2,15 @@
 // aware firing-window expansion behind health reminder scheduling.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { expandOccurrences } from "../src/lib/healthSchedule";
+import { expandOccurrences, healthDispatchSticks } from "../src/lib/healthSchedule";
 
 const TZ = "America/Chicago"; // UTC-5 (CDT) in August
+
+test("a dose is retried only when every push failed", () => {
+  assert.equal(healthDispatchSticks(0, 2), false);
+  assert.equal(healthDispatchSticks(1, 2), true);
+  assert.equal(healthDispatchSticks(0, 0), true);
+});
 
 test("a paused reminder never fires", () => {
   const out = expandOccurrences(

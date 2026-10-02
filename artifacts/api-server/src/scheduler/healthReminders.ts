@@ -3,7 +3,7 @@ import { db } from "../db";
 import { locationSettings } from "@workspace/db";
 import { storage } from "../storage";
 import { sendPushToUser } from "../lib/push";
-import { expandOccurrences } from "../lib/healthSchedule";
+import { expandOccurrences, healthDispatchSticks } from "../lib/healthSchedule";
 import { logger } from "../lib/logger";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { createWorkGate } from "../lib/workGate";
@@ -54,8 +54,8 @@ async function fireEvent(
   userId: string,
   recipientProfileIds: string[],
   payload: { title: string; body: string },
-): Promise<void> {
-  await Promise.all(
+): Promise<boolean> {
+  const sent = await Promise.all(
     recipientProfileIds.map((profileId) =>
       sendPushToUser(
         { userId, profileId },
@@ -74,12 +74,27 @@ async function fireEvent(
         // reminder locally — without it, a family whose server happens to be
         // awake gets every dose notified twice on iOS.
         "healthReminder",
-      ).catch((err) =>
-        logger.warn({ err, reminderId, eventId, profileId }, "health push failed"),
-      ),
+      ).then(() => true).catch((err) => {
+        logger.warn({ err, reminderId, eventId, profileId }, "health push failed");
+        return false;
+      }),
     ),
   );
-  await storage.markHealthReminderEventFired(eventId);
+  return healthDispatchSticks(sent.filter(Boolean).length, recipientProfileIds.length);
+}
+
+async function dispatchDose(
+  fromStatus: "pending" | "snoozed",
+  reminderId: string,
+  eventId: string,
+  userId: string,
+  recipientProfileIds: string[],
+  payload: { title: string; body: string },
+): Promise<void> {
+  const claimed = await storage.claimHealthReminderDispatch(eventId, fromStatus);
+  if (!claimed) return;
+  const stuck = await fireEvent(reminderId, eventId, userId, recipientProfileIds, payload);
+  if (!stuck) await storage.releaseHealthReminderDispatch(eventId, fromStatus);
 }
 
 /**
@@ -145,7 +160,7 @@ export async function runHealthReminderTick(now: Date = new Date()): Promise<boo
         });
         // Only fire fresh "pending" rows we haven't already dispatched.
         if (!created && event.status !== "pending") continue;
-        await fireEvent(reminder.id, event.id, reminder.userId, recipients, payload);
+        await dispatchDose("pending", reminder.id, event.id, reminder.userId, recipients, payload);
         logger.info(
           { reminderId: reminder.id, eventId: event.id, profileId: reminder.profileId },
           "Health reminder dispatched",
@@ -188,7 +203,7 @@ async function processSnoozedAndMissed(now: Date): Promise<void> {
         await storage.markHealthReminderEventMissed(ev.id);
         continue;
       }
-      await fireEvent(reminder.id, ev.id, reminder.userId, recipients, {
+      await dispatchDose("snoozed", reminder.id, ev.id, reminder.userId, recipients, {
         ...payload,
         title: `${payload.title} (snoozed)`,
       });

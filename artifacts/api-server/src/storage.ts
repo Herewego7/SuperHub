@@ -549,6 +549,10 @@ export interface IStorage {
     scheduledAt: Date;
   }): Promise<{ event: HealthReminderEvent; created: boolean }>;
   markHealthReminderEventFired(id: string): Promise<HealthReminderEvent | undefined>;
+  /** Moves a pending or snoozed dose to fired. False when another wake already took it. */
+  claimHealthReminderDispatch(id: string, fromStatus: "pending" | "snoozed"): Promise<boolean>;
+  /** Puts a dose back when every push failed, unless someone already acknowledged it. */
+  releaseHealthReminderDispatch(id: string, fromStatus: "pending" | "snoozed"): Promise<void>;
   acknowledgeHealthReminderEvent(id: string, userId: string, byProfileId: string | null): Promise<HealthReminderEvent | undefined>;
   snoozeHealthReminderEvent(id: string, userId: string, until: Date): Promise<HealthReminderEvent | undefined>;
   markHealthReminderEventMissed(id: string): Promise<HealthReminderEvent | undefined>;
@@ -3334,6 +3338,24 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async claimHealthReminderDispatch(id: string, fromStatus: "pending" | "snoozed"): Promise<boolean> {
+    const updated = await db.update(healthReminderEvents)
+      .set({ firedAt: new Date(), status: "fired" })
+      .where(and(eq(healthReminderEvents.id, id), eq(healthReminderEvents.status, fromStatus)))
+      .returning({ id: healthReminderEvents.id });
+    return updated.length > 0;
+  }
+
+  async releaseHealthReminderDispatch(id: string, fromStatus: "pending" | "snoozed"): Promise<void> {
+    await db.update(healthReminderEvents)
+      .set({ firedAt: null, status: fromStatus })
+      .where(and(
+        eq(healthReminderEvents.id, id),
+        eq(healthReminderEvents.status, "fired"),
+        isNull(healthReminderEvents.acknowledgedAt),
+      ));
+  }
+
   async acknowledgeHealthReminderEvent(id: string, userId: string, byProfileId: string | null): Promise<HealthReminderEvent | undefined> {
     const [updated] = await db.update(healthReminderEvents)
       .set({
@@ -4707,6 +4729,8 @@ export class MemStorage implements IStorage {
     return { event: { id: randomUUID(), ..._input, firedAt: null, acknowledgedAt: null, acknowledgedByProfileId: null, status: "pending", snoozeUntil: null, createdAt: new Date() } as HealthReminderEvent, created: true };
   }
   async markHealthReminderEventFired(_id: string): Promise<HealthReminderEvent | undefined> { return undefined; }
+  async claimHealthReminderDispatch(_id: string, _fromStatus: "pending" | "snoozed"): Promise<boolean> { return true; }
+  async releaseHealthReminderDispatch(_id: string, _fromStatus: "pending" | "snoozed"): Promise<void> {}
   async acknowledgeHealthReminderEvent(_id: string, _userId: string, _byProfileId: string | null): Promise<HealthReminderEvent | undefined> { return undefined; }
   async snoozeHealthReminderEvent(_id: string, _userId: string, _until: Date): Promise<HealthReminderEvent | undefined> { return undefined; }
   async markHealthReminderEventMissed(_id: string): Promise<HealthReminderEvent | undefined> { return undefined; }
