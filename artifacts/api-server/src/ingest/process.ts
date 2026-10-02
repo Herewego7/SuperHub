@@ -21,6 +21,10 @@ export function inboxScanEnabled(scanInbox: boolean | null | undefined): boolean
   return scanInbox !== false;
 }
 
+export function inboxListStopped(err: unknown, have: number): boolean {
+  return inboxFailure(err) !== "reconnect" && have > 0;
+}
+
 export function inboxFailure(err: unknown): "reconnect" | "skip" {
   if (!err || typeof err !== "object") return "skip";
   const code = "code" in err ? (err as { code?: unknown }).code : undefined;

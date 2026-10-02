@@ -1,6 +1,6 @@
 import { google, calendar_v3 } from 'googleapis';
 import { gmailPayload, INBOX_SCAN_LIMIT, toInbound, type InboundMessage } from './ingest/parse';
-import { inboxFailure, inboxTokenExpiry } from './ingest/process';
+import { inboxFailure, inboxListStopped, inboxTokenExpiry } from './ingest/process';
 
 // Calendar plus read-only mail. No userinfo.email/userinfo.profile. Those
 // identity scopes are what makes Google's consent screen read as
@@ -277,18 +277,24 @@ export class GoogleCalendarService {
     const ids: string[] = [];
     let pageToken: string | undefined;
     while (ids.length < INBOX_SCAN_LIMIT) {
-      const listed = await gmail.users.messages.list({
-        userId: "me",
-        q: "newer_than:2d in:inbox",
-        maxResults: Math.min(50, INBOX_SCAN_LIMIT - ids.length),
-        pageToken,
-      });
-      for (const item of listed.data.messages ?? []) {
-        if (item.id) ids.push(item.id);
-        if (ids.length >= INBOX_SCAN_LIMIT) break;
+      try {
+        const listed = await gmail.users.messages.list({
+          userId: "me",
+          q: "newer_than:2d in:inbox",
+          maxResults: Math.min(50, INBOX_SCAN_LIMIT - ids.length),
+          pageToken,
+        });
+        for (const item of listed.data.messages ?? []) {
+          if (item.id) ids.push(item.id);
+          if (ids.length >= INBOX_SCAN_LIMIT) break;
+        }
+        pageToken = listed.data.nextPageToken ?? undefined;
+        if (!pageToken) break;
+      } catch (err) {
+        if (!inboxListStopped(err, ids.length)) throw err;
+        console.warn("Inbox list stopped early:", err instanceof Error ? err.message : err);
+        break;
       }
-      pageToken = listed.data.nextPageToken ?? undefined;
-      if (!pageToken) break;
     }
     const out: InboundMessage[] = [];
     for (const id of ids) {
