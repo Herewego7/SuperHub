@@ -272,6 +272,19 @@ export function eventsOnHomeDay<T extends {
   });
 }
 
+/** Names for the people set to drive. An unknown id stays off the line. */
+export function driverNamesFor(
+  ids: string[] | null | undefined,
+  people: { id: string; name: string }[],
+): string[] {
+  const names: string[] = [];
+  for (const id of ids ?? []) {
+    const name = people.find((person) => person.id === id)?.name.trim();
+    if (name && !names.includes(name)) names.push(name);
+  }
+  return names;
+}
+
 /** A school event that never says the kid's name still shows when that kid is driving. */
 export function drivesOnHomeDay<T extends {
   title: string;

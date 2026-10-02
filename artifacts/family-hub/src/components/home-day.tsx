@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, choresForCount, dinnerName, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
-import { appendPlace, eventClockLine, pointsProfileId } from "@/lib/chatTools";
+import { appendPlace, eventClockLine, planEventTitle, pointsProfileId } from "@/lib/chatTools";
 import { openEmailHref, schoolSaveTarget, slipQuote, slipSender } from "@/lib/slipMail";
 
 type Props = {
@@ -101,7 +101,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   const horizon = visibleForProfiles(horizonEvents(events, day), selectedIds).filter((event) => mailVisibleToKid(event, kidName));
   const coming = [
     ...horizonBirthdays(celebrations, day).map((row) => ({ key: row.id, title: row.title, startTime: row.startTime, allDay: true, source: null as string | null, location: null as string | null })),
-    ...horizon.map((event) => ({ key: event.id, title: event.title, startTime: event.startTime, allDay: event.isAllDay === true, source: event.source ?? null, location: event.location ?? null })),
+    ...horizon.map((event) => ({ key: event.id, title: event.title, startTime: event.startTime, allDay: event.isAllDay === true, source: event.source ?? null, location: event.location ?? null, drivers: driverNamesFor(event.drivingProfileIds, people) })),
   ].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   const earlier = earlierForHome(completions, selectedIds, familyIds, day);
 
@@ -185,7 +185,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           <ul className="flex flex-col gap-1">
             {todayEvents.slice(0, 6).map((event) => (
               <li key={event.id} className="text-sm">
-                {appendPlace(eventClockLine(event.title, event.startTime, false, event.isAllDay === true), event.location)}
+                {planEventTitle(appendPlace(eventClockLine(event.title, event.startTime, false, event.isAllDay === true), event.location), driverNamesFor(event.drivingProfileIds, people))}
                 {eventSourceChip(event.source) && (
                   <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(event.source)}</span>
                 )}
@@ -216,7 +216,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           <ul className="flex flex-col gap-1">
             {coming.slice(0, 5).map((row) => (
               <li key={row.key} className="text-sm">
-                {appendPlace(eventClockLine(row.title, row.startTime, true, row.allDay), row.location)}
+                {planEventTitle(appendPlace(eventClockLine(row.title, row.startTime, true, row.allDay), row.location), "drivers" in row ? row.drivers : [])}
                 {eventSourceChip(row.source) && (
                   <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(row.source)}</span>
                 )}

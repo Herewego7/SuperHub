@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -83,6 +83,12 @@ test("horizon skips a weekly routine and keeps a one-off next week", () => {
     today,
   );
   assert.deepEqual(dinners.map((row) => row.id), ["recital"]);
+});
+
+test("home can name who is driving", () => {
+  const people = [{ id: "liam", name: "Liam" }, { id: "ava", name: "Ava" }];
+  assert.deepEqual(driverNamesFor(["liam", "ava", "missing"], people), ["Liam", "Ava"]);
+  assert.deepEqual(driverNamesFor(null, people), []);
 });
 
 test("a kid who is driving still sees that school event", () => {
