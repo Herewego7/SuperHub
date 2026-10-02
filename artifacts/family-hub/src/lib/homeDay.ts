@@ -36,7 +36,7 @@ export function chatVisibleEvents<T extends {
   return visibleForProfiles(withoutUnwatched(events, assignments), selectedIds).filter((event) => mailVisibleToKid(event, kidName));
 }
 
-/** Chat can answer who is driving a school event the kid is listed on, without showing that email in the plan. */
+/** Visible events, plus a school drive the selected kid is listed on. The email text stays out of the plan. */
 export function eventsForDrivingQuestion<T extends {
   id: string;
   title: string;
@@ -64,6 +64,26 @@ export function eventsForDrivingQuestion<T extends {
     return driverIdsOf(event).some((id) => selectedIds.includes(id));
   });
   return [...visible, ...drives];
+}
+
+export function eventsForDayPlan<T extends {
+  id: string;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  source?: string | null;
+  profileIds?: string[] | null;
+  drivingProfileId?: string | null;
+  drivingProfileIds?: string[] | null;
+  googleCalendarId?: string | null;
+  outlookCalendarId?: string | null;
+}>(
+  events: T[],
+  assignments: readonly Pick<AssignmentLike, "calendarId" | "watched" | "isActive">[],
+  selectedIds: string[],
+  kidName: string | null,
+): T[] {
+  return eventsForDrivingQuestion(events, assignments, selectedIds, kidName);
 }
 
 export function todosForHome<T extends HomeTodo>(chores: T[], selectedIds: string[], familyIds: string[]): T[] {
