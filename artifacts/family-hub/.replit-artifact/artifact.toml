@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "Family Hub"
+title = "SuperHub"
 version = "1.0.0"
 id = "artifacts/family-hub"
 router = "path"
