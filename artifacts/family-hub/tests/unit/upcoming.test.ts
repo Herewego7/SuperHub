@@ -9,6 +9,12 @@ test("a tall week block names the place under the time", () => {
   assert.equal(timeGridDetail("4:00 PM – 5:00 PM at Field 2", "Field 2"), "4:00 PM – 5:00 PM at Field 2");
 });
 
+test("upcoming names who is driving", () => {
+  assert.equal(upcomingTitle({ title: "Soccer", location: "Field 2", drivers: ["Liam"] }), "Soccer, Field 2, Liam driving");
+  assert.equal(upcomingTitle({ title: "Soccer", drivers: ["Liam", "Ava"] }), "Soccer, Liam and Ava driving");
+  assert.equal(upcomingTitle({ title: "Soccer" }), "Soccer");
+});
+
 test("upcoming names a saved place once", () => {
   assert.equal(upcomingTitle({ title: "Soccer", location: "Field 2" }), "Soccer, Field 2");
   assert.equal(upcomingTitle({ title: "Soccer at Field 2", location: "Field 2" }), "Soccer at Field 2");

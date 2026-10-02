@@ -1,4 +1,4 @@
-import { appendPlace, eventClockLine } from "./chatTools";
+import { appendPlace, eventClockLine, planEventTitle } from "./chatTools";
 import { routineSeriesIds } from "./homeDay";
 
 export const UPCOMING_KINDS = ["all", "todos", "keyDates", "events", "newsletters"] as const;
@@ -51,8 +51,8 @@ function kindOf(row: Row): "todo" | "keyDate" | "event" | "newsletter" {
   return "event";
 }
 
-export function upcomingTitle(row: { title: string; location?: string | null }): string {
-  return appendPlace(row.title, row.location);
+export function upcomingTitle(row: { title: string; location?: string | null; drivers?: string[] | null }): string {
+  return planEventTitle(appendPlace(row.title, row.location), row.drivers);
 }
 
 /** The week grid's second line. A short block never renders this. */
