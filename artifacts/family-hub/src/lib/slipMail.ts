@@ -23,6 +23,18 @@ export function openEmailHref(
   return null;
 }
 
+/** One remembered fact per line. A blank field clears them. A repeat is kept once. */
+export function savedFacts(raw: string): string[] {
+  const facts: string[] = [];
+  for (const line of raw.split("\n")) {
+    const fact = line.trim().slice(0, 200);
+    if (!fact || facts.includes(fact)) continue;
+    facts.push(fact);
+    if (facts.length === 20) break;
+  }
+  return facts;
+}
+
 /** A blank school field clears the saved school. */
 export function savedSchool(raw: string | null | undefined): string | null {
   const school = raw?.trim() ?? "";
