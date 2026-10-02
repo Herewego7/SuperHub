@@ -1,5 +1,22 @@
 import { moveDay } from "./chatTools";
 
+function dayKey(day: Date): string {
+  return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+}
+
+/** The week on screen, plus the next eight weeks, so a dinner planned ahead still lands on the calendar. */
+export function dinnerCopyRange(weekStart: string, weekEnd: string, today: Date, weeks = 8): { start: string; end: string } {
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const end = new Date(start);
+  end.setDate(end.getDate() + weeks * 7);
+  const ahead = dayKey(start);
+  const horizon = dayKey(end);
+  return {
+    start: weekStart < ahead ? weekStart : ahead,
+    end: weekEnd > horizon ? weekEnd : horizon,
+  };
+}
+
 export function mealEvents<T extends { slot: string }>(meals: T[], writeToCalendar: boolean): T[] {
   if (!writeToCalendar) return [];
   return meals.filter((meal) => meal.slot === "dinner");
@@ -41,10 +58,6 @@ export function groceryListAfterHave<T extends { name: string }>(
   );
   if (gone.size === 0) return rows;
   return rows.filter((row) => !gone.has(row.name.trim().toLowerCase()));
-}
-
-function dayKey(day: Date): string {
-  return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
 }
 
 export function dinnerReply(

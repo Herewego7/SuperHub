@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
 import { Switch } from "@/components/ui/switch";
+import { dinnerCopyRange } from "@/lib/mealCalendar";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format, addDays, addWeeks, startOfWeek } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -164,9 +165,10 @@ function MealPlanView({ weekAnchor, setWeekAnchor, weekDays, weekStartIso, weekE
   useEffect(() => {
     if (!mealsOnCalendar) return;
     let cancelled = false;
+    const range = dinnerCopyRange(weekStartIso, weekEndIso, new Date());
     void apiRequest("POST", "/api/calendar-settings/meals-on-calendar/copy", {
-      start: weekStartIso,
-      end: weekEndIso,
+      start: range.start,
+      end: range.end,
     }).then(() => {
       if (!cancelled) void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
     });

@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dinnerReply, groceryAlreadyHave, groceryHaveAction, groceryListAfterHave, mealEvents } from "../../src/lib/mealCalendar";
+import { dinnerCopyRange, dinnerReply, groceryAlreadyHave, groceryHaveAction, groceryListAfterHave, mealEvents } from "../../src/lib/mealCalendar";
+
+test("turning dinners on copies the weeks ahead, not only the week on screen", () => {
+  const range = dinnerCopyRange("2026-10-05", "2026-10-11", new Date(2026, 9, 1));
+  assert.equal(range.start <= "2026-10-01", true);
+  assert.equal(range.end >= "2026-11-12", true);
+  const later = dinnerCopyRange("2026-12-07", "2026-12-13", new Date(2026, 9, 1));
+  assert.equal(later.end >= "2026-12-13", true);
+});
 
 test("the calendar switch off leaves the meal off the event list", () => {
   const events = mealEvents([{ name: "Tacos", slot: "dinner" }], false);
