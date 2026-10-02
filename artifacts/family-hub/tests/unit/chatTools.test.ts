@@ -428,6 +428,9 @@ test("remind me becomes a to-do title, not a notification", () => {
   assert.deepEqual(reminderRequest("remind me to call the dentist", []), { title: "call the dentist", profileIds: [] });
   assert.deepEqual(reminderRequest("remind Liam to pack his bag", [{ id: "liam", name: "Liam" }]), { title: "pack his bag", profileIds: ["liam"] });
   assert.deepEqual(reminderRequest("remind Noah to pack", [{ id: "liam", name: "Liam" }]), { reply: "I don't see Noah." });
+  assert.deepEqual(reminderRequest("remind Liam at 4 pm to pack", [{ id: "liam", name: "Liam" }]), { title: "pack, 4:00 PM", profileIds: ["liam"] });
+  assert.deepEqual(reminderRequest("remind me at 4:30 pm to take the chicken out", []), { title: "take the chicken out, 4:30 PM", profileIds: [] });
+  assert.deepEqual(reminderRequest("remind Liam to pack at 4 pm", [{ id: "liam", name: "Liam" }]), { title: "pack, 4:00 PM", profileIds: ["liam"] });
 });
 
 test("an adult can name a person's school", () => {

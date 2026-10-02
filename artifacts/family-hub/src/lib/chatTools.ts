@@ -95,18 +95,62 @@ export function feedbackNote(text: string): string | null {
   return note ? note : null;
 }
 
+function spokenClock(raw: string): string | null {
+  const match = raw.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+  if (!match) return null;
+  const parsed = clock24(Number(match[1]), match[2] ? Number(match[2]) : 0, (match[3] || "pm").toLowerCase());
+  if (!parsed) return null;
+  const show = parsed.hours % 12 || 12;
+  const label = parsed.hours >= 12 ? "PM" : "AM";
+  return `${show}:${String(parsed.minutes).padStart(2, "0")} ${label}`;
+}
+
+function titledAt(task: string, clock: string | null): string | null {
+  const title = task.trim();
+  if (!title) return null;
+  if (!clock || title.toLowerCase().includes(clock.toLowerCase())) return title;
+  return `${title}, ${clock}`;
+}
+
 export function reminderRequest(
   text: string,
   profiles: { id: string; name: string }[],
 ): { title: string; profileIds: string[] } | { reply: string } | null {
-  const named = text.trim().match(/^remind\s+([A-Za-z]+)\s+to\s+(.+?)\.?$/i);
+  const trimmed = text.trim();
+  const clock = String.raw`(\d{1,2}(?::\d{2})?(?:\s*(?:am|pm))?)`;
+  const person = (name: string) => profiles.find((profile) => profile.name.toLowerCase() === name.toLowerCase());
+  const namedAt = trimmed.match(new RegExp(`^remind\\s+([A-Za-z]+)\\s+at\\s+${clock}\\s+to\\s+(.+?)\\.?$`, "i"));
+  if (namedAt && !/^(me|us)$/i.test(namedAt[1])) {
+    const profile = person(namedAt[1]);
+    if (!profile) return { reply: `I don't see ${namedAt[1]}.` };
+    const title = titledAt(namedAt[3], spokenClock(namedAt[2]));
+    return title ? { title, profileIds: [profile.id] } : null;
+  }
+  const selfAt = trimmed.match(new RegExp(`^remind\\s+(?:me|us)\\s+at\\s+${clock}\\s+(?:to\\s+)?(.+?)\\.?$`, "i"));
+  if (selfAt) {
+    const title = titledAt(selfAt[2], spokenClock(selfAt[1]));
+    return title ? { title, profileIds: [] } : null;
+  }
+  const namedTrail = trimmed.match(new RegExp(`^remind\\s+([A-Za-z]+)\\s+to\\s+(.+?)\\s+at\\s+${clock}\\.?$`, "i"));
+  if (namedTrail && !/^(me|us)$/i.test(namedTrail[1])) {
+    const profile = person(namedTrail[1]);
+    if (!profile) return { reply: `I don't see ${namedTrail[1]}.` };
+    const title = titledAt(namedTrail[2], spokenClock(namedTrail[3]));
+    return title ? { title, profileIds: [profile.id] } : null;
+  }
+  const selfTrail = trimmed.match(new RegExp(`^remind\\s+(?:me|us)\\s+to\\s+(.+?)\\s+at\\s+${clock}\\.?$`, "i"));
+  if (selfTrail) {
+    const title = titledAt(selfTrail[1], spokenClock(selfTrail[2]));
+    return title ? { title, profileIds: [] } : null;
+  }
+  const named = trimmed.match(/^remind\s+([A-Za-z]+)\s+to\s+(.+?)\.?$/i);
   if (named && !/^(me|us)$/i.test(named[1])) {
-    const profile = profiles.find((person) => person.name.toLowerCase() === named[1].toLowerCase());
+    const profile = person(named[1]);
     if (!profile) return { reply: `I don't see ${named[1]}.` };
     const title = named[2].trim();
     return title ? { title, profileIds: [profile.id] } : null;
   }
-  const self = text.trim().match(/^remind\s+(?:me|us)\s+(?:to\s+)?(.+?)\.?$/i);
+  const self = trimmed.match(/^remind\s+(?:me|us)\s+(?:to\s+)?(.+?)\.?$/i);
   const title = self?.[1]?.trim();
   return title ? { title, profileIds: [] } : null;
 }
