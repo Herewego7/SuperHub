@@ -147,6 +147,34 @@ test("a store receipt stays out and a practice note stays", () => {
   assert.equal(mailWorthSaving({ subject: "Track your package", fromAddress: "shipment-tracking@amazon.com", snippet: "Arriving today." }), false);
 });
 
+test("a saved slip with no calendar event gets the event on the next scan", () => {
+  const planned = ingestMessages(
+    [{ subject: "Picture day", fromAddress: "office@school.edu", snippet: "See the note.", body: "Thursday at 3:30 PM.", accountId: "chad" }],
+    { mutedSenders: [], dismissedSlipKeys: [] },
+    ["picture day"],
+    ["liam"],
+    [],
+  );
+  assert.equal(planned.todos.length, 0);
+  assert.equal(planned.events[0]?.hours, 15);
+  const held = ingestMessages(
+    [{ subject: "Picture day", fromAddress: "office@school.edu", snippet: "Thursday at 3:30 PM.", accountId: "chad" }],
+    { mutedSenders: [], dismissedSlipKeys: [] },
+    ["picture day"],
+    ["liam"],
+    ["picture day"],
+  );
+  assert.equal(held.events.length, 0);
+  const again = ingestMessages(
+    [{ subject: "Picture day", fromAddress: "office@school.edu", snippet: "Thursday at 3:30 PM.", accountId: "chad" }],
+    { mutedSenders: [], dismissedSlipKeys: ["picture day"] },
+    [],
+    ["liam"],
+    [],
+  );
+  assert.equal(again.events.length, 0);
+});
+
 test("two copies of the same slip from two adults become one to-do", () => {
   const planned = ingestMessages(
     [

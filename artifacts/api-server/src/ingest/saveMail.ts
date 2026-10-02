@@ -9,11 +9,16 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
   if (settings?.scanInbox === false) return { todos: [], events: [], scanOff: true };
   const chores = await storage.getChoresByUser(userId);
   const existingKeys = chores.filter((chore) => chore.category === "school_email").map((chore) => slipKey(chore.title));
+  const savedEvents = await storage.getEventsByUser(userId);
+  const existingEventKeys = savedEvents.flatMap((event) =>
+    event.source === "school" && event.externalId ? [event.externalId] : [],
+  );
   const planned = ingestMessages(
     messages,
     { mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] },
     existingKeys,
     profileIds,
+    existingEventKeys,
   );
   const todos = [];
   for (const todo of planned.todos) {

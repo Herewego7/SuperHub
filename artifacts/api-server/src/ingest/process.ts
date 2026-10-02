@@ -252,21 +252,49 @@ export function mailWorthSaving(message: { subject: string; snippet?: string; bo
   return SCHOOL_WORDS.test(`${message.subject} ${message.snippet ?? ""} ${message.body ?? ""}`);
 }
 
+function plannedEvent(message: InboundMessage, key: string, profileIds: string[]): PlannedEvent | null {
+  const note = `${message.subject} ${message.body || message.snippet}`.slice(0, 2000);
+  const clock = slipClock(note);
+  if (!clock) return null;
+  return {
+    title: message.subject.trim(),
+    description: note,
+    source: "school",
+    externalId: key,
+    profileIds,
+    hours: clock.hours,
+    minutes: clock.minutes,
+  };
+}
+
 export function ingestMessages(
   messages: InboundMessage[],
   state: HouseholdMail,
   existingKeys: string[],
   profileIds: string[],
+  existingEventKeys: string[] = [],
 ): { todos: PlannedTodo[]; events: PlannedEvent[] } {
   const muted = new Set(state.mutedSenders.map((address) => address.toLowerCase()));
+  const dismissed = new Set(state.dismissedSlipKeys);
   const seen = new Set([...state.dismissedSlipKeys, ...existingKeys]);
+  const haveEvent = new Set(existingEventKeys);
   const todos: PlannedTodo[] = [];
   const events: PlannedEvent[] = [];
   for (const message of messages) {
     if (message.fromAddress && muted.has(message.fromAddress.toLowerCase())) continue;
     if (!mailWorthSaving(message)) continue;
     const key = slipKey(message.subject);
-    if (!key || seen.has(key)) continue;
+    if (!key) continue;
+    if (seen.has(key)) {
+      if (!dismissed.has(key) && !haveEvent.has(key)) {
+        const event = plannedEvent(message, key, profileIds);
+        if (event) {
+          events.push(event);
+          haveEvent.add(key);
+        }
+      }
+      continue;
+    }
     seen.add(key);
     todos.push({
       title: message.subject.trim(),
@@ -278,18 +306,10 @@ export function ingestMessages(
       daysOfWeek: [],
       slipKey: key,
     });
-    const note = `${message.subject} ${message.body || message.snippet}`.slice(0, 2000);
-    const clock = slipClock(note);
-    if (clock) {
-      events.push({
-        title: message.subject.trim(),
-        description: note,
-        source: "school",
-        externalId: key,
-        profileIds,
-        hours: clock.hours,
-        minutes: clock.minutes,
-      });
+    const event = plannedEvent(message, key, profileIds);
+    if (event) {
+      events.push(event);
+      haveEvent.add(key);
     }
   }
   return { todos, events };
