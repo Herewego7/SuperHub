@@ -116,6 +116,14 @@ test("a store receipt stays out and a practice note stays", () => {
   assert.equal(mailWorthSaving({ subject: "Your package was delivered", fromAddress: "shipment-tracking@amazon.com", snippet: "Arriving today." }), false);
   assert.deepEqual(planned.todos.map((todo) => todo.title), ["Soccer practice moved"]);
   assert.equal(planned.events[0]?.hours, 17);
+  const game = ingestMessages(
+    [{ subject: "Soccer game moved", fromAddress: "coach@gmail.com", snippet: "Thursday at 4:00 PM.", accountId: "chad" }],
+    { mutedSenders: [], dismissedSlipKeys: [] },
+    [],
+    ["liam"],
+  );
+  assert.deepEqual(game.todos.map((todo) => todo.title), ["Soccer game moved"]);
+  assert.equal(mailWorthSaving({ subject: "Track your package", fromAddress: "shipment-tracking@amazon.com", snippet: "Arriving today." }), false);
 });
 
 test("two copies of the same slip from two adults become one to-do", () => {

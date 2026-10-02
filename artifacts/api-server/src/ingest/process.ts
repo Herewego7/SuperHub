@@ -219,7 +219,7 @@ const FAMILY_PLATFORMS = [
   "classroom.google.com",
 ];
 
-const SCHOOL_WORDS = /\b(school|permission|field trip|picture day|pta|pto|classroom|teacher|homework|practice|recital|tournament|sign-?up|early release|early dismissal|no school|half day|spirit day|book fair|aftercare|conference|parent night|open house)\b/i;
+const SCHOOL_WORDS = /\b(school|permission|field trip|picture day|pta|pto|classroom|teacher|homework|practice|recital|tournament|sign-?up|early release|early dismissal|no school|half day|spirit day|book fair|aftercare|conference|parent night|open house|soccer|basketball|baseball|softball|volleyball|football|swim|swimming|cheer)\b/i;
 
 function senderDomain(address: string | undefined): string {
   const at = address?.lastIndexOf("@") ?? -1;
