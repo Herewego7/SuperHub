@@ -18,6 +18,7 @@ import { yesterdayKeyTz, isoWeekKeyFromDateKey } from "../lib/streak";
 import { driverIdsOf, driverWriteFields } from "../lib/eventDrivers";
 import { registerHealthReminderRoutes } from "./healthReminders";
 import { registerKbRoutes } from "./kb";
+import { registerChatRoutes } from "./chat";
 import { registerSubscriptionRoutes } from "./subscription";
 import { sendPushToUser } from "../lib/push";
 import { buildWeeklyRecap } from "../lib/weeklyRecap";
@@ -235,6 +236,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerHealthReminderRoutes(app);
   // Knowledge Base "ask a question" backlog + email forward
   registerKbRoutes(app);
+  registerChatRoutes(app);
   // Free-trial-then-subscribe entitlement (2026-08 launch plan)
   registerSubscriptionRoutes(app);
 

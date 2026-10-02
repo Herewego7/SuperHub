@@ -87,6 +87,8 @@ interface HomeViewProps {
    * by kind), respectively. */
   onEditChore?: (chore: Chore) => void;
   onDeleteChore?: (chore: Chore) => void;
+  onAddTodo?: () => void;
+  onShiftDay?: (by: number) => void;
 }
 
 // An event assigned to literally every real profile should show the "All
@@ -131,7 +133,7 @@ const CONTENT_TYPE_COLORS = {
  */
 const completionFirstSeen = new Map<string, number>();
 
-export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectProfile, selectedDate, onNavigateToRewards, onNavigateToBonusChores, onOpenHistory, onOpenActivityEntry, addEventTrigger, onNavigateToEvent, onNavigateToParentControls, onNavigateToRewardSuggestions, onReplayOnboarding, onOpenCalendarSettings, healthReminderSpotlightTrigger, onHealthReminderSpotlightHandled, praiseSpotlightTrigger, onPraiseSpotlightHandled, notesSpotlightTrigger, onNotesSpotlightHandled, celebrationDeepLinkId, onEditChore, onDeleteChore }: HomeViewProps) {
+export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectProfile, selectedDate, onNavigateToRewards, onNavigateToBonusChores, onOpenHistory, onOpenActivityEntry, addEventTrigger, onNavigateToEvent, onNavigateToParentControls, onNavigateToRewardSuggestions, onReplayOnboarding, onOpenCalendarSettings, healthReminderSpotlightTrigger, onHealthReminderSpotlightHandled, praiseSpotlightTrigger, onPraiseSpotlightHandled, notesSpotlightTrigger, onNotesSpotlightHandled, celebrationDeepLinkId, onEditChore, onDeleteChore, onAddTodo, onShiftDay }: HomeViewProps) {
   const { spotlight, spotlightOverlay } = useSpotlight();
 
   const [showAllEvents, setShowAllEvents] = useState(false);
@@ -2380,6 +2382,10 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           connected: !!(p.googleCalendarConnected || p.outlookCalendarConnected),
         }))}
         onOpenChores={() => setActiveTab("chores")}
+        onAddTodo={onAddTodo}
+        onShiftDay={onShiftDay}
+        onOpenCalendar={() => setActiveTab("calendar")}
+        onOpenEvent={onNavigateToEvent}
       />
 
       <CustomizePageCard
