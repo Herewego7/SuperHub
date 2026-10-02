@@ -160,16 +160,20 @@ function birthdayOnDay(monthDay: string, day: string): boolean {
   return !leapYear(Number(day.slice(0, 4)));
 }
 
-function celebrationPhrase(row: { name: string; year?: number | null; type?: string | null }, year: number): string | null {
+function celebrationPhrase(row: { name: string; year?: number | null; type?: string | null; customLabel?: string | null }, year: number): string | null {
   const age = row.year ? year - row.year : null;
   if (row.type === "anniversary") return age && age > 0 ? `${row.name}, ${age}-year anniversary` : `${row.name}'s anniversary`;
+  if (row.type === "other") {
+    const label = row.customLabel?.trim();
+    return label ? `${row.name}, ${label}` : row.name;
+  }
   if (row.type && row.type !== "birthday") return null;
   return age && age > 0 ? `${row.name} turns ${age}` : `${row.name}'s birthday`;
 }
 
 /** The birthday or anniversary line for the plan's day. */
 export function planBirthdayLine(
-  rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[],
+  rows: { name: string; monthDay: string; year?: number | null; type?: string | null; customLabel?: string | null }[],
   day: string,
 ): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;

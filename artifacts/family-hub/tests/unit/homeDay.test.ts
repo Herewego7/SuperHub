@@ -248,6 +248,7 @@ test("home names a birthday on the day being viewed", () => {
   assert.equal(homeBirthdayLine([{ name: "Liam", monthDay: "10-02", year: 2018 }], new Date(2026, 9, 1)), null);
   assert.equal(homeBirthdayLine([{ name: "Us", monthDay: "10-01", year: 2013, type: "anniversary" }], new Date(2026, 9, 1)), "Us, 13-year anniversary.");
   assert.equal(homeBirthdayLine([{ name: "Us", monthDay: "10-01", type: "anniversary" }], new Date(2026, 9, 1)), "Us's anniversary.");
+  assert.equal(homeBirthdayLine([{ name: "Rover", monthDay: "10-01", type: "other", customLabel: "adoption day" }], new Date(2026, 9, 1)), "Rover, adoption day.");
   assert.equal(homeBirthdayLine([{ name: "Liam", monthDay: "02-29", year: 2016 }], new Date(2027, 1, 28)), "Liam turns 11.");
 });
 

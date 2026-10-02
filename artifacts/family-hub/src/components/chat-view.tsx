@@ -81,7 +81,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   const { data: profiles = [] } = useQuery<{ id: string; name: string; school?: string | null; facts?: string[] | null; isAllFamilyProfile?: boolean | null }[]>({ queryKey: ["/api/profiles"] });
   const { data: weather } = useQuery<{ location?: string; temperature?: number; condition?: string }>({ queryKey: ["/api/weather"], retry: false });
   const { data: calendarSettings } = useQuery<{ familyCalendarId?: string | null }>({ queryKey: ["/api/calendar-settings"] });
-  const { data: celebrations = [], isFetched: celebrationsFetched } = useQuery<{ name: string; monthDay: string; year?: number | null; type?: string | null }[]>({ queryKey: ["/api/celebrations"] });
+  const { data: celebrations = [], isFetched: celebrationsFetched } = useQuery<{ name: string; monthDay: string; year?: number | null; type?: string | null; customLabel?: string | null }[]>({ queryKey: ["/api/celebrations"] });
   const { data: meals = [], isFetched: mealsFetched } = useQuery<Meal[]>({
     queryKey: ["/api/meals", "chat-dinner"],
     queryFn: async () => {

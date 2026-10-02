@@ -26,7 +26,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   const { data: calendarSettings } = useQuery<{ shareOriginals?: boolean | null }>({
     queryKey: ["/api/calendar-settings"],
   });
-  const { data: celebrations = [] } = useQuery<{ name: string; monthDay: string; year?: number | null; type?: string | null }[]>({
+  const { data: celebrations = [] } = useQuery<{ name: string; monthDay: string; year?: number | null; type?: string | null; customLabel?: string | null }[]>({
     queryKey: ["/api/celebrations"],
   });
   const { data: meals = [] } = useQuery<Meal[]>({

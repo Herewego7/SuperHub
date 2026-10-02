@@ -315,7 +315,7 @@ function celebrationDate(year: number, monthDay: string): Date | null {
 
 /** Birthdays after the viewed day, through the same week Horizon uses. Today stays on the Home line. */
 export function horizonBirthdays(
-  rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[],
+  rows: { name: string; monthDay: string; year?: number | null; type?: string | null; customLabel?: string | null }[],
   day: Date,
 ): { id: string; title: string; startTime: Date }[] {
   const start = new Date(day);
@@ -326,7 +326,7 @@ export function horizonBirthdays(
   until.setDate(until.getDate() + 8);
   const found: { id: string; title: string; startTime: Date }[] = [];
     for (const row of rows) {
-    if (row.type && row.type !== "birthday" && row.type !== "anniversary") continue;
+    if (row.type && row.type !== "birthday" && row.type !== "anniversary" && row.type !== "other") continue;
     let date = celebrationDate(from.getFullYear(), row.monthDay);
     if (!date) continue;
     if (date < from) date = celebrationDate(from.getFullYear() + 1, row.monthDay);
@@ -387,16 +387,20 @@ function birthdayOnDay(monthDay: string, key: string): boolean {
   return !leapYear(Number(key.slice(0, 4)));
 }
 
-function celebrationPhrase(row: { name: string; year?: number | null; type?: string | null }, year: number): string | null {
+function celebrationPhrase(row: { name: string; year?: number | null; type?: string | null; customLabel?: string | null }, year: number): string | null {
   const age = row.year ? year - row.year : null;
   if (row.type === "anniversary") return age && age > 0 ? `${row.name}, ${age}-year anniversary` : `${row.name}'s anniversary`;
+  if (row.type === "other") {
+    const label = row.customLabel?.trim();
+    return label ? `${row.name}, ${label}` : row.name;
+  }
   if (row.type && row.type !== "birthday") return null;
   return age && age > 0 ? `${row.name} turns ${age}` : `${row.name}'s birthday`;
 }
 
 /** The birthday or anniversary line for the day Home is showing. */
 export function homeBirthdayLine(
-  rows: { name: string; monthDay: string; year?: number | null; type?: string | null }[],
+  rows: { name: string; monthDay: string; year?: number | null; type?: string | null; customLabel?: string | null }[],
   day: Date,
 ): string | null {
   const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;

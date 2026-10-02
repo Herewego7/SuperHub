@@ -254,7 +254,7 @@ export function dayReply(
     completions?: { choreId: string; completedAt?: Date | string | null }[];
     dinner?: string | null;
     meals?: { date: string; slot: string; name: string }[];
-    celebrations?: { name: string; monthDay: string; year?: number | null; type?: string | null }[];
+    celebrations?: { name: string; monthDay: string; year?: number | null; type?: string | null; customLabel?: string | null }[];
     day: Date;
   },
 ): string | null {
