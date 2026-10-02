@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, homeBirthdayLine, horizonBirthdays, horizonEvents, horizonWithoutChecked, mailVisibleToKid, openTodos, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, forecastFor, homeBirthdayLine, horizonBirthdays, horizonEvents, horizonMail, horizonWithoutChecked, mailDate, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, newsletterIssues, openTodos, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -309,4 +309,64 @@ test("home names a birthday on the day being viewed", () => {
 test("dinner is the meal in that slot on that date", () => {
   assert.equal(dinnerName([{ date: "2026-10-01", slot: "dinner", name: "Tacos" }], new Date(2026, 9, 1)), "Tacos");
   assert.equal(dinnerName([{ date: "2026-10-02", slot: "dinner", name: "Soup" }], new Date(2026, 9, 1)), null);
+});
+
+const today = new Date(2026, 9, 2, 11, 0, 0);
+
+test("a to-do lands on its day, stays overdue for a week, and a check stays on that day", () => {
+  const undated = { id: "milk", title: "Buy milk", description: "", category: null };
+  const due = { id: "slip", title: "Permission slip", description: "From: office@school.org\n\nDue Oct 1.", category: "school_email" };
+  const later = { id: "pic", title: "Picture day form", description: "From: office@school.org\n\nBring it Oct 6.", category: "school_email" };
+  const old = { id: "old", title: "Old form", description: "From: office@school.org\n\nIt was Sep 20.", category: "school_email" };
+  const rows = [undated, due, later, old];
+  const onToday = planTodoRows(rows, [], today, today);
+  assert.deepEqual(onToday.map((row) => row.id), ["slip", "milk"]);
+  assert.equal(onToday[0]?.overdue, true);
+  assert.deepEqual(planTodoRows(rows, [], new Date(2026, 9, 6), today).map((row) => row.id), ["pic"]);
+  const done = planTodoRows(rows, [{ choreId: "milk", completedAt: today }], today, today);
+  assert.equal(done.find((row) => row.id === "milk")?.done, true);
+  assert.equal(planTodoRows(rows, [{ choreId: "milk", completedAt: new Date(2026, 9, 1) }], today, today).some((row) => row.id === "milk"), false);
+});
+
+test("a mail date that is not on the calendar is a key date, and a range keeps both days", () => {
+  const letter = { id: "dance", title: "Homecoming", description: "From: office@school.org\nHomecoming is Oct 3.", category: "school_email" as const };
+  const open = mailKeyDates([letter], [], today);
+  assert.equal(open.length, 1);
+  assert.equal(open[0]?.start.getDate(), 3);
+  const covered = mailKeyDates([letter], [{ title: "Homecoming", startTime: new Date(2026, 9, 3) }], today);
+  assert.equal(covered.length, 0);
+  const span = mailSpan("Mon, Sep 28 – Fri, Oct 2", today);
+  assert.equal(planDateLabel(span!.start, span!.end), "Mon, Sep 28 – Fri, Oct 2");
+  assert.equal(mailDate("See you Oct 6 at 9:30 AM", today)?.getDate(), 6);
+});
+
+test("a timed email missing from the calendar shows that day and on the horizon", () => {
+  const practice = { id: "run", title: "Royal Stag", description: "From: coach@school.org\nThe run is Oct 3 at 9:30 AM.", category: "school_email" as const };
+  assert.equal(mailOffCalendar([practice], [], new Date(2026, 9, 3), today)[0]?.time, "9:30 AM");
+  assert.equal(mailOffCalendar([practice], [{ title: "Royal Stag", startTime: new Date(2026, 9, 3, 9, 30) }], new Date(2026, 9, 3), today).length, 0);
+  assert.equal(horizonMail([practice], [], today)[0]?.start.getDate(), 3);
+});
+
+test("a newsletter is the latest letter from that sender, and a dated note is not one", () => {
+  const first = { id: "a", title: "Oak Weekly", description: "From: news@school.org\nHighlights from the week.", category: "school_email" as const, createdAt: new Date(2026, 8, 28) };
+  const second = { id: "b", title: "Oak Weekly 2", description: "From: news@school.org\nThe next issue.", category: "school_email" as const, createdAt: new Date(2026, 9, 1) };
+  const dated = { id: "c", title: "Picture day", description: "From: news@school.org\nPicture day is Oct 6.", category: "school_email" as const, createdAt: today };
+  const issues = newsletterIssues([first, second, dated], today);
+  assert.deepEqual(issues.map((issue) => issue.id), ["b"]);
+  assert.equal(sourceChipLabel("news@school.org", "mail"), "Source: news@school.org");
+});
+
+test("snooze tonight is 8 PM, and the completed list covers seven days", () => {
+  const tonight = snoozeUntil("tonight", new Date(2026, 9, 2, 11, 0));
+  assert.equal(new Date(tonight!).getHours(), 20);
+  assert.equal(snoozeUntil("tonight", new Date(2026, 9, 2, 21, 0)), null);
+  const morning = new Date(snoozeUntil("tomorrow", new Date(2026, 9, 2, 21, 0))!);
+  assert.equal(morning.getDate(), 3);
+  assert.equal(morning.getHours(), 7);
+  const done = completedActions([
+    { id: "new", choreId: "a", completedAt: today },
+    { id: "old", choreId: "b", completedAt: new Date(2026, 8, 1) },
+  ], today);
+  assert.deepEqual(done.map((row) => row.id), ["new"]);
+  assert.deepEqual(forecastFor([{ date: "2026-10-02", high: 68, low: 54, condition: "clear" }], today), { high: 68, low: 54, condition: "clear" });
 });

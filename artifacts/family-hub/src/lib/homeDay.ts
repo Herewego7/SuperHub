@@ -479,3 +479,307 @@ export function dinnerName(meals: Array<{ date: string; slot: string; name: stri
   const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
   return meals.find((meal) => meal.date === key && meal.slot === "dinner")?.name ?? null;
 }
+
+export const PLAN_TODO_FOLD = 8;
+export const PLAN_KEY_DATES = 5;
+export const PLAN_HORIZON = 3;
+export const PLAN_NEWSLETTERS = 3;
+export const PLAN_OVERDUE_DAYS = 7;
+export const PLAN_COMPLETED_DAYS = 7;
+
+const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+const MONTH_SHORT = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+function dayStart(day: Date): Date {
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function sameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function monthIndex(name: string): number {
+  const word = name.toLowerCase().replace(".", "");
+  const full = MONTHS.indexOf(word === "sept" ? "september" : word);
+  if (full >= 0) return full;
+  return MONTH_SHORT.indexOf(word.slice(0, 3));
+}
+
+function dated(year: number, month: number, date: number, from: Date, explicitYear: boolean): Date | null {
+  if (month < 0 || month > 11 || date < 1 || date > 31) return null;
+  const at = new Date(year, month, date);
+  if (at.getMonth() !== month) return null;
+  if (!explicitYear && at < dayStart(from)) {
+    const age = Math.round((dayStart(from).getTime() - at.getTime()) / 86400000);
+    if (age > PLAN_OVERDUE_DAYS) at.setFullYear(from.getFullYear() + 1);
+  }
+  return at;
+}
+
+/** A month-and-day, or a numeric date, written in an email. A weekday name is not enough. */
+export function mailDate(text: string, from: Date): Date | null {
+  const span = mailSpan(text, from);
+  return span?.start ?? null;
+}
+
+export type MailSpan = { start: Date; end: Date | null; time: string | null };
+
+/** The first date in the text, a second date when the note is a range, and a clock when one is written. */
+export function mailSpan(text: string, from: Date): MailSpan | null {
+  const months = [...text.matchAll(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/gi)];
+  const numeric = [...text.matchAll(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/g)];
+  const points: Date[] = [];
+  for (const match of months) {
+    const at = dated(from.getFullYear(), monthIndex(match[1]), Number(match[2]), from, false);
+    if (at) points.push(at);
+  }
+  for (const match of numeric) {
+    const rawYear = match[3] ? Number(match[3]) : null;
+    const year = rawYear == null ? from.getFullYear() : rawYear < 100 ? 2000 + rawYear : rawYear;
+    const at = dated(year, Number(match[1]) - 1, Number(match[2]), from, rawYear != null);
+    if (at) points.push(at);
+  }
+  if (points.length === 0) return null;
+  points.sort((a, b) => a.getTime() - b.getTime());
+  const start = points[0];
+  const end = points.length > 1 && !sameDay(points[0], points[points.length - 1]) ? points[points.length - 1] : null;
+  return { start, end, time: mailClock(text) };
+}
+
+export function mailClockParts(text: string): { hours: number; minutes: number; label: string } | null {
+  const match = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  if (!match) return null;
+  let hours = Number(match[1]);
+  const minutes = match[2] ? Number(match[2]) : 0;
+  const suffix = match[3].toLowerCase();
+  if (hours < 1 || hours > 12 || minutes > 59) return null;
+  if (suffix === "pm" && hours !== 12) hours += 12;
+  if (suffix === "am" && hours === 12) hours = 0;
+  const at = new Date();
+  at.setHours(hours, minutes, 0, 0);
+  return { hours, minutes, label: at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) };
+}
+
+export function mailClock(text: string): string | null {
+  return mailClockParts(text)?.label ?? null;
+}
+
+export function planDateLabel(start: Date, end: Date | null): string {
+  const one = (at: Date) => at.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  if (!end || sameDay(start, end)) return one(start);
+  return `${one(start)} – ${one(end)}`;
+}
+
+export function sourceChipLabel(sender: string | null, kind: "mail" | "todo"): string {
+  if (sender) return `Source: ${sender}`;
+  return kind === "mail" ? "Source: School email" : "To-do";
+}
+
+export function newsletterInitials(title: string): string {
+  const words = title.replace(/[^A-Za-z0-9 ]/g, " ").trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  return title.replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "NL";
+}
+
+/** Tonight at 8, tomorrow at 7:30, or Saturday at 9. A custom time must be in the future. */
+export function snoozeUntil(which: "tonight" | "tomorrow" | "weekend" | "custom", now: Date, custom?: Date): number | null {
+  if (which === "custom") {
+    if (!custom || custom.getTime() <= now.getTime()) return null;
+    return custom.getTime();
+  }
+  if (which === "tonight") {
+    const at = new Date(now);
+    at.setHours(20, 0, 0, 0);
+    return at.getTime() > now.getTime() ? at.getTime() : null;
+  }
+  if (which === "tomorrow") {
+    const at = new Date(now);
+    at.setDate(at.getDate() + 1);
+    at.setHours(7, 30, 0, 0);
+    return at.getTime();
+  }
+  const at = new Date(now);
+  at.setHours(9, 0, 0, 0);
+  const daysUntilSaturday = (6 - at.getDay() + 7) % 7;
+  at.setDate(at.getDate() + daysUntilSaturday);
+  if (at.getTime() <= now.getTime()) at.setDate(at.getDate() + 7);
+  return at.getTime();
+}
+
+type PlanChore = {
+  id: string;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  createdAt?: Date | string | null;
+};
+
+function noteOf(row: PlanChore): string {
+  return `${row.title}\n${row.description ?? ""}`;
+}
+
+function mailTask(text: string): boolean {
+  return /\b(due|bring|return|sign|wear|turn in|permission)\b/i.test(text);
+}
+
+function completionOn<T extends { choreId: string; completedAt?: Date | string | null }>(todoId: string, completions: T[], day: Date): T | null {
+  const start = dayStart(day);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return completions.find((completion) => {
+    if (completion.choreId !== todoId || !completion.completedAt) return false;
+    const at = new Date(completion.completedAt);
+    return at >= start && at < end;
+  }) ?? null;
+}
+
+/** Open to-dos due that day, overdue ones on today for a week, and ones checked off that day. */
+export function planTodoRows<T extends PlanChore>(
+  todos: T[],
+  completions: { choreId: string; completedAt?: Date | string | null }[],
+  day: Date,
+  now: Date,
+): (T & { done: boolean; overdue: boolean })[] {
+  const viewing = dayStart(day);
+  const today = dayStart(now);
+  const onToday = sameDay(viewing, today);
+  const rows: (T & { done: boolean; overdue: boolean })[] = [];
+  for (const todo of todos) {
+    if (completionOn(todo.id, completions, day)) {
+      rows.push({ ...todo, done: true, overdue: false });
+      continue;
+    }
+    if (completions.some((completion) => completion.choreId === todo.id)) continue;
+    const due = mailDate(noteOf(todo), today);
+    if (due && sameDay(due, viewing)) {
+      rows.push({ ...todo, done: false, overdue: false });
+      continue;
+    }
+    if (onToday && due) {
+      const age = Math.round((today.getTime() - dayStart(due).getTime()) / 86400000);
+      if (age > 0 && age <= PLAN_OVERDUE_DAYS) rows.push({ ...todo, done: false, overdue: true });
+      continue;
+    }
+    if (!due && onToday) rows.push({ ...todo, done: false, overdue: false });
+  }
+  return rows.sort((a, b) => Number(b.overdue) - Number(a.overdue));
+}
+
+function titlesMatch(eventTitle: string, mailTitle: string): boolean {
+  return slipTitle(eventTitle).toLowerCase() === slipTitle(mailTitle).toLowerCase();
+}
+
+/** A mail date that is not already on a calendar that day. An action with a quote stays a to-do. */
+export function mailKeyDates<T extends PlanChore>(
+  todos: T[],
+  events: { title: string; startTime: Date | string }[],
+  now: Date,
+): (T & { start: Date; end: Date | null; time: string | null })[] {
+  const today = dayStart(now);
+  const rows: (T & { start: Date; end: Date | null; time: string | null })[] = [];
+  for (const todo of todos) {
+    if (todo.category !== "school_email") continue;
+    if (mailTask(noteOf(todo)) || mailClock(noteOf(todo))) continue;
+    const span = mailSpan(noteOf(todo), today);
+    if (!span || dayStart(span.end ?? span.start) < today) continue;
+    const covered = events.some((event) => titlesMatch(event.title, todo.title) && sameDay(new Date(event.startTime), span.start));
+    if (covered) continue;
+    rows.push({ ...todo, ...span });
+  }
+  return rows.sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+/** A timed note for this day that never became a calendar event. */
+export function mailOffCalendar<T extends PlanChore>(
+  todos: T[],
+  events: { title: string; startTime: Date | string }[],
+  day: Date,
+  now: Date = new Date(),
+): (T & { time: string })[] {
+  const rows: (T & { time: string })[] = [];
+  for (const todo of todos) {
+    if (todo.category !== "school_email") continue;
+    const time = mailClock(noteOf(todo));
+    if (!time) continue;
+    const due = mailDate(noteOf(todo), now);
+    if (due && !sameDay(due, day)) continue;
+    if (!due && !sameDay(dayStart(day), dayStart(now))) continue;
+    if (events.some((event) => titlesMatch(event.title, todo.title) && sameDay(new Date(event.startTime), day))) continue;
+    rows.push({ ...todo, time });
+  }
+  return rows;
+}
+
+/** Timed mail in the week after the day on screen, still missing from the calendar. */
+export function horizonMail<T extends PlanChore>(
+  todos: T[],
+  events: { title: string; startTime: Date | string }[],
+  day: Date,
+): (T & { start: Date; time: string })[] {
+  const from = dayStart(day);
+  from.setDate(from.getDate() + 1);
+  const until = dayStart(day);
+  until.setDate(until.getDate() + 8);
+  const rows: (T & { start: Date; time: string })[] = [];
+  for (const todo of todos) {
+    if (todo.category !== "school_email") continue;
+    const time = mailClock(noteOf(todo));
+    const due = mailDate(noteOf(todo), day);
+    if (!time || !due || due < from || due >= until) continue;
+    if (events.some((event) => titlesMatch(event.title, todo.title) && sameDay(new Date(event.startTime), due))) continue;
+    rows.push({ ...todo, start: due, time });
+  }
+  return rows.sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+/** The latest school letter from each sender in the last two weeks, when it is not a date to add. */
+export function newsletterIssues<T extends PlanChore>(todos: T[], now: Date): (T & { when: Date })[] {
+  const today = dayStart(now);
+  const earliest = new Date(today);
+  earliest.setDate(earliest.getDate() - 13);
+  const datedIds = new Set(mailKeyDates(todos, [], now).map((row) => row.id));
+  const recent = todos.filter((todo) => {
+    if (todo.category !== "school_email" || datedIds.has(todo.id)) return false;
+    if (mailTask(noteOf(todo)) || mailClock(noteOf(todo))) return false;
+    const at = todo.createdAt ? new Date(todo.createdAt) : today;
+    return at >= earliest && at < new Date(today.getTime() + 86400000);
+  });
+  const newest = new Map<string, T & { when: Date }>();
+  for (const todo of recent) {
+    const sender = todo.description?.match(/^From: (\S+)\n/)?.[1]?.toLowerCase() ?? todo.id;
+    const when = todo.createdAt ? new Date(todo.createdAt) : today;
+    const held = newest.get(sender);
+    if (!held || when > held.when) newest.set(sender, { ...todo, when });
+  }
+  return [...newest.values()].sort((a, b) => b.when.getTime() - a.when.getTime());
+}
+
+/** Finished to-dos from the last 7 days, counting today. Newest first. */
+export function completedActions<T extends { id: string; choreId: string; completedAt?: Date | string | null }>(
+  completions: T[],
+  now: Date,
+): T[] {
+  const today = dayStart(now);
+  const earliest = new Date(today);
+  earliest.setDate(earliest.getDate() - (PLAN_COMPLETED_DAYS - 1));
+  const end = new Date(today);
+  end.setDate(end.getDate() + 1);
+  return completions
+    .filter((completion) => {
+      if (!completion.completedAt) return false;
+      const at = new Date(completion.completedAt);
+      return at >= earliest && at < end;
+    })
+    .sort((a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime());
+}
+
+export function forecastFor(
+  days: { date: string; high: number; low: number; condition: string }[] | undefined,
+  day: Date,
+): { high: number; low: number; condition: string } | null {
+  const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+  const found = days?.find((item) => item.date === key);
+  return found ? { high: found.high, low: found.low, condition: found.condition } : null;
+}

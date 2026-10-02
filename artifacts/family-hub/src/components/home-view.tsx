@@ -899,6 +899,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           drivingProfileIds: gcDrivingProfileIds,
           calendarId: displayName,
           calendarName: displayName,
+          calendarColor: gcEvent.extendedProperties?.private?.['calendar_color'] || null,
           createdAt: new Date(gcEvent.created || Date.now()),
           updatedAt: new Date(gcEvent.updated || Date.now()),
           isGoogleCalendar: true,
@@ -958,6 +959,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           profileIds: [profileId],
           calendarId: ie.calendarColor ? 'Subscribed Calendar' : 'Subscribed Calendar',
           calendarName: 'Subscribed Calendar',
+          calendarColor: ie.calendarColor || null,
           recurringEventId: recurringIdFromIcal(ie),
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -2389,6 +2391,12 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
         onShiftDay={onShiftDay}
         onOpenCalendar={() => setActiveTab("calendar")}
         onOpenEvent={onNavigateToEvent}
+        onRefresh={() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+          void queryClient.invalidateQueries({ queryKey: ["/api/google-calendar/events"] });
+          void queryClient.invalidateQueries({ queryKey: ["/api/outlook-calendar/events"] });
+          void queryClient.invalidateQueries({ queryKey: ["/api/ical-calendar/events"] });
+        }}
       />
 
       <CustomizePageCard
