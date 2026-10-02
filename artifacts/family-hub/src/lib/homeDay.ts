@@ -122,19 +122,44 @@ export type HorizonEvent = {
   recurrenceType?: string | null;
 };
 
+export function schoolEventClock(
+  title: string,
+  events: { title: string; startTime: Date | string; source?: string | null; isAllDay?: boolean | null }[],
+  day: Date,
+): string | null {
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  const event = events.find((item) => {
+    if (item.source !== "school" || item.title.toLowerCase() !== title.toLowerCase()) return false;
+    const at = new Date(item.startTime);
+    return at >= start && at < end;
+  });
+  if (!event || event.isAllDay) return null;
+  const at = new Date(event.startTime);
+  if (at.getHours() === 0 && at.getMinutes() === 0) return null;
+  let hours = at.getHours();
+  const suffix = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  return `${hours}:${String(at.getMinutes()).padStart(2, "0")} ${suffix}`;
+}
+
 export function eventsOnHomeDay<T extends {
   startTime: Date | string;
   source?: string | null;
   title: string;
   description?: string | null;
   category?: string | null;
-}>(events: T[], day: Date, kidName: string | null, dinner: string | null): T[] {
+}>(events: T[], day: Date, kidName: string | null, dinner: string | null, todos: { title: string; category?: string | null }[] = []): T[] {
   const start = new Date(day);
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
+  const slips = new Set(todos.filter((todo) => todo.category === "school_email").map((todo) => todo.title.toLowerCase()));
   return events.filter((event) => {
     if (event.source === "meal" && dinner) return false;
+    if (event.source === "school" && slips.has(event.title.toLowerCase())) return false;
     const at = new Date(event.startTime);
     return at >= start && at < end && mailVisibleToKid(event, kidName);
   });

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, choresForCount, dinnerName, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { choreProgress, choresForCount, dinnerName, earlierForHome, eventsOnHomeDay, horizonEvents, mailVisibleToKid, openTodos, schoolEmailNames, schoolEventClock, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { eventClockLine, pointsProfileId } from "@/lib/chatTools";
 import { openEmailHref, schoolSaveTarget, slipQuote, slipSender } from "@/lib/slipMail";
@@ -86,7 +86,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   const todos = openTodos(todosForHome(chores, selectedIds, familyIds), completions).filter((todo) => !kidName || schoolEmailNames(todo, kidName));
   const progress = choreProgress(choresForCount(chores, selectedIds, familyIds), completions, day);
   const dinner = dinnerName(meals, day);
-  const todayEvents = eventsOnHomeDay(visibleForProfiles(events, selectedIds), day, kidName, dinner);
+  const todayEvents = eventsOnHomeDay(visibleForProfiles(events, selectedIds), day, kidName, dinner, todos);
   const horizon = visibleForProfiles(horizonEvents(events, day), selectedIds).filter((event) => mailVisibleToKid(event, kidName));
   const earlier = earlierForHome(completions, selectedIds, familyIds, day);
 
@@ -100,6 +100,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
           <ul className="flex flex-col gap-2">
             {todos.map((todo) => {
               const quote = slipQuote(todo.description);
+              const clock = todo.category === "school_email" ? schoolEventClock(todo.title, events, day) : null;
               const sender = slipSender(todo.description);
               const offer = schoolSaveTarget(todo.title, todo.description, people, personId ?? null);
               const emailHref = openEmailHref(calendarSettings?.shareOriginals === true, sender);
@@ -112,7 +113,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
                   onClick={() => complete.mutate(todo.id)}
                 />
                 <div className="min-w-0">
-                  <div className="text-[15px] font-medium">{todo.title}</div>
+                  <div className="text-[15px] font-medium">{clock ? `${todo.title}, ${clock}` : todo.title}</div>
                   {quote && <div data-testid="home-todo-quote" className="text-sm text-muted-foreground">{quote}</div>}
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     {todo.category === "school_email" ? (
