@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore } from "@workspace/shared-types";
-import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, pointsProfileId, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { dinnerReply, groceryAlreadyHave, groceryHaveAction } from "@/lib/mealCalendar";
@@ -265,7 +265,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       setDraft("");
       return;
     }
-    const place = tools.includes("maps_link") ? placeReply(text, talkEvents) : null;
+    const place = tools.includes("maps_link") ? placeAnswer(text, events, calendarAssignments, selectedIds, kid?.name ?? null) : null;
     if (place) {
       next.push({ id: `${Date.now()}-o`, role: "assistant", text: place });
       localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));

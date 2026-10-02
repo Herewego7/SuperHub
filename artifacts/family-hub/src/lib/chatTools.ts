@@ -1,5 +1,5 @@
 /** Chat tools carried over from Bot Life. Mail tools stay off a kid's thread. */
-import { dinnerName } from "./homeDay";
+import { dinnerName, eventsForDayPlan } from "./homeDay";
 
 export const CHAT_TOOLS = [
   "get_plan",
@@ -418,6 +418,16 @@ export function familyReply(
   const people = profiles.filter((person) => person.name.trim() && !person.isAllFamilyProfile);
   if (people.length === 0) return "Nobody is in the family yet.";
   return people.map((person) => [person.name, person.school, ...(person.facts ?? [])].filter(Boolean).join(", ")).join("\n");
+}
+
+export function placeAnswer(
+  text: string,
+  events: (Parameters<typeof eventsForDayPlan>[0][number] & { location?: string | null })[],
+  assignments: Parameters<typeof eventsForDayPlan>[1],
+  selectedIds: string[],
+  kidName: string | null,
+): string | null {
+  return placeReply(text, eventsForDayPlan(events, assignments, selectedIds, kidName));
 }
 
 export function placeReply(text: string, events: { title: string; location?: string | null }[]): string | null {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { assignChange, checkOffTitle, confirmedReply, createEventClock, createEventTitle, createTodoTitle, dayReply, declinedReply, deleteEventAction, deleteEventTitle, drivingReply, eventClockLine, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeReply, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -283,6 +283,36 @@ test("an adult can name a person's school", () => {
   const fact = schoolFact("Liam's school is Lincoln.", [{ id: "liam", name: "Liam" }]);
   assert.deepEqual(fact, { profileId: "liam", name: "Liam", school: "Lincoln" });
   assert.equal(schoolFact("school is Lincoln", [{ id: "liam", name: "Liam" }]), null);
+});
+
+test("where is soccer uses the school drive a kid is listed on", () => {
+  const soccer = {
+    id: "soccer",
+    title: "Soccer practice",
+    description: "Bring shin guards",
+    source: "school",
+    location: "Field 2",
+    profileIds: ["dad"],
+    drivingProfileIds: ["ava"],
+    googleCalendarId: null,
+    outlookCalendarId: null,
+  };
+  const staff = {
+    id: "staff",
+    title: "Staff meeting",
+    description: "Parents only",
+    source: "school",
+    location: "Office",
+    profileIds: [] as string[],
+    drivingProfileIds: [] as string[],
+    googleCalendarId: null,
+    outlookCalendarId: null,
+  };
+  assert.equal(
+    placeAnswer("where is soccer", [soccer, staff], [], ["ava"], "Ava"),
+    "Soccer practice is at Field 2. https://maps.apple.com/?q=Field%202",
+  );
+  assert.equal(placeAnswer("where is staff", [soccer, staff], [], ["ava"], "Ava")?.includes("Office"), false);
 });
 
 test("who is driving names the person on that event", () => {
