@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleMoveBody } from "../../src/lib/chatGoogle";
+import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleDeleteChoice, googleMoveBody } from "../../src/lib/chatGoogle";
 
 test("chat can see a Google event and who is driving it", () => {
   const rows = chatGoogleEvents([
@@ -81,4 +81,10 @@ test("chat can move a one-off Google event and leaves a series", () => {
   assert.equal(allDay && typeof allDay === "object" && allDay.end, day.toISOString());
   assert.equal(googleMoveBody({ source: "google", recurringEventId: "series-1", isAllDay: false }, start, end, true), "series");
   assert.equal(googleMoveBody({ source: "outlook", recurringEventId: null, isAllDay: false }, start, end, true), null);
+});
+
+test("deleting a Google event asks first when chat can write it", () => {
+  assert.equal(googleDeleteChoice({ source: "google", googleProfileId: "dad", googleCalendarId: "cal", googleEventId: "abc" }), "confirm");
+  assert.equal(googleDeleteChoice({ source: "google", googleProfileId: "dad", googleCalendarId: null, googleEventId: "abc" }), "keep");
+  assert.equal(googleDeleteChoice({ source: "outlook", googleProfileId: "dad", googleCalendarId: "cal", googleEventId: "abc" }), null);
 });

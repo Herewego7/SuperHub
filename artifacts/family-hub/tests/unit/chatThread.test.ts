@@ -27,6 +27,7 @@ test("unread stays on the person it was sent to", () => {
 
 test("a yes still knows which outside event after chat closes", () => {
   assert.deepEqual(pendingConfirmFrom(JSON.stringify({ kind: "delete", id: "soccer" })), { kind: "delete", id: "soccer" });
+  assert.deepEqual(pendingConfirmFrom(JSON.stringify({ kind: "delete", id: "soccer", path: "/api/google-calendar/events/dad/cal/abc" })), { kind: "delete", id: "soccer", path: "/api/google-calendar/events/dad/cal/abc" });
   assert.deepEqual(pendingConfirmFrom(JSON.stringify({ kind: "move", id: "soccer", start: "a", end: "b" })), { kind: "move", id: "soccer", start: "a", end: "b" });
   assert.equal(pendingConfirmFrom("nope"), null);
   assert.equal(pendingConfirmFrom(null), null);

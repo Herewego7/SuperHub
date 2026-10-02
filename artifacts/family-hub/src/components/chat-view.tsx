@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
 import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
-import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleMoveBody } from "@/lib/chatGoogle";
+import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleDeleteChoice, googleMoveBody } from "@/lib/chatGoogle";
 import type { Chore } from "@workspace/shared-types";
 import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
@@ -40,10 +40,12 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   const [draft, setDraft] = useState("");
   const storedConfirm = readPendingConfirm(profileKey);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(storedConfirm?.kind === "delete" ? storedConfirm.id : null);
+  const [pendingDeletePath, setPendingDeletePath] = useState<string | null>(storedConfirm?.kind === "delete" ? storedConfirm.path ?? null : null);
   const [pendingMove, setPendingMove] = useState<Extract<PendingConfirm, { kind: "move" }> | null>(storedConfirm?.kind === "move" ? storedConfirm : null);
   const storePending = (pending: PendingConfirm | null) => {
     savePendingConfirm(profileKey, pending);
     setPendingDeleteId(pending?.kind === "delete" ? pending.id : null);
+    setPendingDeletePath(pending?.kind === "delete" ? pending.path ?? null : null);
     setPendingMove(pending?.kind === "move" ? pending : null);
   };
   const [bubbles, setBubbles] = useState<ChatBubble[]>(() => readThread(profileKey));
@@ -209,8 +211,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       const id = pendingDeleteId;
       storePending(null);
       replyAfter(
-        apiRequest("DELETE", `/api/events/${id}`).then(() => {
-          void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        apiRequest("DELETE", pendingDeletePath ?? `/api/events/${id}`).then(() => {
+          void queryClient.invalidateQueries({ queryKey: pendingDeletePath ? ["/api/google-calendar/events"] : ["/api/events"] });
         }),
         "Deleted.",
         true,
@@ -465,8 +467,20 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     const removeTitle = deleteEventTitle(text);
     const target = removeTitle ? talkEvents.find((event) => event.title.toLowerCase() === removeTitle.toLowerCase()) : undefined;
     if (target && tools.includes("delete_event")) {
+      const googleDelete = googleDeleteChoice(target);
+      if (googleDelete === "confirm") {
+        const path = googleChatWrite(target);
+        if (path) {
+          storePending({ kind: "delete", id: target.id, path });
+          next.push({ id: `${Date.now()}-c`, role: "assistant", text: `Delete ${target.title}? It is on Google Calendar. Reply yes to delete it.` });
+          localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+          setBubbles(next);
+          setDraft("");
+          return;
+        }
+      }
       const action = deleteEventAction(target.source, target.id);
-      if (action === "keep") {
+      if (googleDelete === "keep" || action === "keep") {
         next.push({ id: `${Date.now()}-c`, role: "assistant", text: `${target.title} stays on ${eventStaysPut(target.source, target.id) ?? "Google Calendar"}.` });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
         setBubbles(next);

@@ -132,6 +132,17 @@ export function chatIcalEvents(
   return rows;
 }
 
+/** A Google event chat can write is deleted only after a yes. A missing calendar stays. */
+export function googleDeleteChoice(event: {
+  source?: string | null;
+  googleProfileId?: string;
+  googleCalendarId?: string | null;
+  googleEventId?: string;
+}): "confirm" | "keep" | null {
+  if (event.source !== "google") return null;
+  return googleChatWrite(event) ? "confirm" : "keep";
+}
+
 /** A one-off Google event can take a new time. A series stays, because one instance is not the whole repeat. */
 export function googleMoveBody(
   event: { source?: string | null; recurringEventId?: string | null; isAllDay?: boolean | null },

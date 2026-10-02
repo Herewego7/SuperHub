@@ -1,14 +1,17 @@
 export type ChatBubble = { id: string; role: "user" | "assistant"; text: string };
 
 export type PendingConfirm =
-  | { kind: "delete"; id: string }
+  | { kind: "delete"; id: string; path?: string }
   | { kind: "move"; id: string; start: string; end: string };
 
 export function pendingConfirmFrom(raw: string | null): PendingConfirm | null {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as { kind?: string; id?: string; start?: string; end?: string };
-    if (parsed.kind === "delete" && parsed.id) return { kind: "delete", id: parsed.id };
+    const parsed = JSON.parse(raw) as { kind?: string; id?: string; path?: string; start?: string; end?: string };
+    if (parsed.kind === "delete" && parsed.id) {
+      const path = typeof parsed.path === "string" && parsed.path.startsWith("/api/google-calendar/events/") ? parsed.path : undefined;
+      return path ? { kind: "delete", id: parsed.id, path } : { kind: "delete", id: parsed.id };
+    }
     if (parsed.kind === "move" && parsed.id && parsed.start && parsed.end) {
       return { kind: "move", id: parsed.id, start: parsed.start, end: parsed.end };
     }
