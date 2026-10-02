@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, inboxScanEnabled, inboxTokenExpiry, ingestMessages, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
 import { outlookToInbound, toInbound } from "../src/ingest/parse.ts";
 
 test("a stored Google token is refreshed once it has expired", () => {
@@ -101,6 +101,21 @@ test("an outlook message becomes a slip with the subject and sender", () => {
   assert.equal(message.subject, "Picture day");
   assert.equal(message.fromAddress, "office@school.edu");
   assert.equal(message.snippet, "Wear a blue shirt & smile.");
+});
+
+test("a store receipt stays out and a practice note stays", () => {
+  const planned = ingestMessages(
+    [
+      { subject: "Your package was delivered", fromAddress: "shipment-tracking@amazon.com", snippet: "Arriving today.", accountId: "chad" },
+      { subject: "Soccer practice moved", fromAddress: "coach@gmail.com", snippet: "Thursday at 5:30 PM.", accountId: "chad" },
+    ],
+    { mutedSenders: [], dismissedSlipKeys: [] },
+    [],
+    ["liam"],
+  );
+  assert.equal(mailWorthSaving({ subject: "Your package was delivered", fromAddress: "shipment-tracking@amazon.com", snippet: "Arriving today." }), false);
+  assert.deepEqual(planned.todos.map((todo) => todo.title), ["Soccer practice moved"]);
+  assert.equal(planned.events[0]?.hours, 17);
 });
 
 test("two copies of the same slip from two adults become one to-do", () => {

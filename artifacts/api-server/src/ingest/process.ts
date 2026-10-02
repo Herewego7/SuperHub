@@ -205,6 +205,42 @@ export function dismissSlip(state: HouseholdMail, key: string): HouseholdMail {
   return { ...state, dismissedSlipKeys: [...state.dismissedSlipKeys, key] };
 }
 
+const FAMILY_PLATFORMS = [
+  "parentsquare.com",
+  "schoolmessenger.com",
+  "konstella.com",
+  "classdojo.com",
+  "seesaw.me",
+  "brightwheel.com",
+  "mybrightwheel.com",
+  "teamsnap.com",
+  "sportsengine.com",
+  "signupgenius.com",
+  "classroom.google.com",
+];
+
+const SCHOOL_WORDS = /\b(school|permission|field trip|picture day|pta|pto|classroom|teacher|homework|practice|recital|tournament|sign-?up|early release|early dismissal|no school|half day|spirit day|book fair|aftercare|conference|parent night|open house)\b/i;
+
+function senderDomain(address: string | undefined): string {
+  const at = address?.lastIndexOf("@") ?? -1;
+  if (at < 0 || !address) return "";
+  return address.slice(at + 1).toLowerCase();
+}
+
+function domainIs(domain: string, list: readonly string[]): boolean {
+  return list.some((item) => domain === item || domain.endsWith(`.${item}`));
+}
+
+export function isSchoolDomain(domain: string): boolean {
+  return /(^|\.)k12\.[a-z]{2}\.us$/.test(domain) || /(^|\.)k12\./.test(domain) || /(school|academy|usd|isd)[a-z0-9-]*\.(org|net|edu|us)$/.test(domain);
+}
+
+export function mailWorthSaving(message: { subject: string; snippet?: string; body?: string; fromAddress?: string }): boolean {
+  const domain = senderDomain(message.fromAddress);
+  if (domain && (domainIs(domain, FAMILY_PLATFORMS) || isSchoolDomain(domain))) return true;
+  return SCHOOL_WORDS.test(`${message.subject} ${message.snippet ?? ""} ${message.body ?? ""}`);
+}
+
 export function ingestMessages(
   messages: InboundMessage[],
   state: HouseholdMail,
@@ -217,6 +253,7 @@ export function ingestMessages(
   const events: PlannedEvent[] = [];
   for (const message of messages) {
     if (message.fromAddress && muted.has(message.fromAddress.toLowerCase())) continue;
+    if (!mailWorthSaving(message)) continue;
     const key = slipKey(message.subject);
     if (!key || seen.has(key)) continue;
     seen.add(key);
