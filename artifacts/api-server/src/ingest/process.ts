@@ -211,6 +211,14 @@ export function acceptSchool(current: string | null | undefined, suggestion: str
   return next;
 }
 
+export const HELD_EVENT_PREFIX = "event-held:";
+
+export function holdSchoolEvent(keys: readonly string[], key: string): string[] {
+  const next = `${HELD_EVENT_PREFIX}${key}`;
+  if (!key || keys.includes(next)) return [...keys];
+  return [...keys, next];
+}
+
 export function dismissSlip(state: HouseholdMail, key: string): HouseholdMail {
   if (!key || state.dismissedSlipKeys.includes(key)) return state;
   return { ...state, dismissedSlipKeys: [...state.dismissedSlipKeys, key] };
@@ -276,6 +284,9 @@ export function ingestMessages(
 ): { todos: PlannedTodo[]; events: PlannedEvent[] } {
   const muted = new Set(state.mutedSenders.map((address) => address.toLowerCase()));
   const dismissed = new Set(state.dismissedSlipKeys);
+  const heldEvents = new Set(
+    state.dismissedSlipKeys.flatMap((item) => item.startsWith(HELD_EVENT_PREFIX) ? [item.slice(HELD_EVENT_PREFIX.length)] : []),
+  );
   const seen = new Set([...state.dismissedSlipKeys, ...existingKeys]);
   const haveEvent = new Set(existingEventKeys);
   const todos: PlannedTodo[] = [];
@@ -286,7 +297,7 @@ export function ingestMessages(
     const key = slipKey(message.subject);
     if (!key) continue;
     if (seen.has(key)) {
-      if (!dismissed.has(key) && !haveEvent.has(key)) {
+      if (!dismissed.has(key) && !heldEvents.has(key) && !haveEvent.has(key)) {
         const event = plannedEvent(message, key, profileIds);
         if (event) {
           events.push(event);

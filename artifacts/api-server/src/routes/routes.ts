@@ -25,7 +25,7 @@ import { geocodeCity } from "../lib/geocode";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, muteSender, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, holdSchoolEvent, muteSender, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
 import { applyIngestedMail } from "../ingest/saveMail";
 import { scanConnectedInboxes } from "../ingest/scanHousehold";
 import { markSchedulerWorkDirty } from "../lib/workGate";
@@ -643,9 +643,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (e) {
         console.warn("Could not load event sync links (continuing with delete):", e instanceof Error ? e.message : e);
       }
+      const removing = (await storage.getEventsByUser(userId)).find((event) => event.id === id);
       const success = await storage.deleteEvent(id, userId);
       if (!success) {
         return res.status(404).json({ message: "Event not found" });
+      }
+      if (removing?.source === "school") {
+        const key = removing.externalId || slipKey(removing.title);
+        if (key) {
+          try {
+            const settings = await storage.getCalendarSettingsByUser(userId);
+            const keys = holdSchoolEvent(settings?.dismissedSlipKeys ?? [], key);
+            if (keys.length !== (settings?.dismissedSlipKeys ?? []).length) {
+              await storage.updateCalendarSettings({ dismissedSlipKeys: keys, userId });
+            }
+          } catch (err) {
+            console.warn("Could not remember a removed school event:", err instanceof Error ? err.message : err);
+          }
+        }
       }
       // Not awaited — see the note on the create route above. The local row is
       // already gone, which is all GET /api/events reads; removing the external

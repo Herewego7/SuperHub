@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, inboxFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, holdSchoolEvent, inboxFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
 import { gmailPayload, outlookToInbound, toInbound } from "../src/ingest/parse.ts";
 
 test("a stored Google token is refreshed once it has expired", () => {
@@ -173,6 +173,15 @@ test("a saved slip with no calendar event gets the event on the next scan", () =
     [],
   );
   assert.equal(again.events.length, 0);
+  const removed = ingestMessages(
+    [{ subject: "Picture day", fromAddress: "office@school.edu", snippet: "Thursday at 3:30 PM.", accountId: "chad" }],
+    { mutedSenders: [], dismissedSlipKeys: holdSchoolEvent([], "picture day") },
+    ["picture day"],
+    ["liam"],
+    [],
+  );
+  assert.equal(removed.events.length, 0);
+  assert.equal(withoutDismissedChores([{ title: "Picture day", category: "school_email" }], holdSchoolEvent([], "picture day")).length, 1);
 });
 
 test("two copies of the same slip from two adults become one to-do", () => {
