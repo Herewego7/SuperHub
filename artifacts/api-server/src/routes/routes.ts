@@ -4757,6 +4757,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/outlook-calendar/events/:profileId", isAuthenticated, async (req: any, res) => {
+    try {
+      const { profileId } = req.params;
+      const userId = getUserId(req);
+      const isOwner = await validateProfileOwnership(profileId, userId);
+      if (!isOwner) return res.status(403).json({ error: "Forbidden" });
+      const eventId = req.body?.eventId;
+      if (typeof eventId !== "string" || !eventId) return res.status(400).json({ error: "Missing event" });
+      const accessToken = await getFreshOutlookAccessToken(profileId);
+      if (!accessToken) return res.status(404).json({ error: "No Outlook Calendar connection found" });
+      const { title, location, start, end, isAllDay } = req.body ?? {};
+      await outlookCalendarService.updateEvent(accessToken, eventId, {
+        ...(title !== undefined ? { title } : {}),
+        ...(location !== undefined ? { location } : {}),
+        ...(start && end ? { start: new Date(start), end: new Date(end), isAllDay: !!isAllDay } : {}),
+      });
+      outlookEventsCache.delete(profileId);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error updating Outlook Calendar event:", error);
+      res.status(500).json({ error: "Failed to update calendar event" });
+    }
+  });
+
+  app.delete("/api/outlook-calendar/events/:profileId", isAuthenticated, async (req: any, res) => {
+    try {
+      const { profileId } = req.params;
+      const userId = getUserId(req);
+      const isOwner = await validateProfileOwnership(profileId, userId);
+      if (!isOwner) return res.status(403).json({ error: "Forbidden" });
+      const eventId = req.query.eventId;
+      if (typeof eventId !== "string" || !eventId) return res.status(400).json({ error: "Missing event" });
+      const accessToken = await getFreshOutlookAccessToken(profileId);
+      if (!accessToken) return res.status(404).json({ error: "No Outlook Calendar connection found" });
+      await outlookCalendarService.deleteEvent(accessToken, eventId);
+      outlookEventsCache.delete(profileId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting Outlook Calendar event:", error);
+      res.status(500).json({ error: "Failed to delete calendar event" });
+    }
+  });
+
   app.delete("/api/outlook-calendar/disconnect/:profileId", isAuthenticated, async (req: any, res) => {
     try {
       const { profileId } = req.params;

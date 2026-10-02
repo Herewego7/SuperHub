@@ -9,7 +9,7 @@ export function pendingConfirmFrom(raw: string | null): PendingConfirm | null {
   try {
     const parsed = JSON.parse(raw) as { kind?: string; id?: string; path?: string; start?: string; end?: string };
     if (parsed.kind === "delete" && parsed.id) {
-      const path = typeof parsed.path === "string" && parsed.path.startsWith("/api/google-calendar/events/") ? parsed.path : undefined;
+      const path = typeof parsed.path === "string" && (parsed.path.startsWith("/api/google-calendar/events/") || parsed.path.startsWith("/api/outlook-calendar/events/")) ? parsed.path : undefined;
       return path ? { kind: "delete", id: parsed.id, path } : { kind: "delete", id: parsed.id };
     }
     if (parsed.kind === "move" && parsed.id && parsed.start && parsed.end) {

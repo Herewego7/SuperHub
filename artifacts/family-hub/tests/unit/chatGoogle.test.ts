@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleDeleteChoice, googleMoveBody } from "../../src/lib/chatGoogle";
+import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleDeleteChoice, googleMoveBody, outlookChatWrite } from "../../src/lib/chatGoogle";
 
 test("chat can see a Google event and who is driving it", () => {
   const rows = chatGoogleEvents([
@@ -87,4 +87,16 @@ test("deleting a Google event asks first when chat can write it", () => {
   assert.equal(googleDeleteChoice({ source: "google", googleProfileId: "dad", googleCalendarId: "cal", googleEventId: "abc" }), "confirm");
   assert.equal(googleDeleteChoice({ source: "google", googleProfileId: "dad", googleCalendarId: null, googleEventId: "abc" }), "keep");
   assert.equal(googleDeleteChoice({ source: "outlook", googleProfileId: "dad", googleCalendarId: "cal", googleEventId: "abc" }), null);
+});
+
+test("an Outlook event chat can change has a write path", () => {
+  const rows = chatOutlookEvents(
+    [{ profileId: "dad", events: [{ id: "o/1", subject: "Piano", isAllDay: false, start: { dateTime: "2026-10-02T15:00:00" }, end: { dateTime: "2026-10-02T15:30:00" }, calendar: { id: "ocal" } }] }],
+    [],
+    ["dad"],
+  );
+  assert.equal(rows[0].outlookProfileId, "dad");
+  assert.equal(rows[0].outlookEventId, "o/1");
+  assert.deepEqual(outlookChatWrite(rows[0]), { path: "/api/outlook-calendar/events/dad", eventId: "o/1" });
+  assert.equal(outlookChatWrite({ source: "google", outlookProfileId: "dad", outlookEventId: "o/1" }), null);
 });

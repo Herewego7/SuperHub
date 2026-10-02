@@ -45,6 +45,8 @@ type ExternalEvent = {
   profileIds: string[];
   drivingProfileIds: string[];
   outlookCalendarId: string | null;
+  outlookProfileId: string | null;
+  outlookEventId: string | null;
   recurringEventId: string | null;
 };
 
@@ -84,6 +86,8 @@ export function chatOutlookEvents(
         profileIds: outlookEventProfileIds(event, batch.profileId, assignments, known),
         drivingProfileIds: [],
         outlookCalendarId: event.calendar?.id ?? null,
+        outlookProfileId: batch.profileId,
+        outlookEventId: event.id,
         recurringEventId: recurringIdFromOutlook(event),
       });
     }
@@ -125,6 +129,8 @@ export function chatIcalEvents(
         profileIds: [batch.profileId],
         drivingProfileIds: [],
         outlookCalendarId: null,
+        outlookProfileId: null,
+        outlookEventId: null,
         recurringEventId: recurringIdFromIcal(event),
       });
     }
@@ -157,6 +163,38 @@ export function googleMoveBody(
     return { start: day.toISOString(), end: day.toISOString(), isAllDay: true };
   }
   return { start: start.toISOString(), end: _end.toISOString(), isAllDay: false };
+}
+
+/** Where chat writes a change that belongs on Outlook. The event id stays out of the path because it can contain slashes. */
+export function outlookChatWrite(event: {
+  source?: string | null;
+  outlookProfileId?: string | null;
+  outlookEventId?: string | null;
+}): { path: string; eventId: string } | null {
+  if (event.source !== "outlook" || !event.outlookProfileId || !event.outlookEventId) return null;
+  return {
+    path: `/api/outlook-calendar/events/${encodeURIComponent(event.outlookProfileId)}`,
+    eventId: event.outlookEventId,
+  };
+}
+
+export function outlookMoveBody(
+  event: { source?: string | null; recurringEventId?: string | null; isAllDay?: boolean | null },
+  start: Date,
+  end: Date,
+  timed: boolean,
+): { start: string; end: string; isAllDay: boolean } | "series" | null {
+  if (event.source !== "outlook") return null;
+  return googleMoveBody({ ...event, source: "google" }, start, end, timed);
+}
+
+export function outlookDeleteChoice(event: {
+  source?: string | null;
+  outlookProfileId?: string | null;
+  outlookEventId?: string | null;
+}): "confirm" | "keep" | null {
+  if (event.source !== "outlook") return null;
+  return outlookChatWrite(event) ? "confirm" : "keep";
 }
 
 /** Where chat writes a change that belongs on Google. Outlook and a missing calendar stay null. */

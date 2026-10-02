@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
 import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
-import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleDeleteChoice, googleMoveBody } from "@/lib/chatGoogle";
+import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleDeleteChoice, googleMoveBody, outlookChatWrite, outlookDeleteChoice, outlookMoveBody } from "@/lib/chatGoogle";
 import type { Chore } from "@workspace/shared-types";
 import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, forgetFact, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
@@ -212,7 +212,12 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       storePending(null);
       replyAfter(
         apiRequest("DELETE", pendingDeletePath ?? `/api/events/${id}`).then(() => {
-          void queryClient.invalidateQueries({ queryKey: pendingDeletePath ? ["/api/google-calendar/events"] : ["/api/events"] });
+          const key = pendingDeletePath?.includes("outlook-calendar")
+            ? ["/api/outlook-calendar/events"]
+            : pendingDeletePath
+              ? ["/api/google-calendar/events"]
+              : ["/api/events"];
+          void queryClient.invalidateQueries({ queryKey: key });
         }),
         "Deleted.",
         true,
@@ -467,6 +472,18 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     const removeTitle = deleteEventTitle(text);
     const target = removeTitle ? talkEvents.find((event) => event.title.toLowerCase() === removeTitle.toLowerCase()) : undefined;
     if (target && tools.includes("delete_event")) {
+      const outlookDelete = outlookDeleteChoice(target);
+      if (outlookDelete === "confirm") {
+        const write = outlookChatWrite(target);
+        if (write) {
+          storePending({ kind: "delete", id: target.id, path: `${write.path}?eventId=${encodeURIComponent(write.eventId)}` });
+          next.push({ id: `${Date.now()}-c`, role: "assistant", text: `Delete ${target.title}? It is on Outlook. Reply yes to delete it.` });
+          localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
+          setBubbles(next);
+          setDraft("");
+          return;
+        }
+      }
       const googleDelete = googleDeleteChoice(target);
       if (googleDelete === "confirm") {
         const path = googleChatWrite(target);
@@ -480,7 +497,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         }
       }
       const action = deleteEventAction(target.source, target.id);
-      if (googleDelete === "keep" || action === "keep") {
+      if (outlookDelete === "keep" || googleDelete === "keep" || action === "keep") {
         next.push({ id: `${Date.now()}-c`, role: "assistant", text: `${target.title} stays on ${eventStaysPut(target.source, target.id) ?? "Google Calendar"}.` });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
         setBubbles(next);
@@ -516,7 +533,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       }
       const stays = eventStaysPut(target.source, target.id);
       const googlePath = stays === "Google Calendar" ? googleChatWrite(target) : null;
-      if (stays && !googlePath) {
+      const outlook = stays === "Outlook" ? outlookChatWrite(target) : null;
+      if (stays && !googlePath && !outlook) {
         next.push({ id: `${Date.now()}-n`, role: "assistant", text: `${target.title} stays on ${stays}.` });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
         setBubbles(next);
@@ -524,8 +542,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         return;
       }
       replyAfter(
-        apiRequest("PATCH", googlePath ?? `/api/events/${target.id}`, { title: renaming.next }).then(() => {
-          void queryClient.invalidateQueries({ queryKey: googlePath ? ["/api/google-calendar/events"] : ["/api/events"] });
+        apiRequest("PATCH", googlePath ?? outlook?.path ?? `/api/events/${target.id}`, outlook ? { eventId: outlook.eventId, title: renaming.next } : { title: renaming.next }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: outlook ? ["/api/outlook-calendar/events"] : googlePath ? ["/api/google-calendar/events"] : ["/api/events"] });
         }),
         `${target.title} is now ${renaming.next}.`,
       );
@@ -543,7 +561,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       }
       const stays = eventStaysPut(target.source, target.id);
       const googlePath = stays === "Google Calendar" ? googleChatWrite(target) : null;
-      if (stays && !googlePath) {
+      const outlook = stays === "Outlook" ? outlookChatWrite(target) : null;
+      if (stays && !googlePath && !outlook) {
         next.push({ id: `${Date.now()}-p`, role: "assistant", text: `${target.title} stays on ${stays}.` });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
         setBubbles(next);
@@ -551,8 +570,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         return;
       }
       replyAfter(
-        apiRequest("PATCH", googlePath ?? `/api/events/${target.id}`, { location: placing.location }).then(() => {
-          void queryClient.invalidateQueries({ queryKey: googlePath ? ["/api/google-calendar/events"] : ["/api/events"] });
+        apiRequest("PATCH", googlePath ?? outlook?.path ?? `/api/events/${target.id}`, outlook ? { eventId: outlook.eventId, location: placing.location } : { location: placing.location }).then(() => {
+          void queryClient.invalidateQueries({ queryKey: outlook ? ["/api/outlook-calendar/events"] : googlePath ? ["/api/google-calendar/events"] : ["/api/events"] });
         }),
         `${target.title} is at ${placing.location}.`,
       );
@@ -568,11 +587,15 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       if (moving.on) start.setFullYear(moving.on.getFullYear(), moving.on.getMonth(), moving.on.getDate());
       if (moving.hours != null && moving.minutes != null) start.setHours(moving.hours, moving.minutes, 0, 0);
       const finish = new Date(start.getTime() + duration);
-      if (action === "keep-google") {
-        const path = googleChatWrite(moved);
-        const body = googleMoveBody(moved, start, finish, moving.hours != null);
+      if (action === "keep-google" || action === "keep-outlook") {
+        const outlook = action === "keep-outlook" ? outlookChatWrite(moved) : null;
+        const path = action === "keep-google" ? googleChatWrite(moved) : outlook?.path ?? null;
+        const body = action === "keep-google"
+          ? googleMoveBody(moved, start, finish, moving.hours != null)
+          : outlookMoveBody(moved, start, finish, moving.hours != null);
         if (body === "series") {
-          next.push({ id: `${Date.now()}-m`, role: "assistant", text: `${moved.title} repeats on Google Calendar, so I left the time.` });
+          const where = action === "keep-outlook" ? "Outlook" : "Google Calendar";
+          next.push({ id: `${Date.now()}-m`, role: "assistant", text: `${moved.title} repeats on ${where}, so I left the time.` });
           localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
           setBubbles(next);
           setDraft("");
@@ -580,8 +603,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         }
         if (path && body) {
           replyAfter(
-            apiRequest("PATCH", path, body).then(() => {
-              void queryClient.invalidateQueries({ queryKey: ["/api/google-calendar/events"] });
+            apiRequest("PATCH", path, outlook ? { ...body, eventId: outlook.eventId } : body).then(() => {
+              void queryClient.invalidateQueries({ queryKey: outlook ? ["/api/outlook-calendar/events"] : ["/api/google-calendar/events"] });
             }),
             `Moved ${moved.title}.`,
           );
