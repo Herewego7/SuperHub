@@ -18,6 +18,8 @@ import { eventsOnWatchedCalendars } from "../lib/calendarAssignmentScope";
 import { withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
 import { storage } from "../storage";
 import { GoogleCalendarService } from "../googleCalendar";
+import { getFreshOutlookAccessToken } from "../calendarSync";
+import { outlookCalendarService } from "../outlookCalendar";
 
 export type PlanPush = "evening-plan" | "daily-brief";
 
@@ -113,6 +115,100 @@ function savedIds(raw: unknown): string[] {
     /* A bad assignment falls back to the connected person. */
   }
   return [];
+}
+
+type PlanAssignment = { calendarId: string; calendarType?: string | null; profileId?: string | null; audienceProfileIds?: string[] | null; isActive?: boolean | null };
+
+function peopleForCalendar(calendarId: string | null, calendarType: string, assignments: PlanAssignment[], fallback: string): string[] {
+  if (!calendarId) return [fallback];
+  const row = assignments.find((item) => item.calendarType === calendarType && item.calendarId === calendarId && item.isActive !== false);
+  const audience = (row?.audienceProfileIds ?? []).filter((id) => id.length > 0);
+  if (audience.length > 0) return audience;
+  return row?.profileId ? [row.profileId] : [fallback];
+}
+
+function outlookWhen(part: { dateTime?: string; timeZone?: string } | null | undefined, allDay: boolean): Date | null {
+  if (!part?.dateTime) return null;
+  if (allDay) {
+    const day = part.dateTime.slice(0, 10);
+    return day ? new Date(`${day}T00:00:00`) : null;
+  }
+  const raw = part.dateTime;
+  const hasOffset = /[zZ]$|[+-]\d\d:?\d\d$/.test(raw);
+  if (!hasOffset && (part.timeZone ?? "UTC") === "UTC") return new Date(`${raw}Z`);
+  return new Date(raw);
+}
+
+/** Outlook events the evening plan can name. */
+export function outlookPlanRows(events: unknown[], profileId: string, assignments: PlanAssignment[] = []): {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  source: "outlook";
+  startTime: string;
+  endTime: string;
+  isAllDay: boolean;
+  profileIds: string[];
+  drivingProfileIds: string[];
+  googleCalendarId: null;
+  outlookCalendarId: string | null;
+}[] {
+  const seen = new Set<string>();
+  const rows = [];
+  for (const item of events) {
+    const event = item as {
+      id?: string;
+      subject?: string;
+      bodyPreview?: string;
+      isAllDay?: boolean;
+      start?: { dateTime?: string; timeZone?: string };
+      end?: { dateTime?: string; timeZone?: string };
+      location?: { displayName?: string };
+      calendar?: { id?: string };
+    };
+    if (!event?.id || seen.has(event.id)) continue;
+    const allDay = event.isAllDay === true;
+    const start = outlookWhen(event.start, allDay);
+    if (!start || Number.isNaN(start.getTime())) continue;
+    seen.add(event.id);
+    const end = outlookWhen(event.end, allDay) ?? start;
+    const calendarId = event.calendar?.id ?? null;
+    rows.push({
+      id: `outlook-${profileId}-${event.id}`,
+      title: event.subject?.trim() || "Untitled",
+      description: event.bodyPreview ?? null,
+      location: event.location?.displayName ?? null,
+      source: "outlook" as const,
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+      isAllDay: allDay,
+      profileIds: peopleForCalendar(calendarId, "outlook", assignments, profileId),
+      drivingProfileIds: [],
+      googleCalendarId: null,
+      outlookCalendarId: calendarId,
+    });
+  }
+  return rows;
+}
+
+async function outlookEventsForPlan(userId: string, assignments: PlanAssignment[]) {
+  const rows = [];
+  const skip = await storage.getExternalEventIdsByUser(userId, "outlook");
+  const people = await loadProfiles(eq(profiles.userId, userId));
+  for (const person of people) {
+    if (!person.outlookCalendarConnected) continue;
+    try {
+      const accessToken = await getFreshOutlookAccessToken(person.id);
+      if (!accessToken) continue;
+      const tokens = await storage.getOutlookCalendarTokens(person.id);
+      const raw = await outlookCalendarService.getCalendarEvents(accessToken, tokens?.selectedCalendarIds);
+      rows.push(...outlookPlanRows(raw.filter((event) => event?.id && !skip.has(event.id)), person.id, assignments));
+    } catch (err) {
+      logger.warn({ err, profileId: person.id }, "Evening plan skipped Outlook");
+    }
+  }
+  return rows;
 }
 
 /** Google events the evening plan can name. A copy the app already saved is left out. */
@@ -410,7 +506,11 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const chores = await storage.getChoresByUser(profile.userId);
     const completions = await storage.getChoreCompletionsByUser(profile.userId);
     const assignments = await storage.getCalendarAssignmentsByUser(profile.userId);
-    const events = [...await storage.getEventsByUser(profile.userId), ...await googleEventsForPlan(profile.userId, assignments)];
+    const events = [
+      ...await storage.getEventsByUser(profile.userId),
+      ...await googleEventsForPlan(profile.userId, assignments),
+      ...await outlookEventsForPlan(profile.userId, assignments),
+    ];
     const meals = await storage.getMealsByUser(profile.userId);
     const celebrations = await storage.getCelebrationsByUser(profile.userId);
     const target = profile.eveningPlanTiming === "morningOf" ? day : nextDayKey(day);
