@@ -34,7 +34,10 @@ async function generate(ai: GoogleGenAI, system: string, contents: unknown[], to
         contents: contents as never,
         config: {
           systemInstruction: system,
-          maxOutputTokens: 1024,
+          // Thinking tokens count against this cap. 1024 left a week-long
+          // answer ending mid-sentence. Keep the thinking short so the words fit.
+          maxOutputTokens: 8192,
+          thinkingConfig: { thinkingBudget: 512 },
           tools: [{ functionDeclarations: tools as never }],
         },
       });
