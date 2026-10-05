@@ -73,5 +73,17 @@ describe("chat brain", () => {
     const child = { ...snap, isChild: true };
     const muted = handleToolCall("mute_sender", { address: "a@b.com", confirmed: true }, child, true);
     assert.equal(muted.action, null);
+    assert.equal(handleToolCall("search", { query: "slip" }, child, true).action, null);
+  });
+
+  it("searches mail, opens a map, and files a reminder on the plan", () => {
+    const found = handleToolCall("search", { query: "slip lunch" }, snap, true);
+    assert.equal((found.output as { results: { title: string }[] }).results[0]?.title, "Sign the slip");
+    const map = handleToolCall("maps_link", { place: "Lincoln Elementary" }, snap, true);
+    assert.match((map.output as { url: string }).url, /Lincoln%20Elementary/);
+    const reminder = handleToolCall("create_reminder", { text: "Pack the bag", when: "2026-10-06" }, snap, true);
+    assert.equal(reminder.action?.kind, "create_task");
+    assert.equal(toolDeclarations(false).some((tool) => tool.name === "get_newsletters"), true);
+    assert.equal(toolDeclarations(true).some((tool) => tool.name === "get_newsletters"), false);
   });
 });

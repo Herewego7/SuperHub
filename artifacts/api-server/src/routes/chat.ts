@@ -7,6 +7,7 @@ import { replyWithChat, type ChatHistory } from "../chatReply";
 import type { ChatAction, ChatSnapshot } from "../chatBrain";
 import { choresDismissedBySlip, dismissSlip, muteSender } from "../ingest/process";
 import { slipKey } from "../ingest/parse";
+import { draftLine, draftWrite, normalizeDraft, readDraft } from "../ai/draft";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp } from "../meals/dinnerEvent";
 import { syncEventCreate, syncEventDelete, syncEventUpdate } from "../calendarSync";
 
@@ -95,11 +96,12 @@ async function applyAction(userId: string, action: ChatAction): Promise<PlacedDi
     await storage.createChore({
       userId,
       title: action.title.slice(0, 200),
+      description: action.description,
       taskType: "todo",
       points: 0,
       profileIds: action.profileIds,
-      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-      recurrenceType: "daily",
+      daysOfWeek: action.once ? [] : [0, 1, 2, 3, 4, 5, 6],
+      ...(action.once ? {} : { recurrenceType: "daily" as const }),
       isActive: true,
     });
     return [];
@@ -174,6 +176,12 @@ async function applyAction(userId: string, action: ChatAction): Promise<PlacedDi
       await storage.deleteChore(id, userId);
     }
     await storage.updateCalendarSettings({ dismissedSlipKeys: next.dismissedSlipKeys, userId });
+    const { rememberRecord } = await import("../ai/memory");
+    void rememberRecord(userId, "example", action.title);
+  }
+  if (action.kind === "feedback") {
+    const { feedbackNotes, db } = await import("@workspace/db");
+    await db.insert(feedbackNotes).values({ userId, text: action.text.slice(0, 2000) }).catch(() => undefined);
   }
   return [];
 }
@@ -194,7 +202,95 @@ function changedKeys(actions: ChatAction[]): string[] {
   return [...keys];
 }
 
+async function homeForecast(lat?: number | null, lon?: number | null): Promise<{ date: string; high: number; low: number }[]> {
+  if (lat == null || lon == null) return [];
+  try {
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7`, { signal: AbortSignal.timeout(2500) });
+    if (!res.ok) return [];
+    const data = await res.json() as { daily?: { time?: string[]; temperature_2m_max?: number[]; temperature_2m_min?: number[] } };
+    return (data.daily?.time ?? []).map((date, index) => ({
+      date,
+      high: Math.round(data.daily?.temperature_2m_max?.[index] ?? 0),
+      low: Math.round(data.daily?.temperature_2m_min?.[index] ?? 0),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function rememberedNotes(userId: string): Promise<string[]> {
+  const { recentRecords } = await import("../ai/memory");
+  const rows = await recentRecords(userId, "chunk", 40);
+  return rows.map((row) => row.text);
+}
+
 export function registerChatRoutes(app: Express): void {
+  app.post("/api/plan/draft", isAuthenticated, async (req: any, res) => {
+    try {
+      const text = typeof req.body?.text === "string" ? req.body.text.trim().slice(0, 1000) : "";
+      if (!text) {
+        res.status(400).json({ message: "Type a sentence first." });
+        return;
+      }
+      const userId = ownerId(req);
+      const profiles = await storage.getProfilesByUser(userId);
+      const names = profiles.filter((profile: { isAllFamilyProfile?: boolean | null }) => !profile.isAllFamilyProfile).map((profile: { name: string }) => profile.name);
+      const draft = await readDraft(text, names, new Date());
+      res.json({ draft, line: draftLine(draft) });
+    } catch (err) {
+      console.error("Plan draft failed:", err);
+      res.status(500).json({ message: "Couldn't read that sentence." });
+    }
+  });
+
+  app.post("/api/plan/draft/save", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = ownerId(req);
+      const profiles = await storage.getProfilesByUser(userId);
+      const people = profiles
+        .filter((profile: { isAllFamilyProfile?: boolean | null }) => !profile.isAllFamilyProfile)
+        .map((profile: { id: string; name: string }) => ({ id: profile.id, name: profile.name }));
+      const draft = normalizeDraft(req.body?.draft, people.map((person: { name: string }) => person.name));
+      if (!draft) {
+        res.status(400).json({ message: "That draft is missing a title." });
+        return;
+      }
+      const location = await storage.getLocationSettingsByUser(userId);
+      const write = draftWrite(draft, people, new Date(), location?.timezone || "America/Chicago");
+      if (!write) {
+        res.status(400).json({ message: "Add a date before saving this." });
+        return;
+      }
+      if (write.kind === "todo") {
+        await storage.createChore({
+          userId,
+          title: write.title,
+          description: write.description,
+          taskType: "todo",
+          points: 0,
+          profileIds: write.profileIds,
+          daysOfWeek: [],
+          isActive: true,
+        });
+      } else {
+        await storage.createEvent({
+          userId,
+          title: write.title,
+          description: write.description || null,
+          startTime: write.start,
+          endTime: write.end,
+          isAllDay: write.allDay,
+          profileIds: write.profileIds,
+          source: "app",
+        });
+      }
+      res.json({ saved: true, kind: write.kind });
+    } catch (err) {
+      console.error("Plan draft save failed:", err);
+      res.status(500).json({ message: "Couldn't save that." });
+    }
+  });
+
   app.post("/api/chat", isAuthenticated, async (req: any, res) => {
     try {
       const userId = ownerId(req);
@@ -259,6 +355,8 @@ export function registerChatRoutes(app: Express): void {
         savedMeals: savedMeals.map((meal: { id: string; name: string }) => ({ id: meal.id, name: meal.name })),
         celebrations: celebrations.map((row: { name: string; monthDay: string; type?: string | null; year?: number | null }) => ({ name: row.name, monthDay: row.monthDay, type: row.type, year: row.year })),
         groceries: groceries.filter((item: { alreadyHave?: boolean | null }) => !item.alreadyHave).map((item: { name: string }) => ({ name: item.name })),
+        forecast: await homeForecast(location?.latitude, location?.longitude),
+        notes: await rememberedNotes(userId),
       };
       const brain = await replyWithChat(snap, historyOf(req.body?.history), text);
       if (brain.fallback) {

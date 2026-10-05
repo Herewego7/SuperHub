@@ -23,6 +23,50 @@ export interface GeocodeResult {
   longitude: number;
 }
 
+export interface PlaceMatch {
+  latitude: number;
+  longitude: number;
+  label: string;
+}
+
+type PlaceRow = { name?: string; latitude: number; longitude: number; admin1?: string };
+
+/** "Austin, Texas" is a city plus a region. A bare city name has no region. */
+export function splitPlaceQuery(query: string): { name: string; region: string } {
+  const [name = "", region = ""] = query.split(",").map((part) => part.trim());
+  return { name, region };
+}
+
+/** Prefer the region they named. Otherwise take the first result, which is the largest city with that name. */
+export function pickPlace(results: PlaceRow[], region: string): PlaceMatch | null {
+  if (results.length === 0) return null;
+  const wanted = region.trim().toLowerCase();
+  const match = wanted
+    ? results.find((row) => (row.admin1 ?? "").toLowerCase() === wanted) ??
+      results.find((row) => (row.admin1 ?? "").toLowerCase().startsWith(wanted)) ??
+      results[0]
+    : results[0];
+  if (!match) return null;
+  const city = match.name?.trim() || "there";
+  const area = match.admin1?.trim();
+  return { latitude: match.latitude, longitude: match.longitude, label: area ? `${city}, ${area}` : city };
+}
+
+export async function geocodePlace(query: string): Promise<PlaceMatch | null> {
+  const { name, region } = splitPlaceQuery(query);
+  if (!name) return null;
+  try {
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=10&language=en&format=json`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(2500) });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { results?: PlaceRow[] };
+    return pickPlace(data.results ?? [], region);
+  } catch (error) {
+    logger.warn({ error, place: name }, "Place lookup failed");
+    return null;
+  }
+}
+
 const COUNTRY_CODES: Record<string, string> = {
   "united states": "US",
   canada: "CA",

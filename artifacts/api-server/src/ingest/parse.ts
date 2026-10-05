@@ -84,6 +84,10 @@ export interface InboundMessage {
   snippet: string;
   body?: string;
   accountId: string;
+  /** Earlier messages in the thread, or text pulled from an attachment. */
+  extra?: string;
+  /** One image or PDF from the message, for the model to read. */
+  file?: { mimeType: string; data: string };
 }
 
 export function decodeBody(part: GmailPart): string {
@@ -129,11 +133,28 @@ export function outlookToInbound(
 }
 
 export const INBOX_SCAN_LIMIT = 100;
+/** The regular check. The first catch-up is the last 30 days, same as Bot Life's mail backfill. */
+export const INBOX_RECENT_DAYS = 2;
+export const INBOX_INITIAL_DAYS = 30;
+export const INBOX_INITIAL_LIMIT = 500;
+
+export function gmailInboxQuery(days: number): string {
+  return `newer_than:${days}d in:inbox`;
+}
+
+export function inboxSinceIso(days: number, now: Date): string {
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+export function inboxFetchLimit(days: number): number {
+  return days > INBOX_RECENT_DAYS ? INBOX_INITIAL_LIMIT : INBOX_SCAN_LIMIT;
+}
 
 /** Keep the body parts Gmail returns. The scan used to pass headers only, so a time in the body was never read. */
 export function gmailPayload(part: {
   mimeType?: string | null;
-  body?: { data?: string | null } | null;
+  filename?: string | null;
+  body?: { data?: string | null; attachmentId?: string | null } | null;
   headers?: { name?: string | null; value?: string | null }[] | null;
   parts?: unknown[] | null;
 } | null | undefined): GmailPart | undefined {
@@ -147,10 +168,55 @@ export function gmailPayload(part: {
   });
   return {
     mimeType: part.mimeType ?? "text/plain",
+    ...(part.filename ? { filename: part.filename } : {}),
     ...(headers.length ? { headers } : {}),
-    ...(part.body?.data ? { body: { data: part.body.data } } : {}),
+    ...((part.body?.data || part.body?.attachmentId) ? { body: { ...(part.body.data ? { data: part.body.data } : {}), ...(part.body.attachmentId ? { attachmentId: part.body.attachmentId } : {}) } } : {}),
     ...(parts.length ? { parts } : {}),
   };
+}
+
+const OUTLOOK_FILE = "#microsoft.graph.fileAttachment";
+
+/** One picture or PDF from an Outlook message. A real attachment wins over a logo pasted in the body. */
+export function outlookAttachment(rows: unknown[]): { id: string; mimeType: string; data?: string } | null {
+  const files = rows.flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const file = row as { id?: unknown; name?: unknown; contentType?: unknown; contentBytes?: unknown; size?: unknown; isInline?: unknown; "@odata.type"?: unknown };
+    const type = typeof file["@odata.type"] === "string" ? file["@odata.type"] : OUTLOOK_FILE;
+    const mime = typeof file.contentType === "string" ? file.contentType.toLowerCase() : "";
+    const id = typeof file.id === "string" ? file.id : "";
+    const size = typeof file.size === "number" ? file.size : 0;
+    if (type !== OUTLOOK_FILE || !id || size > 2_000_000) return [];
+    if (!mime.startsWith("image/") && mime !== "application/pdf") return [];
+    return [{
+      id,
+      mimeType: mime,
+      inline: file.isInline === true,
+      ...(typeof file.contentBytes === "string" && file.contentBytes.length > 0 && file.contentBytes.length < 2_000_000 ? { data: file.contentBytes } : {}),
+    }];
+  }).sort((a, b) => Number(a.inline) - Number(b.inline));
+  const picked = files[0];
+  if (!picked) return null;
+  return { id: picked.id, mimeType: picked.mimeType, ...(picked.data ? { data: picked.data } : {}) };
+}
+
+export function fileParts(part: GmailPart | undefined): { mimeType: string; filename: string; data?: string; attachmentId?: string }[] {
+  const out: { mimeType: string; filename: string; data?: string; attachmentId?: string }[] = [];
+  const walk = (node: GmailPart | undefined) => {
+    if (!node || out.length >= 1) return;
+    const mime = node.mimeType || "";
+    if ((mime.startsWith("image/") || mime === "application/pdf") && (node.body?.data || node.body?.attachmentId)) {
+      out.push({
+        mimeType: mime,
+        filename: node.filename || "file",
+        ...(node.body?.data ? { data: node.body.data } : {}),
+        ...(node.body?.attachmentId ? { attachmentId: node.body.attachmentId } : {}),
+      });
+    }
+    for (const child of node.parts ?? []) walk(child);
+  };
+  walk(part);
+  return out;
 }
 
 export function toInbound(msg: GmailMessage, accountId: string): InboundMessage {

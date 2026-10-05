@@ -1,5 +1,5 @@
 import { google, calendar_v3 } from 'googleapis';
-import { gmailPayload, INBOX_SCAN_LIMIT, toInbound, type InboundMessage } from './ingest/parse';
+import { fileParts, gmailInboxQuery, gmailPayload, inboxFetchLimit, INBOX_RECENT_DAYS, toInbound, type InboundMessage } from './ingest/parse';
 import { inboxFailure, inboxListStopped, inboxTokenExpiry } from './ingest/process';
 
 // Calendar plus read-only mail. No userinfo.email/userinfo.profile. Those
@@ -263,7 +263,7 @@ export class GoogleCalendarService {
     }
   }
 
-  async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string, tokenExpiry?: Date | string | null): Promise<InboundMessage[]> {
+  async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string, tokenExpiry?: Date | string | null, days = INBOX_RECENT_DAYS): Promise<InboundMessage[]> {
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
@@ -274,20 +274,21 @@ export class GoogleCalendarService {
       expiry_date: inboxTokenExpiry(tokenExpiry, !!refreshToken),
     });
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    const limit = inboxFetchLimit(days);
     const ids: string[] = [];
     let pageToken: string | undefined;
-    while (ids.length < INBOX_SCAN_LIMIT) {
+    while (ids.length < limit) {
       try {
         const listed = await gmail.users.messages.list({
           userId: "me",
-          q: "newer_than:2d in:inbox",
-          maxResults: Math.min(50, INBOX_SCAN_LIMIT - ids.length),
+          q: gmailInboxQuery(days),
+          maxResults: Math.min(50, limit - ids.length),
           pageToken,
         });
         const before = ids.length;
         for (const item of listed.data.messages ?? []) {
           if (item.id && !ids.includes(item.id)) ids.push(item.id);
-          if (ids.length >= INBOX_SCAN_LIMIT) break;
+          if (ids.length >= limit) break;
         }
         pageToken = listed.data.nextPageToken ?? undefined;
         if (!pageToken || ids.length === before) break;
@@ -305,11 +306,35 @@ export class GoogleCalendarService {
           id,
           format: "full",
         });
-        out.push(toInbound({
+        const payload = gmailPayload(full.data.payload);
+        const inbound = toInbound({
           id,
           snippet: full.data.snippet ?? undefined,
-          payload: gmailPayload(full.data.payload),
-        }, accountId));
+          payload,
+        }, accountId);
+        const file = fileParts(payload)[0];
+        if (file) {
+          let data = file.data;
+          if (!data && file.attachmentId) {
+            try {
+              const got = await gmail.users.messages.attachments.get({ userId: "me", messageId: id, id: file.attachmentId });
+              data = got.data.data ?? undefined;
+            } catch (err) {
+              console.warn("Attachment skipped:", err instanceof Error ? err.message : err);
+            }
+          }
+          if (data && data.length < 2_000_000) inbound.file = { mimeType: file.mimeType, data: data.replace(/-/g, "+").replace(/_/g, "/") };
+        }
+        if (full.data.threadId) {
+          try {
+            const thread = await gmail.users.threads.get({ userId: "me", id: full.data.threadId, format: "metadata", metadataHeaders: ["Subject"] });
+            const earlier = (thread.data.messages ?? []).filter((item) => item.id !== id).slice(-2).map((item) => item.snippet).filter((snippet): snippet is string => !!snippet);
+            if (earlier.length) inbound.extra = earlier.join("\n");
+          } catch (err) {
+            console.warn("Thread skipped:", err instanceof Error ? err.message : err);
+          }
+        }
+        out.push(inbound);
       } catch (err) {
         if (inboxFailure(err) === "reconnect") throw err;
         console.warn("Inbox message skipped:", err instanceof Error ? err.message : err);

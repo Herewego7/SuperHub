@@ -1547,6 +1547,19 @@ export const feedbackNotes = pgTable("feedback_notes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+/** Mail the household dismissed, plus text chunks chat can search. */
+export const aiRecords = pgTable("ai_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  kind: varchar("kind").notNull(),
+  text: text("text").notNull(),
+  ref: text("ref"),
+  embedding: jsonb("embedding").$type<number[]>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("ai_records_user_idx").on(table.userId),
+]);
+
 // ── Onboarding walkthrough progress ─────────────────────────────────────────
 // Tracks the skippable steps (profile/location/rewards/invite) of the
 // first-run onboarding wizard so a "finish setting up" reminder can be shown

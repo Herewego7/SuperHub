@@ -44,6 +44,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { PrivacyScreen } from "@/components/privacy-screen";
 import { FlyerSnapSheet } from "@/components/flyer-snap-sheet";
+import { AddAnythingDialog } from "@/components/add-anything-dialog";
 import { AddRemoveStarsModal } from "@/components/add-remove-stars-modal";
 import { objectUrl } from "@/lib/apiBase";
 import { robustScrollIntoView, robustScrollToTop, stickyHeaderOffset } from "@/lib/scroll";
@@ -205,6 +206,7 @@ export default function FamilyHub() {
   const [chatDraft, setChatDraft] = useState("");
   const [chatRevision, setChatRevision] = useState(0);
   const [plusOpen, setPlusOpen] = useState(false);
+  const [addAnythingOpen, setAddAnythingOpen] = useState(false);
   const [choresSubTab, setChoresSubTab] = useState<ChoresSubTabType>("chores");
   const [pendingOpenEventId, setPendingOpenEventId] = useState<string | null>(null);
   const { spotlight, spotlightOverlay } = useSpotlight();
@@ -2001,6 +2003,15 @@ export default function FamilyHub() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" side="top" className="w-56">
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => setAddAnythingOpen(true)}
+              data-testid="menu-add-anything"
+            >
+              <Sparkles className="w-4 h-4 mr-2 text-primary" />
+              Add anything
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">Calendar</DropdownMenuLabel>
             <DropdownMenuItem className="cursor-pointer" onClick={openGlobalAddEvent} data-testid="menu-add-event">
               <CalendarPlus className="w-4 h-4 mr-2 text-primary" />
@@ -2099,6 +2110,7 @@ export default function FamilyHub() {
         </DropdownMenu>
       </div>
 
+      <AddAnythingDialog open={addAnythingOpen} onOpenChange={setAddAnythingOpen} />
 
       {/* ── Health reminder: profile picker ── */}
       <Dialog open={healthReminderPickerOpen} onOpenChange={(o) => { if (!o) setHealthReminderPickerOpen(false); }}>

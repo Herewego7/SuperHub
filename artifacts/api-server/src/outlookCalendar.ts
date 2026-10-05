@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { outlookInstancesToDelete } from "./lib/recurrenceRule";
-import { INBOX_SCAN_LIMIT, outlookToInbound, type InboundMessage } from "./ingest/parse";
+import { inboxFetchLimit, inboxSinceIso, INBOX_RECENT_DAYS, outlookAttachment, outlookToInbound, type InboundMessage } from "./ingest/parse";
 import { graphNextLink, inboxListStopped } from "./ingest/process";
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
@@ -180,16 +180,17 @@ export class OutlookCalendarService {
     }
   }
 
-  async listInbox(accessToken: string, accountId: string): Promise<InboundMessage[]> {
-    const since = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  async listInbox(accessToken: string, accountId: string, days = INBOX_RECENT_DAYS): Promise<InboundMessage[]> {
+    const since = inboxSinceIso(days, new Date());
+    const limit = inboxFetchLimit(days);
     const out: InboundMessage[] = [];
     let url: string | null = `${GRAPH_API_BASE}/me/mailFolders/inbox/messages`;
     let params: Record<string, string | number> | undefined = {
-      $top: Math.min(50, INBOX_SCAN_LIMIT),
-      $select: "subject,from,bodyPreview,body,receivedDateTime",
+      $top: Math.min(50, limit),
+      $select: "id,subject,from,bodyPreview,body,receivedDateTime,hasAttachments",
       $orderby: "receivedDateTime desc",
     };
-    while (url && out.length < INBOX_SCAN_LIMIT) {
+    while (url && out.length < limit) {
       let response;
       try {
         response = await graph.get(url, {
@@ -211,10 +212,30 @@ export class OutlookCalendarService {
           older = true;
           continue;
         }
-        out.push(outlookToInbound(row, accountId));
-        if (out.length >= INBOX_SCAN_LIMIT) break;
+        const inbound = outlookToInbound(row, accountId);
+        if (row?.hasAttachments && typeof row?.id === "string") {
+          try {
+            const listed = await graph.get(`${GRAPH_API_BASE}/me/messages/${encodeURIComponent(row.id)}/attachments`, {
+              headers: { Authorization: `Bearer ${accessToken}` },
+              params: { $top: 10 },
+            });
+            const picked = outlookAttachment(Array.isArray(listed.data?.value) ? listed.data.value : []);
+            let data = picked?.data;
+            if (picked && !data) {
+              const one = await graph.get(`${GRAPH_API_BASE}/me/messages/${encodeURIComponent(row.id)}/attachments/${encodeURIComponent(picked.id)}`, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              });
+              data = typeof one.data?.contentBytes === "string" ? one.data.contentBytes : undefined;
+            }
+            if (picked && data && data.length < 2_000_000) inbound.file = { mimeType: picked.mimeType, data };
+          } catch (err) {
+            console.warn("Outlook attachment skipped:", err instanceof Error ? err.message : err);
+          }
+        }
+        out.push(inbound);
+        if (out.length >= limit) break;
       }
-      if (older || out.length >= INBOX_SCAN_LIMIT) break;
+      if (older || out.length >= limit) break;
       url = graphNextLink(response.data?.["@odata.nextLink"]);
     }
     return out;

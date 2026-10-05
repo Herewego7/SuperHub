@@ -16,6 +16,8 @@ import { loadProfiles } from "../lib/profileRows";
 import { expandRecurringEvents } from "../lib/eventRecurrence";
 import { eventsOnWatchedCalendars } from "../lib/calendarAssignmentScope";
 import { withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
+import { askJson, geminiClient, READ_MODELS } from "../geminiClient";
+import { planLinesStayHonest } from "../ai/parity";
 import { storage } from "../storage";
 import { GoogleCalendarService } from "../googleCalendar";
 import { getFreshOutlookAccessToken } from "../calendarSync";
@@ -643,6 +645,23 @@ function planLines(body: string): string[] {
   return body.split("\n").map((line) => line.trim()).filter((line) => line.length > 0 && line !== "Nothing on the plan.");
 }
 
+/** Bot Life rewrites the plan, then rejects a line that invented a time or a weekday. */
+export async function polishPlanBody(body: string): Promise<string> {
+  const ai = geminiClient();
+  const lines = planLines(body);
+  if (!ai || lines.length === 0) return body;
+  const parsed = await askJson(
+    ai,
+    READ_MODELS,
+    "Rewrite these plan lines so they are shorter and warmer. Keep every time and weekday exactly as written. Never add one that is not there. JSON {\"lines\":string[]}",
+    lines.map((line, index) => `${index + 1}. ${line}`).join("\n"),
+  );
+  const next = parsed && typeof parsed === "object" && Array.isArray((parsed as { lines?: unknown }).lines)
+    ? (parsed as { lines: unknown[] }).lines.flatMap((line) => typeof line === "string" && line.trim() ? [line.trim()] : [])
+    : [];
+  return planLinesStayHonest(body, next) ? next.join("\n") : body;
+}
+
 /** What this morning's plan says that last night's did not, including a line that dropped off. */
 export function changedPlanLines(previous: string, next: string): string[] {
   const oldLines = planLines(previous);
@@ -816,7 +835,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     if (!claimed) continue;
     try {
       const target = profile.eveningPlanTiming === "morningOf" ? day : nextDayKey(day);
-      const body = await planTextFor(profile, now, tz, target, settings?.dismissedSlipKeys ?? []);
+      const body = await polishPlanBody(await planTextFor(profile, now, tz, target, settings?.dismissedSlipKeys ?? []));
       const when = profile.eveningPlanTiming === "morningOf" ? "today" : "tomorrow";
       const title = planTitle(profile.role === "child" || profile.isChild === true, profile.eveningPlanTiming);
       const chat = planChatText(title, planLookahead(when, body.split("\n")), body);

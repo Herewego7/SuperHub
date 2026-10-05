@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, graphNextLink, holdSchoolEvent, inboxFailure, inboxListStopped, inboxMailFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
-import { gmailPayload, outlookToInbound, toInbound } from "../src/ingest/parse.ts";
+import { gmailInboxQuery, gmailPayload, inboxFetchLimit, inboxSinceIso, outlookToInbound, toInbound } from "../src/ingest/parse.ts";
+
+test("a catch-up scan reads 30 days, and the regular check stays at 2", () => {
+  assert.equal(gmailInboxQuery(30), "newer_than:30d in:inbox");
+  assert.equal(gmailInboxQuery(2), "newer_than:2d in:inbox");
+  assert.equal(inboxFetchLimit(30), 500);
+  assert.equal(inboxFetchLimit(2), 100);
+  assert.equal(inboxSinceIso(30, new Date("2026-10-05T12:00:00.000Z")), "2026-09-05T12:00:00.000Z");
+});
 
 test("a stored Google token is refreshed once it has expired", () => {
   assert.equal(inboxTokenExpiry("2020-01-01T00:00:00.000Z", true), Date.parse("2020-01-01T00:00:00.000Z"));
