@@ -5,11 +5,24 @@ import { storage } from "../storage";
 import { applyIngestedMail } from "./saveMail";
 import { gmailNewsletterQuery, INBOX_INITIAL_DAYS, INBOX_NEWSLETTER_LIMIT, INBOX_RECENT_DAYS, latestPerSender } from "./parse";
 import { inboxMailFailure, inboxScanEnabled, shareScan } from "./process";
+import { beginHouseholdScan, finishHouseholdScan } from "./scanProgress";
 
 const inflight = new Map<string, Promise<Awaited<ReturnType<typeof scanOnce>>>>();
 
 export function scanConnectedInboxes(userId: string, days = INBOX_RECENT_DAYS) {
-  return shareScan(inflight, userId, () => scanOnce(userId, days));
+  return shareScan(inflight, userId, () => {
+    beginHouseholdScan(userId);
+    return scanOnce(userId, days).then(
+      (result) => {
+        finishHouseholdScan(userId, { todos: result.todos.length, events: result.events.length });
+        return result;
+      },
+      (err) => {
+        finishHouseholdScan(userId, { todos: 0, events: 0 });
+        throw err;
+      },
+    );
+  });
 }
 
 /** A new Google or Outlook connection starts the 30-day catch-up. The redirect does not wait on it. */

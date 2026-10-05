@@ -20,6 +20,12 @@ export function noteInboxScan(reset = false, now = Date.now()) {
   window.dispatchEvent(new Event("superhub-inbox-scan"));
 }
 
+export function clearInboxScan() {
+  if (typeof localStorage === "undefined") return;
+  localStorage.removeItem(INBOX_SCAN_KEY);
+  window.dispatchEvent(new Event("superhub-inbox-scan"));
+}
+
 export function readInboxScanOpen(now = Date.now()): boolean {
   if (typeof localStorage === "undefined") return false;
   const until = Number(localStorage.getItem(INBOX_SCAN_KEY) || "");

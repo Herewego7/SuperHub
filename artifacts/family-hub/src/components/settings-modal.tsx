@@ -1530,7 +1530,7 @@ export function CalendarConnectionsSection({
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      if (data.started) setScanNote("Reading the last 30 days of mail. Leave SuperHub open. Items show on Home as they're found.");
+      if (data.started) setScanNote("Reading your mail. Home updates when the read finishes. Leave SuperHub open.");
       else if (data.scanOff) setScanNote("Scan is off.");
       else if (data.mailProblem === "scope") setScanNote("Connected. Connect it again and allow reading email.");
       else if (data.mailProblem === "unavailable") setScanNote("Connected. Mail reading isn't available for that account yet.");

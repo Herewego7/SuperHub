@@ -12,6 +12,7 @@ import { draftLine, draftWrite, normalizeDraft, readDraft } from "../ai/draft";
 import { conditionText, type TemperatureUnit } from "../ai/weather";
 import { acceptedMealPlan, assignedDinners, dinnerConfirmText, proposedDinners, type DinnerNight } from "../meals/assignDinner";
 import { findGrocery, groceriesToAdd, groceryAddedLine, groceryListText, groceryRequest, matchMeal, type GroceryRequest } from "../meals/mealMatch";
+import { driverWriteFields } from "../lib/eventDrivers";
 import { scheduleTurn } from "../plan/chatSchedule";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp } from "../meals/dinnerEvent";
 import { syncEventCreate, syncEventDelete, syncEventUpdate } from "../calendarSync";
@@ -202,7 +203,7 @@ async function applyAction(userId: string, action: ChatAction): Promise<{ meals:
       userId,
       title: action.title.slice(0, 200),
       taskType: "chore",
-      points: 1,
+      points: action.points,
       profileIds: action.profileIds,
       daysOfWeek: action.daysOfWeek,
       recurrenceType: action.daysOfWeek.length === 7 ? "daily" : "weekly",
@@ -468,15 +469,17 @@ export function registerChatRoutes(app: Express): void {
       const schedulePeople = profiles
         .filter((profile: { isAllFamilyProfile?: boolean | null }) => !profile.isAllFamilyProfile)
         .map((profile: { id: string; name: string }) => ({ id: profile.id, name: profile.name }));
-      const scheduleEvents = eventsForChat(storedEvents, outsideEvents).map((event: { id: string; title: string; startTime: string | Date; source?: string | null; isAllDay?: boolean | null }) => ({
+      const scheduleEvents = eventsForChat(storedEvents, outsideEvents).map((event: { id: string; title: string; startTime: string | Date; source?: string | null; isAllDay?: boolean | null; location?: string | null; profileIds?: string[] | null }) => ({
         id: event.id,
         title: event.title,
         startTime: event.startTime,
         source: event.source,
         isAllDay: event.isAllDay,
+        location: event.location,
+        profileIds: event.profileIds,
       }));
       const lastAssistant = [...history].reverse().find((turn) => turn.role === "assistant")?.text;
-      const scheduled = scheduleTurn(text, now, timeZone, schedulePeople, scheduleEvents, lastAssistant);
+      const scheduled = scheduleTurn(text, now, timeZone, schedulePeople, scheduleEvents, lastAssistant, account?.firstName || undefined);
       if (scheduled?.kind === "ask") {
         res.json({ fallback: false, text: scheduled.text, changed: [] });
         return;
@@ -495,6 +498,20 @@ export function registerChatRoutes(app: Express): void {
         res.json({ fallback: false, text: scheduled.text, changed: ["events"] });
         return;
       }
+      if (scheduled?.kind === "update_event") {
+        const patch: { location?: string; description?: string; recurrenceType?: string; recurrenceInterval?: number; profileIds?: string[]; drivingProfileIds?: string[]; drivingProfileId?: string | null } = {};
+        if (scheduled.location !== undefined) patch.location = scheduled.location;
+        if (scheduled.description !== undefined) patch.description = scheduled.description;
+        if (scheduled.recurrenceType) {
+          patch.recurrenceType = scheduled.recurrenceType;
+          patch.recurrenceInterval = 1;
+        }
+        if (scheduled.drivingProfileIds) Object.assign(patch, driverWriteFields(scheduled.drivingProfileIds));
+        if (scheduled.profileIds) patch.profileIds = scheduled.profileIds;
+        await storage.updateEvent(scheduled.eventId, patch, userId);
+        res.json({ fallback: false, text: scheduled.text, changed: ["events"] });
+        return;
+      }
       if (scheduled?.kind === "delete_event") {
         await storage.deleteEvent(scheduled.eventId, userId);
         res.json({ fallback: false, text: scheduled.text, changed: ["events"] });
@@ -505,7 +522,7 @@ export function registerChatRoutes(app: Express): void {
           userId,
           title: scheduled.title,
           taskType: "chore",
-          points: 1,
+          points: scheduled.points,
           profileIds: scheduled.profileIds,
           daysOfWeek: scheduled.daysOfWeek,
           recurrenceType: scheduled.daysOfWeek.length === 7 ? "daily" : "weekly",

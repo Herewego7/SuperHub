@@ -89,6 +89,24 @@ describe("chat brain", () => {
     assert.equal(handed.action, null);
   });
 
+  it("will not save a chore until it knows the days, the person, and the stars", () => {
+    const noDays = handleToolCall("create_chore", { title: "Trash" }, snap, false);
+    assert.equal(noDays.action, null);
+    assert.match(String((noDays.output as { ask?: string }).ask), /Which days/);
+    const noOne = handleToolCall("create_chore", { title: "Trash", days: ["Monday"] }, snap, false);
+    assert.equal(noOne.action, null);
+    assert.match(String((noOne.output as { ask?: string }).ask), /Who should do the chore/);
+    const noStars = handleToolCall("create_chore", { title: "Trash", days: ["Monday"], profileIds: ["liam"] }, snap, false);
+    assert.equal(noStars.action, null);
+    assert.match(String((noStars.output as { ask?: string }).ask), /How many stars/);
+    const saved = handleToolCall("create_chore", { title: "Trash", days: ["Monday"], profileIds: ["liam"], points: 4 }, snap, false);
+    assert.equal(saved.action?.kind, "create_chore");
+    if (saved.action?.kind === "create_chore") {
+      assert.deepEqual(saved.action.profileIds, ["liam"]);
+      assert.equal(saved.action.points, 4);
+    }
+  });
+
   it("adds a to-do only for a real person", () => {
     const made = handleToolCall("create_task", { title: "Pack the bag", profileIds: ["liam", "stranger"] }, snap, false);
     assert.deepEqual(made.action, { kind: "create_task", title: "Pack the bag", profileIds: ["liam"] });
