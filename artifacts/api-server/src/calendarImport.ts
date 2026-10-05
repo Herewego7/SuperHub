@@ -1,5 +1,6 @@
 import ICAL from "ical.js";
 import { GoogleGenAI } from "@google/genai";
+import { requireGemini } from "./geminiClient";
 import { safeFetchText } from "./lib/safeFetch";
 import { ObjectStorageService } from "./objectStorage";
 
@@ -237,15 +238,7 @@ Rules:
 - Title should be human-readable, e.g. "No School - Teacher Workshop", not "TW".`;
 
 function fetchGemini(): GoogleGenAI {
-  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
-  const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
-  if (!apiKey || !baseUrl) {
-    throw new Error("Gemini AI integration is not configured");
-  }
-  return new GoogleGenAI({
-    apiKey,
-    httpOptions: { apiVersion: "", baseUrl },
-  });
+  return requireGemini();
 }
 
 function combineDateAndTime(date: string, time: string | null | undefined, fallbackHour: number): Date {

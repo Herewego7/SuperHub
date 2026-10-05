@@ -5,6 +5,7 @@
  */
 import { GoogleGenAI } from "@google/genai";
 import { type ChatAction, type ChatSnapshot, handleToolCall, chatSystemPrompt, toolDeclarations, userSaidYes } from "./chatBrain";
+import { geminiClient } from "./geminiClient";
 
 export type ChatHistory = { role: "user" | "assistant"; text: string }[];
 
@@ -20,10 +21,7 @@ const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
 const MAX_ROUNDS = 4;
 
 function configured(): GoogleGenAI | null {
-  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
-  const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
-  if (!apiKey || !baseUrl) return null;
-  return new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "", baseUrl } });
+  return geminiClient();
 }
 
 async function generate(ai: GoogleGenAI, system: string, contents: unknown[], tools: ReturnType<typeof toolDeclarations>): Promise<ModelTurn | null> {

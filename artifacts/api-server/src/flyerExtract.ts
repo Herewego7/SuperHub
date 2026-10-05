@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { requireGemini } from "./geminiClient";
 import { ObjectStorageService } from "./objectStorage";
 
 export type ConfidenceLevel = "high" | "medium" | "low";
@@ -96,15 +97,7 @@ Rules:
 - Only return an empty events array if the image contains absolutely no dates, events, or appointments whatsoever (e.g., a plain landscape photo).`;
 
 function fetchGemini(): GoogleGenAI {
-  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
-  const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
-  if (!apiKey || !baseUrl) {
-    throw new Error("Gemini AI integration is not configured");
-  }
-  return new GoogleGenAI({
-    apiKey,
-    httpOptions: { apiVersion: "", baseUrl },
-  });
+  return requireGemini();
 }
 
 function normalizeConfidence(v: unknown): ConfidenceLevel {
