@@ -32,7 +32,7 @@ import { applyIngestedMail } from "../ingest/saveMail";
 import { scanAfterConnect, scanConnectedInboxes } from "../ingest/scanHousehold";
 import { markSchedulerWorkDirty } from "../lib/workGate";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp, dinnersToCopy } from "../meals/dinnerEvent";
-import { slipKey } from "../ingest/parse";
+import { INBOX_INITIAL_DAYS, slipKey } from "../ingest/parse";
 import { moveClock } from "../scheduler/eveningPlan";
 import { expandRecurringEvents, resolveSeriesEventId } from "../lib/eventRecurrence";
 import { planRecurringEdit, planRecurringDelete, type EditScope } from "../lib/recurringEdit";
@@ -3343,8 +3343,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/ingest/scan", isAuthenticated, async (req: any, res) => {
     try {
-      const saved = await scanConnectedInboxes(getUserId(req));
-      res.json(saved);
+      const userId = getUserId(req);
+      const settings = await storage.getCalendarSettingsByUser(userId);
+      if (settings?.scanInbox === false) {
+        res.json({ todos: [], events: [], scanOff: true, connected: 0 });
+        return;
+      }
+      const saved = scanConnectedInboxes(userId, INBOX_INITIAL_DAYS);
+      saved.catch((err) => console.error("Error scanning inbox:", err));
+      res.json({ todos: [], events: [], started: true, full: true, connected: 1, scanOff: false });
     } catch (error) {
       console.error("Error scanning inbox:", error);
       res.status(500).json({ error: "Failed to scan inbox" });

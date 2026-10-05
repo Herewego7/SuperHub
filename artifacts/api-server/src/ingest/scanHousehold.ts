@@ -3,23 +3,24 @@ import { OutlookCalendarService } from "../outlookCalendar";
 import { getFreshOutlookAccessToken } from "../calendarSync";
 import { storage } from "../storage";
 import { applyIngestedMail } from "./saveMail";
+import { INBOX_INITIAL_DAYS, INBOX_RECENT_DAYS } from "./parse";
 import { inboxMailFailure, inboxScanEnabled, shareScan } from "./process";
 
 const inflight = new Map<string, Promise<Awaited<ReturnType<typeof scanOnce>>>>();
 
-export function scanConnectedInboxes(userId: string) {
-  return shareScan(inflight, userId, () => scanOnce(userId));
+export function scanConnectedInboxes(userId: string, days = INBOX_RECENT_DAYS) {
+  return shareScan(inflight, userId, () => scanOnce(userId, days));
 }
 
-/** A new Google or Outlook connection starts the mail scan. The redirect does not wait on it. */
+/** A new Google or Outlook connection starts the 30-day catch-up. The redirect does not wait on it. */
 export function scanAfterConnect(profileId: string) {
   return storage.getProfile(profileId).then((profile) => {
     if (!profile?.userId) return null;
-    return scanConnectedInboxes(profile.userId);
+    return scanConnectedInboxes(profile.userId, INBOX_INITIAL_DAYS);
   });
 }
 
-async function scanOnce(userId: string) {
+async function scanOnce(userId: string, days = INBOX_RECENT_DAYS) {
   const settings = await storage.getCalendarSettingsByUser(userId);
   if (!inboxScanEnabled(settings?.scanInbox)) {
     return { todos: [], events: [], scanOff: true, connected: 0, needsReconnect: false };
@@ -44,7 +45,7 @@ async function scanOnce(userId: string) {
     if (tokens?.accessToken) {
       connected += 1;
       try {
-        messages.push(...await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry));
+        messages.push(...await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry, days));
       } catch (err) {
         note(err, "Google");
       }
@@ -54,7 +55,7 @@ async function scanOnce(userId: string) {
       connected += 1;
       try {
         const access = (await getFreshOutlookAccessToken(owner.id)) ?? outlookTokens.accessToken;
-        messages.push(...await outlook.listInbox(access, outlookTokens.email || owner.id));
+        messages.push(...await outlook.listInbox(access, outlookTokens.email || owner.id, days));
       } catch (err) {
         note(err, "Outlook");
       }

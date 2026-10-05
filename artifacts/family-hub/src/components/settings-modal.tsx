@@ -1521,7 +1521,7 @@ export function CalendarConnectionsSection({
   const scanNow = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/ingest/scan");
-      return res.json() as Promise<{ todos: unknown[]; needsReconnect?: boolean; connected?: number; scanOff?: boolean; mailProblem?: "scope" | "unavailable" | null }>;
+      return res.json() as Promise<{ todos: unknown[]; started?: boolean; needsReconnect?: boolean; connected?: number; scanOff?: boolean; mailProblem?: "scope" | "unavailable" | null }>;
     },
     onMutate: () => {
       noteInboxScan();
@@ -1530,7 +1530,8 @@ export function CalendarConnectionsSection({
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      if (data.scanOff) setScanNote("Scan is off.");
+      if (data.started) setScanNote("Reading the last 30 days of mail. Leave SuperHub open. Items show on Home as they're found.");
+      else if (data.scanOff) setScanNote("Scan is off.");
       else if (data.mailProblem === "scope") setScanNote("Connected. Connect it again and allow reading email.");
       else if (data.mailProblem === "unavailable") setScanNote("Connected. Mail reading isn't available for that account yet.");
       else if (data.needsReconnect) setScanNote("Reconnect the account to read mail.");

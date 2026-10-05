@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { outlookInstancesToDelete } from "./lib/recurrenceRule";
-import { INBOX_SCAN_LIMIT, outlookToInbound, type InboundMessage } from "./ingest/parse";
+import { inboxFetchLimit, inboxSinceIso, INBOX_RECENT_DAYS, outlookToInbound, type InboundMessage } from "./ingest/parse";
 import { graphNextLink, inboxListStopped } from "./ingest/process";
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
@@ -180,16 +180,17 @@ export class OutlookCalendarService {
     }
   }
 
-  async listInbox(accessToken: string, accountId: string): Promise<InboundMessage[]> {
-    const since = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  async listInbox(accessToken: string, accountId: string, days = INBOX_RECENT_DAYS): Promise<InboundMessage[]> {
+    const since = inboxSinceIso(days, new Date());
+    const limit = inboxFetchLimit(days);
     const out: InboundMessage[] = [];
     let url: string | null = `${GRAPH_API_BASE}/me/mailFolders/inbox/messages`;
     let params: Record<string, string | number> | undefined = {
-      $top: Math.min(50, INBOX_SCAN_LIMIT),
+      $top: Math.min(50, limit),
       $select: "subject,from,bodyPreview,body,receivedDateTime",
       $orderby: "receivedDateTime desc",
     };
-    while (url && out.length < INBOX_SCAN_LIMIT) {
+    while (url && out.length < limit) {
       let response;
       try {
         response = await graph.get(url, {
@@ -212,9 +213,9 @@ export class OutlookCalendarService {
           continue;
         }
         out.push(outlookToInbound(row, accountId));
-        if (out.length >= INBOX_SCAN_LIMIT) break;
+        if (out.length >= limit) break;
       }
-      if (older || out.length >= INBOX_SCAN_LIMIT) break;
+      if (older || out.length >= limit) break;
       url = graphNextLink(response.data?.["@odata.nextLink"]);
     }
     return out;

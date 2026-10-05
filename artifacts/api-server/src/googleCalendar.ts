@@ -1,5 +1,5 @@
 import { google, calendar_v3 } from 'googleapis';
-import { gmailPayload, INBOX_SCAN_LIMIT, toInbound, type InboundMessage } from './ingest/parse';
+import { gmailInboxQuery, gmailPayload, inboxFetchLimit, INBOX_RECENT_DAYS, toInbound, type InboundMessage } from './ingest/parse';
 import { inboxFailure, inboxListStopped, inboxTokenExpiry } from './ingest/process';
 
 // Calendar plus read-only mail. No userinfo.email/userinfo.profile. Those
@@ -263,7 +263,7 @@ export class GoogleCalendarService {
     }
   }
 
-  async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string, tokenExpiry?: Date | string | null): Promise<InboundMessage[]> {
+  async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string, tokenExpiry?: Date | string | null, days = INBOX_RECENT_DAYS): Promise<InboundMessage[]> {
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
@@ -274,20 +274,21 @@ export class GoogleCalendarService {
       expiry_date: inboxTokenExpiry(tokenExpiry, !!refreshToken),
     });
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    const limit = inboxFetchLimit(days);
     const ids: string[] = [];
     let pageToken: string | undefined;
-    while (ids.length < INBOX_SCAN_LIMIT) {
+    while (ids.length < limit) {
       try {
         const listed = await gmail.users.messages.list({
           userId: "me",
-          q: "newer_than:2d in:inbox",
-          maxResults: Math.min(50, INBOX_SCAN_LIMIT - ids.length),
+          q: gmailInboxQuery(days),
+          maxResults: Math.min(50, limit - ids.length),
           pageToken,
         });
         const before = ids.length;
         for (const item of listed.data.messages ?? []) {
           if (item.id && !ids.includes(item.id)) ids.push(item.id);
-          if (ids.length >= INBOX_SCAN_LIMIT) break;
+          if (ids.length >= limit) break;
         }
         pageToken = listed.data.nextPageToken ?? undefined;
         if (!pageToken || ids.length === before) break;

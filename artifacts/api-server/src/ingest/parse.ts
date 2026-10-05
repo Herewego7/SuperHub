@@ -129,6 +129,22 @@ export function outlookToInbound(
 }
 
 export const INBOX_SCAN_LIMIT = 100;
+/** The regular check. The first catch-up is the last 30 days, same as Bot Life's mail backfill. */
+export const INBOX_RECENT_DAYS = 2;
+export const INBOX_INITIAL_DAYS = 30;
+export const INBOX_INITIAL_LIMIT = 500;
+
+export function gmailInboxQuery(days: number): string {
+  return `newer_than:${days}d in:inbox`;
+}
+
+export function inboxSinceIso(days: number, now: Date): string {
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+export function inboxFetchLimit(days: number): number {
+  return days > INBOX_RECENT_DAYS ? INBOX_INITIAL_LIMIT : INBOX_SCAN_LIMIT;
+}
 
 /** Keep the body parts Gmail returns. The scan used to pass headers only, so a time in the body was never read. */
 export function gmailPayload(part: {
