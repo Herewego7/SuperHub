@@ -6,7 +6,7 @@ import { examplesForMessage, rememberMail } from "../ai/memory";
 import { connectedCalendarEvents } from "../scheduler/eveningPlan";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { slipKey, type InboundMessage } from "./parse";
-import { ingestMessages, mailWorthSaving, schoolEventStart, slipClock, type PlannedEvent, type PlannedTodo } from "./process";
+import { ingestMessages, schoolEventStart, slipClock, type PlannedEvent, type PlannedTodo } from "./process";
 import { alreadyRead, openContextLines, plansFromRead, readInboxMessage, subjectPlaceholder, type MailPerson } from "./readMail";
 
 type Saved = { todos: unknown[]; events: unknown[]; scanOff: boolean };
@@ -86,7 +86,7 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
   for (const message of messages) {
     await heartbeat?.();
     const subject = message.subject?.trim() ?? "";
-    if (!subject || !mailWorthSaving(message)) continue;
+    if (!subject) continue;
     if (message.fromAddress && state.mutedSenders.some((address) => address.toLowerCase() === message.fromAddress?.toLowerCase())) continue;
     if (state.dismissedSlipKeys.includes(slipKey(subject))) continue;
     if (chores.some((chore) => alreadyRead(chore.description, subject))) continue;

@@ -26,7 +26,7 @@ export function scanConnectedInboxes(userId: string, days = INBOX_RECENT_DAYS) {
     return scanOnce(userId, days).then(
       async (result) => {
         finishHouseholdScan(userId, { todos: result.todos.length, events: result.events.length });
-        if (days >= INBOX_INITIAL_DAYS) await finishInboxScanRecord(userId);
+        if (days >= INBOX_INITIAL_DAYS && !result.mailProblem && !result.needsReconnect) await finishInboxScanRecord(userId);
         return result;
       },
       (err) => {

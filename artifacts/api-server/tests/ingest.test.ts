@@ -72,6 +72,8 @@ test("one bad inbox message is skipped and a refused account reconnects", () => 
   assert.equal(inboxMailFailure({ response: { status: 401 } }), "auth");
   assert.equal(inboxMailFailure({ response: { status: 403, data: { error: { errors: [{ reason: "insufficientPermissions" }] } } } }), "scope");
   assert.equal(inboxMailFailure({ response: { status: 403, data: { error: { errors: [{ reason: "accessNotConfigured" }] } } } }), "unavailable");
+  assert.equal(inboxMailFailure({ response: { status: 403, data: { error: { status: "PERMISSION_DENIED", message: "Gmail API has not been used in project 1 before or it is disabled." } } } }), "unavailable");
+  assert.equal(inboxMailFailure({ response: { status: 403, data: { error: { status: "PERMISSION_DENIED", message: "Request had insufficient authentication scopes." } } } }), "scope");
   assert.equal(gmailScopeGranted(["https://www.googleapis.com/auth/calendar"]), false);
   assert.equal(gmailScopeGranted(["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/gmail.readonly"]), true);
   assert.equal(gmailScopeGranted(undefined), null);
