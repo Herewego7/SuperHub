@@ -349,6 +349,15 @@ test("a timed email missing from the calendar shows that day and on the horizon"
   assert.equal(horizonMail([practice], [], today)[0]?.start.getDate(), 3);
 });
 
+test("a read letter stays a newsletter, a key date stays a date, and a to-do stays a to-do", () => {
+  const letter = { id: "oak", title: "Oak Weekly", description: "From: news@school.org\nPlan: newsletter\nRef: oak weekly\nPicture day is 10/6/2026. Please sign the form.", category: "school_email" as const, createdAt: today };
+  const date = { id: "pic", title: "Picture day", description: "From: news@school.org\nPlan: keydate\nRef: pictures\n10/6/2026\nPlease sign the form.", category: "school_email" as const, createdAt: today };
+  const task = { id: "form", title: "Return the form", description: "From: news@school.org\nPlan: todo\nRef: form\nDue 10/6/2026.", category: "school_email" as const, createdAt: today };
+  assert.deepEqual(newsletterIssues([letter, date, task], today).map((issue) => issue.id), ["oak"]);
+  assert.deepEqual(mailKeyDates([letter, date, task], [], today).map((row) => row.id), ["pic"]);
+  assert.deepEqual(horizonDatedTodos([letter, date, task], [], today).map((row) => row.id), ["form"]);
+});
+
 test("a newsletter is the latest letter from that sender, and a dated note is not one", () => {
   const first = { id: "a", title: "Oak Weekly", description: "From: news@school.org\nHighlights from the week.", category: "school_email" as const, createdAt: new Date(2026, 8, 28) };
   const second = { id: "b", title: "Oak Weekly 2", description: "From: news@school.org\nThe next issue.", category: "school_email" as const, createdAt: new Date(2026, 9, 1) };
