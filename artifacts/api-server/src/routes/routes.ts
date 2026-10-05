@@ -54,6 +54,7 @@ import {
   peekOAuthTransaction,
   consumeOAuthTransaction,
   nativeRedirectFor,
+  webCalendarReturn,
   isOAuthProvider,
   type OAuthProvider,
 } from "../lib/oauthState";
@@ -3547,7 +3548,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const check = await peekOAuthTransaction(state as string, "google");
     if (!check.ok) {
       console.warn("Rejected Google OAuth start:", check.reason);
-      return res.redirect(`/?google_calendar_error=invalid_state`);
+      return res.redirect(webCalendarReturn("google_calendar_error=invalid_state"));
     }
     const requestHost = req.get('host');
     const authUrl = googleCalendarService.getAuthUrl(state as string, requestHost);
@@ -3566,7 +3567,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (oauthError) {
         console.error('Google OAuth error:', oauthError);
-        return res.redirect('/?google_calendar_error=access_denied');
+        return res.redirect(webCalendarReturn("google_calendar_error=access_denied"));
       }
 
       if (!code) {
@@ -3582,7 +3583,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const verified = await consumeOAuthTransaction(state as string, "google");
       if (!verified.ok) {
         console.warn('Rejected Google OAuth callback:', verified.reason);
-        return res.redirect(`/?google_calendar_error=invalid_state`);
+        return res.redirect(webCalendarReturn("google_calendar_error=invalid_state"));
       }
       const profileId = verified.profileId;
       // Server-derived, never client-supplied.
@@ -3594,7 +3595,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Google's consent screen.
       if (!(await oauthActorStillValid(verified))) {
         console.warn("Google OAuth callback from an account no longer entitled to complete it");
-        return res.redirect(`/?google_calendar_error=invalid_state`);
+        return res.redirect(webCalendarReturn("google_calendar_error=invalid_state"));
       }
 
       console.log('Received authorization code, exchanging for tokens...');
@@ -3652,7 +3653,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 <script>window.location=${safeDeepLink};</script>
 </head><body><p>Completing calendar connection, returning to app...</p></body></html>`);
       } else {
-        res.redirect(`/?google_calendar_connected=true&profileId=${profileId}`);
+        res.redirect(webCalendarReturn(`google_calendar_connected=true&profileId=${profileId}`));
       }
     } catch (error) {
       console.error("Google Calendar auth error:", error);
@@ -3664,7 +3665,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 <script>window.location=${safeDeepLink};</script>
 </head><body><p>Returning to app...</p></body></html>`);
       } else {
-        res.redirect("/?google_calendar_error=true");
+        res.redirect(webCalendarReturn("google_calendar_error=true"));
       }
     }
   });
@@ -4598,7 +4599,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const check = await peekOAuthTransaction(state, "outlook");
     if (!check.ok) {
       console.warn("Rejected Outlook OAuth start:", check.reason);
-      return res.redirect(`/?outlook_calendar_error=invalid_state`);
+      return res.redirect(webCalendarReturn("outlook_calendar_error=invalid_state"));
     }
     const authUrl = outlookCalendarService.generateAuthUrl(clientId, redirectUri, state);
     res.redirect(authUrl);
@@ -4614,7 +4615,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (oauthError) {
         console.error('Outlook OAuth error:', oauthError);
-        return res.redirect('/?outlook_calendar_error=access_denied');
+        return res.redirect(webCalendarReturn("outlook_calendar_error=access_denied"));
       }
 
       if (!code) {
@@ -4628,14 +4629,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const verified = await consumeOAuthTransaction(state as string, "outlook");
       if (!verified.ok) {
         console.warn('Rejected Outlook OAuth callback:', verified.reason);
-        return res.redirect(`/?outlook_calendar_error=invalid_state`);
+        return res.redirect(webCalendarReturn("outlook_calendar_error=invalid_state"));
       }
       const profileId = verified.profileId;
       outlookMobileRedirect = verified.redirectMode === "native" ? nativeRedirectFor("outlook") : null;
 
       if (!(await oauthActorStillValid(verified))) {
         console.warn("Outlook OAuth callback from an account no longer entitled to complete it");
-        return res.redirect(`/?outlook_calendar_error=invalid_state`);
+        return res.redirect(webCalendarReturn("outlook_calendar_error=invalid_state"));
       }
 
       console.log('Received authorization code, exchanging for tokens...');
@@ -4687,7 +4688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 <script>window.location=${safeDeepLink};</script>
 </head><body><p>Completing calendar connection, returning to app...</p></body></html>`);
       }
-      res.redirect(`/?outlook_calendar_connected=true&profileId=${profileId}`);
+      res.redirect(webCalendarReturn(`outlook_calendar_connected=true&profileId=${profileId}`));
     } catch (error) {
       console.error("Outlook Calendar auth error:", error);
       if (outlookMobileRedirect) {
@@ -4698,7 +4699,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 <script>window.location=${safeDeepLink};</script>
 </head><body><p>Returning to app...</p></body></html>`);
       }
-      res.redirect("/?outlook_calendar_error=true");
+      res.redirect(webCalendarReturn("outlook_calendar_error=true"));
     }
   });
 
