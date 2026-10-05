@@ -21,6 +21,27 @@ export function inboxScanEnabled(scanInbox: boolean | null | undefined): boolean
   return scanInbox !== false;
 }
 
+const GMAIL_READ_SCOPES = [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://mail.google.com/",
+];
+
+/** null when the token didn't say. A calendar-only grant is false. */
+export function gmailScopeGranted(scopes: string[] | null | undefined): boolean | null {
+  if (!scopes || scopes.length === 0) return null;
+  return scopes.some((scope) => GMAIL_READ_SCOPES.includes(scope));
+}
+
+/** One working mailbox is enough. Otherwise report the reason a reconnect can fix. */
+export function inboxBlockReason(results: Array<"ok" | "scope" | "unavailable" | "auth">): "ok" | "scope" | "unavailable" | "auth" | "none" {
+  if (results.includes("ok")) return "ok";
+  if (results.includes("scope")) return "scope";
+  if (results.includes("unavailable")) return "unavailable";
+  if (results.includes("auth")) return "auth";
+  return "none";
+}
+
 export function graphNextLink(link: unknown): string | null {
   if (typeof link !== "string" || !link) return null;
   try {

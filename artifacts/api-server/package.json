@@ -7,6 +7,7 @@
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
+    "scan-inbox": "node --enable-source-maps ./dist/inboxScanJob.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:node": "DATABASE_URL=\"${DATABASE_URL:-postgres://test:test@localhost:5432/testdb}\" tsx --test tests/*.test.ts",
     "test:scripts": "DATABASE_URL=\"${DATABASE_URL:-postgres://test:test@localhost:5432/testdb}\" tsx src/calendarSyncPlan.test.ts && DATABASE_URL=\"${DATABASE_URL:-postgres://test:test@localhost:5432/testdb}\" tsx src/lib/apns.test.ts && DATABASE_URL=\"${DATABASE_URL:-postgres://test:test@localhost:5432/testdb}\" tsx src/replit_integrations/auth/rateLimit.test.ts && DATABASE_URL=\"${DATABASE_URL:-postgres://test:test@localhost:5432/testdb}\" tsx src/replit_integrations/auth/resetToken.test.ts && DATABASE_URL=\"${DATABASE_URL:-postgres://test:test@localhost:5432/testdb}\" tsx src/replit_integrations/auth/password.test.ts",

@@ -29,8 +29,9 @@ import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
 import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, holdSchoolEvent, muteSender, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
 import { applyIngestedMail } from "../ingest/saveMail";
-import { scanAfterConnect, scanConnectedInboxes } from "../ingest/scanHousehold";
-import { householdScanProgress } from "../ingest/scanProgress";
+import { inboxReadiness, scanAfterConnect, scanConnectedInboxes } from "../ingest/scanHousehold";
+import { householdScanProgress, scanStatusFor } from "../ingest/scanProgress";
+import { requestInboxScan } from "../ingest/scanState";
 import { markSchedulerWorkDirty } from "../lib/workGate";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp, dinnersToCopy } from "../meals/dinnerEvent";
 import { INBOX_INITIAL_DAYS, slipKey } from "../ingest/parse";
@@ -3344,20 +3345,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/ingest/scan-status", isAuthenticated, async (req: any, res) => {
-    res.json(householdScanProgress(getUserId(req)));
+    const userId = getUserId(req);
+    const memory = householdScanProgress(userId);
+    const settings = await storage.getCalendarSettingsByUser(userId);
+    res.json({
+      ...memory,
+      ...scanStatusFor(memory, {
+        requestedAt: settings?.inboxScanRequestedAt ?? null,
+        finishedAt: settings?.inboxScanFinishedAt ?? null,
+      }),
+    });
   });
 
   app.post("/api/ingest/scan", isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
-      const settings = await storage.getCalendarSettingsByUser(userId);
-      if (settings?.scanInbox === false) {
-        res.json({ todos: [], events: [], scanOff: true, connected: 0 });
+      const ready = await inboxReadiness(userId);
+      if (!ready.canRead) {
+        res.json({ todos: [], events: [], started: false, scanOff: ready.scanOff, connected: ready.connected, needsReconnect: ready.needsReconnect, mailProblem: ready.mailProblem });
         return;
       }
+      await requestInboxScan(userId).catch((err) => console.warn("Could not record inbox scan:", err instanceof Error ? err.message : err));
       const saved = scanConnectedInboxes(userId, INBOX_INITIAL_DAYS);
       saved.catch((err) => console.error("Error scanning inbox:", err));
-      res.json({ todos: [], events: [], started: true, full: true, connected: 1, scanOff: false });
+      res.json({ todos: [], events: [], started: true, full: true, connected: ready.connected, scanOff: false });
     } catch (error) {
       console.error("Error scanning inbox:", error);
       res.status(500).json({ error: "Failed to scan inbox" });

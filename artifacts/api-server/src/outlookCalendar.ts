@@ -180,6 +180,21 @@ export class OutlookCalendarService {
     }
   }
 
+  async mailAccess(accessToken: string): Promise<"ok" | "scope" | "unavailable" | "auth"> {
+    try {
+      await graph.get(`${GRAPH_API_BASE}/me/mailFolders/inbox/messages`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        params: { $top: 1, $select: "id" },
+      });
+      return "ok";
+    } catch (err) {
+      const status = err && typeof err === "object" && "response" in err ? (err as { response?: { status?: number } }).response?.status : undefined;
+      if (status === 401) return "auth";
+      if (status === 403 || status === 404) return "scope";
+      return "ok";
+    }
+  }
+
   async listInbox(accessToken: string, accountId: string, days = INBOX_RECENT_DAYS): Promise<InboundMessage[]> {
     const since = inboxSinceIso(days, new Date());
     const limit = inboxFetchLimit(days);
