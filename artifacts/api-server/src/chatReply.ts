@@ -1,12 +1,18 @@
 /**
  * One chat turn: Gemini calls SuperHub tools, then the route saves whatever
- * those tools decided. No key, or a Google/Outlook change, hands the turn
- * back to the phrase matcher.
+ * those tools decided. A Google or Outlook edit hands the turn back to the
+ * phrase matcher. A failed model call does not — Bot Life shows its own
+ * sentence instead, and so do we.
+ *
+ * The reply is one complete generateContent call. Streaming this through
+ * Vertex's SSE parser dropped the answer and the page substituted the spare
+ * "I can tell you the plan" line. Bot Life streams through Genkit, which
+ * does not hit that parser.
  */
 import { GoogleGenAI } from "@google/genai";
 import { type ChatAction, type ChatSnapshot, handleToolCall, chatSystemPrompt, toolDeclarations, userSaidYes } from "./chatBrain";
 import { forecastForPlace } from "./ai/weather";
-import { retryDelayMs, retryPolicy, retryReason } from "./ai/modelRetry";
+import { withModelRetry } from "./ai/modelRetry";
 import { BOTLIFE_MODELS, chatGenerationConfig, geminiClient } from "./geminiClient";
 
 export type ChatHistory = { role: "user" | "assistant"; text: string }[];
@@ -21,71 +27,38 @@ type ModelTurn = { text: string; calls: ModelCall[]; modelParts: unknown[] };
 
 export const MAX_ROUNDS = 5;
 
+/** Same sentence Bot Life stores when the model call fails. */
+export const CHAT_PROBLEM = "Sorry, I hit a problem answering that. Please try again in a moment.";
+
 function configured(): GoogleGenAI | null {
   return geminiClient();
 }
 
-type StreamPart = { text?: string; functionCall?: { name?: string; args?: Record<string, unknown> } };
-
-async function generate(ai: GoogleGenAI, system: string, contents: unknown[], tools: ReturnType<typeof toolDeclarations>, onDelta?: (chunk: string) => void): Promise<ModelTurn | null> {
-  let last: unknown;
-  for (const model of [BOTLIFE_MODELS.chat]) {
-    const policyTries = 3;
-    for (let attempt = 1; attempt <= policyTries; attempt++) {
-      let started = false;
-      try {
-        const stream = await ai.models.generateContentStream({
-          model,
-          contents: contents as never,
-          config: {
-            systemInstruction: system,
-            ...chatGenerationConfig(),
-            tools: [{ functionDeclarations: tools as never }],
-            abortSignal: AbortSignal.timeout(60_000),
-          },
-        });
-        const parts: StreamPart[] = [];
-        const streamedCalls: ModelCall[] = [];
-        let text = "";
-        let sawCall = false;
-        for await (const chunk of stream) {
-          started = true;
-          for (const call of chunk.functionCalls ?? []) {
-            if (!call.name) continue;
-            sawCall = true;
-            streamedCalls.push({ name: call.name, args: call.args ?? {} });
-          }
-          const chunkParts = (chunk.candidates?.[0]?.content?.parts ?? []) as StreamPart[];
-          const chunkText = chunkParts.map((part) => part.text || "").join("");
-          for (const part of chunkParts) {
-            parts.push(part);
-            if (part.functionCall) sawCall = true;
-          }
-          const delta = chunkText || (!chunkParts.length && chunk.text ? chunk.text : "");
-          if (delta) {
-            text += delta;
-            if (!sawCall) onDelta?.(delta);
-          }
-        }
-        const fromParts = parts.flatMap((part) => part.functionCall?.name ? [{ name: part.functionCall.name, args: part.functionCall.args ?? {} }] : []);
-        const calls = fromParts.length ? fromParts : streamedCalls;
-        return { text: text.trim(), calls, modelParts: parts };
-      } catch (err) {
-        last = err;
-        if (started || !retryReason(err) || attempt >= retryPolicy("chat").tries) break;
-        const delayMs = retryDelayMs(retryPolicy("chat"), attempt);
-        console.warn("model call failed; retrying", { job: "chat", attempt, delayMs });
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-      }
-    }
+async function generate(ai: GoogleGenAI, system: string, contents: unknown[], tools: ReturnType<typeof toolDeclarations>): Promise<ModelTurn | null> {
+  try {
+    const response = await withModelRetry("chat", (signal) => ai.models.generateContent({
+      model: BOTLIFE_MODELS.chat,
+      contents: contents as never,
+      config: {
+        systemInstruction: system,
+        ...chatGenerationConfig(),
+        tools: [{ functionDeclarations: tools as never }],
+        abortSignal: signal,
+      },
+    }));
+    const parts = (response.candidates?.[0]?.content?.parts ?? []) as { text?: string; functionCall?: { name?: string; args?: Record<string, unknown> } }[];
+    const calls = parts.flatMap((part) => part.functionCall?.name ? [{ name: part.functionCall.name, args: part.functionCall.args ?? {} }] : []);
+    const text = (response.text?.trim() || parts.map((part) => part.text || "").join("")).trim();
+    return { text, calls, modelParts: parts };
+  } catch (err) {
+    console.warn("Chat model failed:", err instanceof Error ? err.message : err);
+    return null;
   }
-  if (last) console.warn("Chat model failed:", last instanceof Error ? last.message : last);
-  return null;
 }
 
-export async function replyWithChat(snap: ChatSnapshot, history: ChatHistory, text: string, onDelta?: (chunk: string) => void): Promise<ChatBrainResult> {
+export async function replyWithChat(snap: ChatSnapshot, history: ChatHistory, text: string): Promise<ChatBrainResult> {
   const ai = configured();
-  if (!ai) return { fallback: true };
+  if (!ai) return { fallback: false, text: CHAT_PROBLEM, actions: [] };
   const saidYes = userSaidYes(text);
   const system = chatSystemPrompt(snap);
   const tools = toolDeclarations(snap.isChild);
@@ -96,8 +69,8 @@ export async function replyWithChat(snap: ChatSnapshot, history: ChatHistory, te
   const actions: ChatAction[] = [];
   let answer = "";
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const turn = await generate(ai, system, contents, tools, onDelta);
-    if (!turn) return { fallback: true };
+    const turn = await generate(ai, system, contents, tools);
+    if (!turn) return { fallback: false, text: answer || CHAT_PROBLEM, actions };
     if (turn.calls.length === 0) {
       answer = turn.text;
       break;

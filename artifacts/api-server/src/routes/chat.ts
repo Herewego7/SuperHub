@@ -3,7 +3,7 @@ import { isAuthenticated } from "../replit_integrations/auth";
 import { checkRateLimit } from "../replit_integrations/auth/rateLimit";
 import { authStorage } from "../replit_integrations/auth/storage";
 import { storage } from "../storage";
-import { replyWithChat, type ChatHistory } from "../chatReply";
+import { CHAT_PROBLEM, replyWithChat, type ChatHistory } from "../chatReply";
 import { eventsForChat, type ChatAction, type ChatSnapshot } from "../chatBrain";
 import { connectedCalendarEvents } from "../scheduler/eveningPlan";
 import { choresDismissedBySlip, dismissSlip, muteSender } from "../ingest/process";
@@ -368,48 +368,26 @@ export function registerChatRoutes(app: Express): void {
           return searchMemory(userId, query);
         },
       };
-      const stream = req.body?.stream === true;
-      const write = (row: unknown) => {
-        res.write(`${JSON.stringify(row)}\n`);
-      };
-      if (stream) {
-        res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
-        res.setHeader("Cache-Control", "no-cache, no-transform");
-        res.setHeader("X-Accel-Buffering", "no");
-        res.flushHeaders();
-      }
-      const brain = await replyWithChat(snap, historyOf(req.body?.history), text, stream ? (chunk) => write({ type: "delta", text: chunk }) : undefined);
+      const brain = await replyWithChat(snap, historyOf(req.body?.history), text);
       if (brain.fallback) {
-        if (stream) {
-          write({ type: "fallback" });
-          res.end();
-          return;
-        }
         res.json({ fallback: true });
         return;
       }
       const groceryMeals: PlacedDinner[] = [];
       for (const action of brain.actions) groceryMeals.push(...await applyAction(userId, action));
-      const body = {
+      res.json({
         fallback: false,
         text: brain.text,
         changed: changedKeys(brain.actions),
         groceryMeals: groceryMeals.filter((meal) => meal.ingredients.length > 0),
-      };
-      if (stream) {
-        write({ type: "done", ...body });
-        res.end();
-        return;
-      }
-      res.json(body);
+      });
     } catch (error) {
       req.log?.error?.({ error }, "Chat reply failed");
       if (res.headersSent) {
-        res.write(`${JSON.stringify({ type: "fallback" })}\n`);
         res.end();
         return;
       }
-      res.json({ fallback: true });
+      res.json({ fallback: false, text: CHAT_PROBLEM });
     }
   });
 }
