@@ -110,6 +110,14 @@ export async function replyWithChat(snap: ChatSnapshot, history: ChatHistory, te
       if (handled.handoff) return { fallback: true };
       const nights = call.name === "plan_dinners" && !handled.action ? dinnersFrom(handled.output) : [];
       if (nights.length > 0) return { fallback: false, text: dinnerConfirmText(nights), actions };
+      const choreAsk = call.name === "create_chore" && !handled.action && handled.output && typeof handled.output === "object" && typeof (handled.output as { ask?: unknown }).ask === "string"
+        ? (handled.output as { ask: string }).ask
+        : "";
+      if (choreAsk) return { fallback: false, text: choreAsk, actions: [] };
+      const eventAsk = call.name === "create_event" && !handled.action && handled.output && typeof handled.output === "object" && typeof (handled.output as { ask?: unknown }).ask === "string"
+        ? (handled.output as { ask: string }).ask
+        : "";
+      if (eventAsk) return { fallback: false, text: eventAsk, actions: [] };
       if (handled.action) actions.push(handled.action);
       responses.push({ functionResponse: { name: call.name, response: handled.output } });
     }

@@ -5,6 +5,7 @@
  */
 import { mapsUrl, searchHits } from "./ai/parity";
 import { dinnerIdeaNames, matchMeal } from "./meals/mealMatch";
+import { daysQuestion, eventPersonQuestion, starsQuestion, whoQuestion } from "./plan/chatSchedule";
 
 export type ChatProfile = {
   id: string;
@@ -59,7 +60,7 @@ export type ChatSnapshot = {
 
 export type ChatAction =
   | { kind: "create_task"; title: string; profileIds: string[]; description?: string; once?: boolean }
-  | { kind: "create_chore"; title: string; profileIds: string[]; daysOfWeek: number[] }
+  | { kind: "create_chore"; title: string; profileIds: string[]; daysOfWeek: number[]; points: number }
   | { kind: "complete_task"; choreId: string; profileId: string }
   | { kind: "create_event"; title: string; start: string; end: string; location: string | null; profileIds: string[] }
   | { kind: "update_event"; eventId: string; patch: Record<string, unknown> }
@@ -193,8 +194,8 @@ export function chatSystemPrompt(snap: ChatSnapshot): string {
     "- Say who each thing is for. Include every meeting and event on the calendar. Leave one out only when they ask you to.",
     "- Mention the weather only when it changes something, like a big temperature drop, rain during something outdoors, or heat, and say what to do about it.",
     "- Change the calendar, to-dos, chores, meals, or groceries only when they ask in this conversation.",
-    "- A chore is not a to-do. create_chore adds a chore, and only after you know the days and who it is for. create_task adds a to-do. Never say you added either unless that tool returns ok.",
-    "- create_event needs a title, a day, and a start time. If any of those is missing, ask for it. Do not invent the day or the time. Never say an event was added or removed unless create_event or delete_event returns ok.",
+    "- A chore is not a to-do. create_chore adds a chore only after you know the days, who it is for, and how many stars it is worth. If any of those is missing, ask. Do not invent the person or the stars. create_task adds a to-do. Never say you added either unless that tool returns ok.",
+    "- create_event needs a title, a day, a start time, and who it is for. If any of those is missing, ask for it. Do not invent the day, the time, or the person. After it is saved, the app asks once about a driver, a place, a repeat, and a description. Never say an event was added or removed unless create_event or delete_event returns ok.",
     "- To plan dinners, call plan_dinners with a date (YYYY-MM-DD) and a name for each night. Use a saved meal name when one fits, otherwise a Browse Meal Ideas name, exactly. A week you are suggesting is also a list, one line each, like Wednesday: Tacos. Stop there. The app asks them to confirm, and only that yes writes the Meals tab and adds that meal's ingredients to the grocery list. Say a dinner is on the plan only after plan_dinners returns ok. Never say you added a dinner or a grocery when that tool did not.",
     "- The Groceries section is the current list. add_grocery, remove_grocery, and check_grocery change it. get_meal reads ingredients from a saved meal or Browse Meal Ideas. Say what changed only after the tool returns ok.",
     "- Before delete_event, remember_fact, forget_school, mute_sender, mark_not_relevant, or plan_dinners, ask first. Call the tool with confirmed=true only after they say yes.",
@@ -218,7 +219,7 @@ export function toolDeclarations(isChild: boolean): { name: string; description:
   const ids = { type: "array", items: { type: "string" } };
   const all = [
     { name: "create_task", description: "Add a to-do. Do not use this for a chore.", parameters: obj({ title: str, profileIds: ids }, ["title"]) },
-    { name: "create_chore", description: "Add a chore, not a to-do. days are weekday names. Ask for the days and who it is for before calling.", parameters: obj({ title: str, profileIds: ids, days: { type: "array", items: { type: "string" } } }, ["title", "days"]) },
+    { name: "create_chore", description: "Add a chore, not a to-do. Ask which days, who it is for, and how many stars before calling. days are weekday names. points is the star value they named. Pass unassigned true only when they said nobody.", parameters: obj({ title: str, profileIds: ids, days: { type: "array", items: { type: "string" } }, points: { type: "integer" }, unassigned: { type: "boolean" } }, ["title", "days", "points"]) },
     { name: "complete_task", description: "Check off a chore or to-do by id.", parameters: obj({ choreId: str }, ["choreId"]) },
     { name: "create_event", description: "Add an event on the family calendar once you know the title, day, and start time. Times are ISO 8601. Do not invent a missing day or time.", parameters: obj({ title: str, start: str, end: str, location: str, profileIds: ids }, ["title", "start", "end"]) },
     { name: "update_event", description: "Change a SuperHub event's title, time, place, or who it is for.", parameters: obj({ eventId: str, title: str, start: str, end: str, location: str, profileIds: ids }, ["eventId"]) },
@@ -288,13 +289,22 @@ export function handleToolCall(
   }
   if (name === "create_chore") {
     const title = textArg(input, "title");
-    const days = (Array.isArray(input.days) ? input.days : []).flatMap((day) => {
+    const days = [...new Set((Array.isArray(input.days) ? input.days : []).flatMap((day) => {
       const index = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"].indexOf(String(day).trim().toLowerCase());
       return index < 0 ? [] : [index];
-    });
+    }))].sort((a, b) => a - b);
     if (!title) return { output: { error: "A chore needs a name." }, action: null, handoff: false };
-    if (days.length === 0) return { output: { error: "Ask which days this chore is on." }, action: null, handoff: false };
-    return { output: { ok: true, title }, action: { kind: "create_chore", title, profileIds: idList(input, snap), daysOfWeek: [...new Set(days)].sort((a, b) => a - b) }, handoff: false };
+    if (days.length === 0) return { output: { ask: daysQuestion(title) }, action: null, handoff: false };
+    const profileIds = idList(input, snap);
+    const unassigned = input.unassigned === true;
+    if (profileIds.length === 0 && !unassigned) return { output: { ask: whoQuestion(title, days, snap.profiles) }, action: null, handoff: false };
+    const rawPoints = input.points;
+    const points = typeof rawPoints === "number" ? rawPoints : typeof rawPoints === "string" && /^\d+$/.test(rawPoints.trim()) ? Number(rawPoints) : null;
+    const who = unassigned ? "no one" : profileIds.map((id) => snap.profiles.find((person) => person.id === id)?.name).filter((name): name is string => !!name).join(", ");
+    if (points == null || !Number.isInteger(points) || points < 0 || points > 10000) {
+      return { output: { ask: starsQuestion(title, days, who || "no one") }, action: null, handoff: false };
+    }
+    return { output: { ok: true, title }, action: { kind: "create_chore", title, profileIds, daysOfWeek: days, points }, handoff: false };
   }
   if (name === "complete_task") {
     const chore = snap.chores.find((item) => item.id === textArg(input, "choreId"));
@@ -308,9 +318,21 @@ export function handleToolCall(
     const start = textArg(input, "start");
     const end = textArg(input, "end") || start;
     if (!title || !start) return { output: { error: "An event needs a title and a start." }, action: null, handoff: false };
+    const profileIds = idList(input, snap);
+    if (profileIds.length === 0 && input.unassigned !== true) {
+      const at = new Date(start);
+      const zone = snap.timeZone || "America/Chicago";
+      if (!Number.isNaN(at.getTime())) {
+        const parts = new Intl.DateTimeFormat("en-US", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(at);
+        const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+        const date = `${value("year")}-${value("month")}-${value("day")}`;
+        const minutes = Number(value("hour")) * 60 + Number(value("minute"));
+        return { output: { ask: eventPersonQuestion(title, date, minutes, false, snap.profiles) }, action: null, handoff: false };
+      }
+    }
     return {
       output: { ok: true, title },
-      action: { kind: "create_event", title, start, end, location: textArg(input, "location") || null, profileIds: idList(input, snap) },
+      action: { kind: "create_event", title, start, end, location: textArg(input, "location") || null, profileIds },
       handoff: false,
     };
   }

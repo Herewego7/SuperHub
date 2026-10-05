@@ -30,6 +30,7 @@ import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
 import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, holdSchoolEvent, muteSender, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
 import { applyIngestedMail } from "../ingest/saveMail";
 import { scanAfterConnect, scanConnectedInboxes } from "../ingest/scanHousehold";
+import { householdScanProgress } from "../ingest/scanProgress";
 import { markSchedulerWorkDirty } from "../lib/workGate";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp, dinnersToCopy } from "../meals/dinnerEvent";
 import { INBOX_INITIAL_DAYS, slipKey } from "../ingest/parse";
@@ -3340,6 +3341,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error ingesting mail:", error);
       res.status(500).json({ error: "Failed to ingest mail" });
     }
+  });
+
+  app.get("/api/ingest/scan-status", isAuthenticated, async (req: any, res) => {
+    res.json(householdScanProgress(getUserId(req)));
   });
 
   app.post("/api/ingest/scan", isAuthenticated, async (req: any, res) => {
