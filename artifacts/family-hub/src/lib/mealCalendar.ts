@@ -1,4 +1,5 @@
 import { moveDay } from "./chatTools";
+import { MEAL_IDEAS } from "./mealIdeasDatabase";
 
 function dayKey(day: Date): string {
   return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
@@ -123,7 +124,7 @@ function mealName(raw: string): string | null {
     .replace(/[.!?]+$/g, "")
     .replace(/^(?:please\s+|let's\s+|lets\s+|we should (?:eat|have|do)\s+|i want\s+|eat\s+|have\s+|do\s+|for\s+|the\s+|dinner\s+|meal\s+)+/i, "")
     .trim();
-  if (!name || name.length > 60 || name.split(/\s+/).length > 6) return null;
+  if (!name || name.length > 80 || name.split(/\s+/).length > 8) return null;
   if (/\b(?:what|when|who|where|why|how)\b/i.test(name)) return null;
   if (/^(?:plan|pick|choose|week|the week|dinners?|meals?)$/i.test(name)) return null;
   return name;
@@ -231,6 +232,34 @@ export function dinnersFromSaved(
     open.push(date);
   }
   return open.slice(0, saved.length).map((date, index) => ({ date, name: saved[index].name }));
+}
+
+/** Saved meals fill the open nights first. Browse Meal Ideas dinners fill the rest. */
+export function dinnersForTheWeek(
+  saved: { id: string; name: string }[],
+  existing: { date: string; slot?: string | null }[],
+  today: Date,
+): DinnerPick[] {
+  const fromSaved = dinnersFromSaved(saved, existing, today);
+  const taken = new Set(fromSaved.map((pick) => pick.date));
+  const used = new Set(fromSaved.map((pick) => pick.name.trim().toLowerCase()));
+  const open: string[] = [];
+  for (let i = 0; i < 7; i += 1) {
+    const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
+    const date = dayKey(day);
+    if (taken.has(date)) continue;
+    if (existing.some((meal) => meal.date === date && (meal.slot === "dinner" || !meal.slot))) continue;
+    open.push(date);
+  }
+  const ideas = MEAL_IDEAS.filter((idea) => idea.mealType === "dinner" && !used.has(idea.name.trim().toLowerCase()));
+  const start = ideas.length === 0 ? 0 : today.getDate() % ideas.length;
+  const picks = [...fromSaved];
+  for (let index = 0; index < open.length && ideas.length > 0; index += 1) {
+    const idea = ideas[(start + index) % ideas.length];
+    used.add(idea.name.trim().toLowerCase());
+    picks.push({ date: open[index], name: idea.name });
+  }
+  return picks.sort((left, right) => left.date.localeCompare(right.date));
 }
 
 export function withSavedMeals(

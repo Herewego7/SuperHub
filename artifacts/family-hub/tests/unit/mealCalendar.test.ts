@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assignedDinners, dinnerCopyRange, dinnerPlanReply, dinnerReply, dinnersFromSaved, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, groceryListAfterHave, mealEvents, proposedDinners, statedDinners, wantsDinnerPlan, withSavedMeals } from "../../src/lib/mealCalendar";
+import { MEAL_IDEAS } from "../../src/lib/mealIdeasDatabase";
+import { assignedDinners, dinnerCopyRange, dinnerPlanReply, dinnerReply, dinnersForTheWeek, dinnersFromSaved, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, groceryListAfterHave, mealEvents, proposedDinners, statedDinners, wantsDinnerPlan, withSavedMeals } from "../../src/lib/mealCalendar";
 
 test("turning dinners on copies the weeks ahead, not only the week on screen", () => {
   const range = dinnerCopyRange("2026-10-05", "2026-10-11", new Date(2026, 9, 1));
@@ -119,4 +120,12 @@ test("a week of dinners uses saved meals and skips a night that already has one"
   assert.equal(named[0].name, "Pasta");
   assert.equal(named[0].replaces, "Soup");
   assert.match(dinnerPlanReply(named), /Reply yes to put these on the meal plan/);
+  const ideas = MEAL_IDEAS.filter((idea) => idea.mealType === "dinner");
+  const week = dinnersForTheWeek([], [], new Date(2026, 9, 5));
+  assert.equal(week.length, 7);
+  assert.equal(week[0].date, "2026-10-05");
+  assert.equal(week[0].name, ideas[5 % ideas.length].name);
+  const withSaved = dinnersForTheWeek([{ id: "a", name: "Pasta" }], [], new Date(2026, 9, 5));
+  assert.equal(withSaved[0].name, "Pasta");
+  assert.equal(withSaved.length, 7);
 });

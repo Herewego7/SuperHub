@@ -4,6 +4,7 @@
  * A child never gets inbox tools.
  */
 import { mapsUrl, searchHits } from "./ai/parity";
+import { dinnerIdeaNames, matchMeal } from "./meals/mealMatch";
 
 export type ChatProfile = {
   id: string;
@@ -46,9 +47,9 @@ export type ChatSnapshot = {
   chores: ChatChore[];
   doneIds: string[];
   meals: { name: string; date: string; mealType?: string | null }[];
-  savedMeals?: { id: string; name: string }[];
+  savedMeals?: { id: string; name: string; ingredients?: { item: string; quantity?: string | null }[] }[];
   celebrations: { name: string; monthDay: string; type?: string | null; year?: number | null }[];
-  groceries: { name: string }[];
+  groceries: { name: string; quantity?: string | null; checked?: boolean }[];
   weather?: { temperature?: number; condition?: string; location?: string } | null;
   forecast?: { date: string; high: number; low: number; condition?: string }[];
   notes?: string[];
@@ -58,6 +59,7 @@ export type ChatSnapshot = {
 
 export type ChatAction =
   | { kind: "create_task"; title: string; profileIds: string[]; description?: string; once?: boolean }
+  | { kind: "create_chore"; title: string; profileIds: string[]; daysOfWeek: number[] }
   | { kind: "complete_task"; choreId: string; profileId: string }
   | { kind: "create_event"; title: string; start: string; end: string; location: string | null; profileIds: string[] }
   | { kind: "update_event"; eventId: string; patch: Record<string, unknown> }
@@ -66,6 +68,9 @@ export type ChatAction =
   | { kind: "set_school"; profileId: string; school: string | null }
   | { kind: "assign"; choreId: string; profileIds: string[] }
   | { kind: "grocery_have"; name: string }
+  | { kind: "grocery_add"; name: string; quantity: string | null }
+  | { kind: "grocery_remove"; name: string }
+  | { kind: "grocery_check"; name: string; checked: boolean }
   | { kind: "mute_sender"; address: string }
   | { kind: "not_relevant"; title: string }
   | { kind: "plan_dinners"; dinners: { date: string; name: string }[] }
@@ -163,8 +168,9 @@ export function chatBriefing(snap: ChatSnapshot): string {
     `Chores:\n${chores.join("\n") || "(none)"}`,
     `Dinners:\n${dinners.join("\n") || "(none planned)"}`,
     `Saved meals:\n${(snap.savedMeals ?? []).map((meal) => meal.name).slice(0, 40).join(", ") || "(none saved)"}`,
+    `Browse Meal Ideas, dinners: ${dinnerIdeaNames()}`,
     `Birthdays and anniversaries:\n${days.join("\n") || "(none saved)"}`,
-    `Groceries still on the list:\n${snap.groceries.map((item) => item.name).slice(0, 30).join(", ") || "(none)"}`,
+    `Groceries:\n${snap.groceries.slice(0, 40).map((item) => `- ${item.name}${item.quantity ? ` (${item.quantity})` : ""}${item.checked ? " (checked)" : ""}`).join("\n") || "(none)"}`,
     snap.weather?.condition ? `Weather now: ${snap.weather.temperature ?? ""} ${snap.weather.condition}${snap.weather.location ? ` in ${snap.weather.location}` : ""}.` : "",
     (snap.forecast ?? []).length
       ? `Forecast:\n${(snap.forecast ?? []).slice(0, 7).map((day) => `- ${day.date}: ${day.condition ? `${day.condition}, ` : ""}high ${day.high}, low ${day.low}`).join("\n")}`
@@ -187,7 +193,10 @@ export function chatSystemPrompt(snap: ChatSnapshot): string {
     "- Say who each thing is for. Include every meeting and event on the calendar. Leave one out only when they ask you to.",
     "- Mention the weather only when it changes something, like a big temperature drop, rain during something outdoors, or heat, and say what to do about it.",
     "- Change the calendar, to-dos, chores, meals, or groceries only when they ask in this conversation.",
-    "- To plan dinners, call plan_dinners with a date (YYYY-MM-DD) and a name for each night. Prefer a saved meal name when one fits. A week you are suggesting is also a list, one line each, like Wednesday: Tacos. Stop there. The app asks them to confirm, and only that yes writes the Meals tab. Say a dinner is on the plan only after plan_dinners returns ok. Never say you added a dinner when that tool did not.",
+    "- A chore is not a to-do. create_chore adds a chore, and only after you know the days and who it is for. create_task adds a to-do. Never say you added either unless that tool returns ok.",
+    "- create_event needs a title, a day, and a start time. If any of those is missing, ask for it. Do not invent the day or the time. Never say an event was added or removed unless create_event or delete_event returns ok.",
+    "- To plan dinners, call plan_dinners with a date (YYYY-MM-DD) and a name for each night. Use a saved meal name when one fits, otherwise a Browse Meal Ideas name, exactly. A week you are suggesting is also a list, one line each, like Wednesday: Tacos. Stop there. The app asks them to confirm, and only that yes writes the Meals tab and adds that meal's ingredients to the grocery list. Say a dinner is on the plan only after plan_dinners returns ok. Never say you added a dinner or a grocery when that tool did not.",
+    "- The Groceries section is the current list. add_grocery, remove_grocery, and check_grocery change it. get_meal reads ingredients from a saved meal or Browse Meal Ideas. Say what changed only after the tool returns ok.",
     "- Before delete_event, remember_fact, forget_school, mute_sender, mark_not_relevant, or plan_dinners, ask first. Call the tool with confirmed=true only after they say yes.",
     "- Events that live on Google, Outlook, or an iCal feed cannot be deleted or moved here. The tool will say to hand that off.",
     "- Use search, get_plan, get_newsletters, get_profile, and get_weather instead of guessing. For weather somewhere other than home, pass place and say the place name the tool returns. For a place, call maps_link and include its url. create_reminder puts a reminder on the plan. send_feedback sends a note to the makers.",
@@ -208,9 +217,10 @@ export function toolDeclarations(isChild: boolean): { name: string; description:
   const str = { type: "string" };
   const ids = { type: "array", items: { type: "string" } };
   const all = [
-    { name: "create_task", description: "Add a to-do.", parameters: obj({ title: str, profileIds: ids }, ["title"]) },
+    { name: "create_task", description: "Add a to-do. Do not use this for a chore.", parameters: obj({ title: str, profileIds: ids }, ["title"]) },
+    { name: "create_chore", description: "Add a chore, not a to-do. days are weekday names. Ask for the days and who it is for before calling.", parameters: obj({ title: str, profileIds: ids, days: { type: "array", items: { type: "string" } } }, ["title", "days"]) },
     { name: "complete_task", description: "Check off a chore or to-do by id.", parameters: obj({ choreId: str }, ["choreId"]) },
-    { name: "create_event", description: "Add an event on the family calendar. Times are ISO 8601.", parameters: obj({ title: str, start: str, end: str, location: str, profileIds: ids }, ["title", "start", "end"]) },
+    { name: "create_event", description: "Add an event on the family calendar once you know the title, day, and start time. Times are ISO 8601. Do not invent a missing day or time.", parameters: obj({ title: str, start: str, end: str, location: str, profileIds: ids }, ["title", "start", "end"]) },
     { name: "update_event", description: "Change a SuperHub event's title, time, place, or who it is for.", parameters: obj({ eventId: str, title: str, start: str, end: str, location: str, profileIds: ids }, ["eventId"]) },
     { name: "delete_event", description: "Delete a SuperHub event after the user says yes.", parameters: obj({ eventId: str, confirmed: { type: "boolean" } }, ["eventId"]) },
     { name: "remember_fact", description: "Remember one fact about a person, after they say yes.", parameters: obj({ profileId: str, fact: str, confirmed: { type: "boolean" } }, ["profileId", "fact"]) },
@@ -218,9 +228,13 @@ export function toolDeclarations(isChild: boolean): { name: string; description:
     { name: "forget_school", description: "Clear a person's school after they say yes.", parameters: obj({ profileId: str, confirmed: { type: "boolean" } }, ["profileId"]) },
     { name: "assign", description: "Assign a chore or to-do to people.", parameters: obj({ choreId: str, profileIds: ids }, ["choreId", "profileIds"]) },
     { name: "grocery_have", description: "Take an item off the grocery list because the family already has it.", parameters: obj({ name: str }, ["name"]) },
+    { name: "add_grocery", description: "Add an item to the grocery list.", parameters: obj({ name: str, quantity: str }, ["name"]) },
+    { name: "remove_grocery", description: "Remove an item from the grocery list.", parameters: obj({ name: str }, ["name"]) },
+    { name: "check_grocery", description: "Check an item off the grocery list, or uncheck it when checked is false.", parameters: obj({ name: str, checked: { type: "boolean" } }, ["name"]) },
+    { name: "get_meal", description: "Ingredients for one saved meal or Browse Meal Ideas dish.", parameters: obj({ name: str }, ["name"]) },
     { name: "mute_sender", description: "Stop mail from an address after they say yes.", parameters: obj({ address: str, confirmed: { type: "boolean" } }, ["address"]) },
     { name: "mark_not_relevant", description: "Remove a school-email to-do after they say yes.", parameters: obj({ title: str, confirmed: { type: "boolean" } }, ["title"]) },
-    { name: "plan_dinners", description: "Put dinners on the meal plan after they say yes. Prefer saved meal names.", parameters: obj({ meals: { type: "array", items: obj({ date: str, name: str }, ["date", "name"]) }, confirmed: { type: "boolean" } }, ["meals"]) },
+    { name: "plan_dinners", description: "Put dinners on the meal plan after they say yes. Use a saved meal or a Browse Meal Ideas name. Saving adds the ingredients to the grocery list.", parameters: obj({ meals: { type: "array", items: obj({ date: str, name: str }, ["date", "name"]) }, confirmed: { type: "boolean" } }, ["meals"]) },
     { name: "search", description: "Search to-dos, events, newsletters, and saved mail. Cite the source.", parameters: obj({ query: str }, ["query"]) },
     { name: "get_newsletters", description: "Recent school newsletters and their highlights.", parameters: obj({}, []) },
     { name: "get_plan", description: "The schedule and to-dos for one day, yyyy-MM-dd.", parameters: obj({ date: str }, ["date"]) },
@@ -271,6 +285,16 @@ export function handleToolCall(
     if (!title) return { output: { error: "A to-do needs a title." }, action: null, handoff: false };
     const profileIds = idList(input, snap);
     return { output: { ok: true, title }, action: { kind: "create_task", title, profileIds }, handoff: false };
+  }
+  if (name === "create_chore") {
+    const title = textArg(input, "title");
+    const days = (Array.isArray(input.days) ? input.days : []).flatMap((day) => {
+      const index = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"].indexOf(String(day).trim().toLowerCase());
+      return index < 0 ? [] : [index];
+    });
+    if (!title) return { output: { error: "A chore needs a name." }, action: null, handoff: false };
+    if (days.length === 0) return { output: { error: "Ask which days this chore is on." }, action: null, handoff: false };
+    return { output: { ok: true, title }, action: { kind: "create_chore", title, profileIds: idList(input, snap), daysOfWeek: [...new Set(days)].sort((a, b) => a - b) }, handoff: false };
   }
   if (name === "complete_task") {
     const chore = snap.chores.find((item) => item.id === textArg(input, "choreId"));
@@ -332,6 +356,24 @@ export function handleToolCall(
     const item = textArg(input, "name");
     if (!item) return { output: { error: "Name the grocery." }, action: null, handoff: false };
     return { output: { ok: true, name: item }, action: { kind: "grocery_have", name: item }, handoff: false };
+  }
+  if (name === "add_grocery" || name === "remove_grocery" || name === "check_grocery") {
+    const item = textArg(input, "name");
+    if (!item) return { output: { error: "Name the grocery." }, action: null, handoff: false };
+    if (name === "add_grocery") {
+      const quantity = textArg(input, "quantity");
+      return { output: { ok: true, name: item }, action: { kind: "grocery_add", name: item, quantity: quantity || null }, handoff: false };
+    }
+    if (name === "remove_grocery") return { output: { ok: true, name: item }, action: { kind: "grocery_remove", name: item }, handoff: false };
+    return { output: { ok: true, name: item }, action: { kind: "grocery_check", name: item, checked: input.checked !== false }, handoff: false };
+  }
+  if (name === "get_meal") {
+    const meal = matchMeal(textArg(input, "name"), (snap.savedMeals ?? []).map((saved) => ({
+      name: saved.name,
+      ingredients: (saved.ingredients ?? []).map((row) => ({ item: row.item, quantity: row.quantity ?? null })),
+    })));
+    if (!meal) return { output: { error: "I don't see that meal in saved meals or Browse Meal Ideas." }, action: null, handoff: false };
+    return { output: { name: meal.name, source: meal.source, ingredients: meal.ingredients }, action: null, handoff: false };
   }
   if (name === "mute_sender") {
     const address = textArg(input, "address");
