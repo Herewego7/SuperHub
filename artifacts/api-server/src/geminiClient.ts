@@ -57,6 +57,32 @@ export function geminiClient(env: GeminiEnv = process.env): GoogleGenAI | null {
   return null;
 }
 
+export const CHAT_MODELS = ["gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash"];
+export const READ_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+export const STRONG_MODELS = ["gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash"];
+
+export async function askJson(ai: GoogleGenAI, models: string[], system: string, prompt: string, image?: { mimeType: string; data: string }): Promise<unknown | null> {
+  const parts = [
+    { text: prompt },
+    ...(image ? [{ inlineData: { mimeType: image.mimeType, data: image.data } }] : []),
+  ];
+  for (const model of models) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: [{ role: "user", parts }],
+        config: { systemInstruction: system, responseMimeType: "application/json", maxOutputTokens: 4096 },
+      });
+      const cleaned = (response.text || "").replace(/```json|```/g, "").trim();
+      if (!cleaned) continue;
+      return JSON.parse(cleaned) as unknown;
+    } catch (err) {
+      console.warn("Gemini JSON failed:", err instanceof Error ? err.message : err);
+    }
+  }
+  return null;
+}
+
 export function requireGemini(env: GeminiEnv = process.env): GoogleGenAI {
   const client = geminiClient(env);
   if (!client) throw new Error("Gemini AI integration is not configured");

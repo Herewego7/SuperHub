@@ -84,6 +84,10 @@ export interface InboundMessage {
   snippet: string;
   body?: string;
   accountId: string;
+  /** Earlier messages in the thread, or text pulled from an attachment. */
+  extra?: string;
+  /** One image or PDF from the message, for the model to read. */
+  file?: { mimeType: string; data: string };
 }
 
 export function decodeBody(part: GmailPart): string {
@@ -149,7 +153,8 @@ export function inboxFetchLimit(days: number): number {
 /** Keep the body parts Gmail returns. The scan used to pass headers only, so a time in the body was never read. */
 export function gmailPayload(part: {
   mimeType?: string | null;
-  body?: { data?: string | null } | null;
+  filename?: string | null;
+  body?: { data?: string | null; attachmentId?: string | null } | null;
   headers?: { name?: string | null; value?: string | null }[] | null;
   parts?: unknown[] | null;
 } | null | undefined): GmailPart | undefined {
@@ -163,10 +168,30 @@ export function gmailPayload(part: {
   });
   return {
     mimeType: part.mimeType ?? "text/plain",
+    ...(part.filename ? { filename: part.filename } : {}),
     ...(headers.length ? { headers } : {}),
-    ...(part.body?.data ? { body: { data: part.body.data } } : {}),
+    ...((part.body?.data || part.body?.attachmentId) ? { body: { ...(part.body.data ? { data: part.body.data } : {}), ...(part.body.attachmentId ? { attachmentId: part.body.attachmentId } : {}) } } : {}),
     ...(parts.length ? { parts } : {}),
   };
+}
+
+export function fileParts(part: GmailPart | undefined): { mimeType: string; filename: string; data?: string; attachmentId?: string }[] {
+  const out: { mimeType: string; filename: string; data?: string; attachmentId?: string }[] = [];
+  const walk = (node: GmailPart | undefined) => {
+    if (!node || out.length >= 1) return;
+    const mime = node.mimeType || "";
+    if ((mime.startsWith("image/") || mime === "application/pdf") && (node.body?.data || node.body?.attachmentId)) {
+      out.push({
+        mimeType: mime,
+        filename: node.filename || "file",
+        ...(node.body?.data ? { data: node.body.data } : {}),
+        ...(node.body?.attachmentId ? { attachmentId: node.body.attachmentId } : {}),
+      });
+    }
+    for (const child of node.parts ?? []) walk(child);
+  };
+  walk(part);
+  return out;
 }
 
 export function toInbound(msg: GmailMessage, accountId: string): InboundMessage {

@@ -5,7 +5,7 @@
  */
 import { GoogleGenAI } from "@google/genai";
 import { type ChatAction, type ChatSnapshot, handleToolCall, chatSystemPrompt, toolDeclarations, userSaidYes } from "./chatBrain";
-import { geminiClient } from "./geminiClient";
+import { CHAT_MODELS, geminiClient } from "./geminiClient";
 
 export type ChatHistory = { role: "user" | "assistant"; text: string }[];
 
@@ -17,7 +17,7 @@ type ModelCall = { name: string; args: Record<string, unknown> };
 
 type ModelTurn = { text: string; calls: ModelCall[]; modelParts: unknown[] };
 
-const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+const MODELS = CHAT_MODELS;
 const MAX_ROUNDS = 4;
 
 function configured(): GoogleGenAI | null {

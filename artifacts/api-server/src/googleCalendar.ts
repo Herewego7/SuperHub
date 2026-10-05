@@ -1,5 +1,5 @@
 import { google, calendar_v3 } from 'googleapis';
-import { gmailInboxQuery, gmailPayload, inboxFetchLimit, INBOX_RECENT_DAYS, toInbound, type InboundMessage } from './ingest/parse';
+import { fileParts, gmailInboxQuery, gmailPayload, inboxFetchLimit, INBOX_RECENT_DAYS, toInbound, type InboundMessage } from './ingest/parse';
 import { inboxFailure, inboxListStopped, inboxTokenExpiry } from './ingest/process';
 
 // Calendar plus read-only mail. No userinfo.email/userinfo.profile. Those
@@ -306,11 +306,35 @@ export class GoogleCalendarService {
           id,
           format: "full",
         });
-        out.push(toInbound({
+        const payload = gmailPayload(full.data.payload);
+        const inbound = toInbound({
           id,
           snippet: full.data.snippet ?? undefined,
-          payload: gmailPayload(full.data.payload),
-        }, accountId));
+          payload,
+        }, accountId);
+        const file = fileParts(payload)[0];
+        if (file) {
+          let data = file.data;
+          if (!data && file.attachmentId) {
+            try {
+              const got = await gmail.users.messages.attachments.get({ userId: "me", messageId: id, id: file.attachmentId });
+              data = got.data.data ?? undefined;
+            } catch (err) {
+              console.warn("Attachment skipped:", err instanceof Error ? err.message : err);
+            }
+          }
+          if (data && data.length < 2_000_000) inbound.file = { mimeType: file.mimeType, data: data.replace(/-/g, "+").replace(/_/g, "/") };
+        }
+        if (full.data.threadId) {
+          try {
+            const thread = await gmail.users.threads.get({ userId: "me", id: full.data.threadId, format: "metadata", metadataHeaders: ["Subject"] });
+            const earlier = (thread.data.messages ?? []).filter((item) => item.id !== id).slice(-2).map((item) => item.snippet).filter((snippet): snippet is string => !!snippet);
+            if (earlier.length) inbound.extra = earlier.join("\n");
+          } catch (err) {
+            console.warn("Thread skipped:", err instanceof Error ? err.message : err);
+          }
+        }
+        out.push(inbound);
       } catch (err) {
         if (inboxFailure(err) === "reconnect") throw err;
         console.warn("Inbox message skipped:", err instanceof Error ? err.message : err);

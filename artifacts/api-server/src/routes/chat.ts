@@ -95,11 +95,12 @@ async function applyAction(userId: string, action: ChatAction): Promise<PlacedDi
     await storage.createChore({
       userId,
       title: action.title.slice(0, 200),
+      description: action.description,
       taskType: "todo",
       points: 0,
       profileIds: action.profileIds,
-      daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-      recurrenceType: "daily",
+      daysOfWeek: action.once ? [] : [0, 1, 2, 3, 4, 5, 6],
+      ...(action.once ? {} : { recurrenceType: "daily" as const }),
       isActive: true,
     });
     return [];
@@ -174,6 +175,12 @@ async function applyAction(userId: string, action: ChatAction): Promise<PlacedDi
       await storage.deleteChore(id, userId);
     }
     await storage.updateCalendarSettings({ dismissedSlipKeys: next.dismissedSlipKeys, userId });
+    const { rememberRecord } = await import("../ai/memory");
+    void rememberRecord(userId, "example", action.title);
+  }
+  if (action.kind === "feedback") {
+    const { feedbackNotes, db } = await import("@workspace/db");
+    await db.insert(feedbackNotes).values({ userId, text: action.text.slice(0, 2000) }).catch(() => undefined);
   }
   return [];
 }
@@ -192,6 +199,28 @@ function changedKeys(actions: ChatAction[]): string[] {
     if (action.kind === "mute_sender" || action.kind === "not_relevant") keys.add("mail");
   }
   return [...keys];
+}
+
+async function homeForecast(lat?: number | null, lon?: number | null): Promise<{ date: string; high: number; low: number }[]> {
+  if (lat == null || lon == null) return [];
+  try {
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7`, { signal: AbortSignal.timeout(2500) });
+    if (!res.ok) return [];
+    const data = await res.json() as { daily?: { time?: string[]; temperature_2m_max?: number[]; temperature_2m_min?: number[] } };
+    return (data.daily?.time ?? []).map((date, index) => ({
+      date,
+      high: Math.round(data.daily?.temperature_2m_max?.[index] ?? 0),
+      low: Math.round(data.daily?.temperature_2m_min?.[index] ?? 0),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function rememberedNotes(userId: string): Promise<string[]> {
+  const { recentRecords } = await import("../ai/memory");
+  const rows = await recentRecords(userId, "chunk", 40);
+  return rows.map((row) => row.text);
 }
 
 export function registerChatRoutes(app: Express): void {
@@ -259,6 +288,8 @@ export function registerChatRoutes(app: Express): void {
         savedMeals: savedMeals.map((meal: { id: string; name: string }) => ({ id: meal.id, name: meal.name })),
         celebrations: celebrations.map((row: { name: string; monthDay: string; type?: string | null; year?: number | null }) => ({ name: row.name, monthDay: row.monthDay, type: row.type, year: row.year })),
         groceries: groceries.filter((item: { alreadyHave?: boolean | null }) => !item.alreadyHave).map((item: { name: string }) => ({ name: item.name })),
+        forecast: await homeForecast(location?.latitude, location?.longitude),
+        notes: await rememberedNotes(userId),
       };
       const brain = await replyWithChat(snap, historyOf(req.body?.history), text);
       if (brain.fallback) {

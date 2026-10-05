@@ -1,9 +1,11 @@
 import { storage } from "../storage";
 import { syncEventCreate } from "../calendarSync";
-import { geminiClient } from "../geminiClient";
+import { geminiClient, askJson, READ_MODELS } from "../geminiClient";
+import { duplicateBand, familyGrades, titleSimilarity } from "../ai/parity";
+import { examplesFor, rememberRecord } from "../ai/memory";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { slipKey, type InboundMessage } from "./parse";
-import { ingestMessages, mailWorthSaving, schoolEventStart, type PlannedEvent, type PlannedTodo } from "./process";
+import { ingestMessages, mailWorthSaving, schoolEventStart, slipClock, type PlannedEvent, type PlannedTodo } from "./process";
 import { alreadyRead, plansFromRead, readInboxMessage, subjectPlaceholder, type MailPerson } from "./readMail";
 
 type Saved = { todos: unknown[]; events: unknown[]; scanOff: boolean };
@@ -75,6 +77,8 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
     .map((person) => ({ name: person.name, school: person.school, facts: person.facts, isChild: person.isChild || person.role === "child" }));
   const completions = await storage.getChoreCompletionsByUser(userId);
   const done = new Set(completions.map((completion) => completion.choreId));
+  const learned = [...state.dismissedSlipKeys.slice(-8), ...(await examplesFor(userId))];
+  const grades = familyGrades(family);
   const keyword: InboundMessage[] = [];
   const todos = [];
   const events = [];
@@ -84,7 +88,7 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
     if (message.fromAddress && state.mutedSenders.some((address) => address.toLowerCase() === message.fromAddress?.toLowerCase())) continue;
     if (state.dismissedSlipKeys.includes(slipKey(subject))) continue;
     if (chores.some((chore) => alreadyRead(chore.description, subject))) continue;
-    const read = await readInboxMessage(ai, message, family);
+    const read = await readInboxMessage(ai, message, family, learned);
     if (!read) {
       keyword.push(message);
       continue;
@@ -100,8 +104,19 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
       const index = existingKeys.indexOf(subjectKey);
       if (index >= 0) existingKeys.splice(index, 1);
     }
-    const planned = plansFromRead(message, read, profileIds, state, existingKeys, existingEventKeys, new Date());
-    if (planned.todos.length === 0 && planned.events.length === 0 && !read.newsletter) {
+    const planned = plansFromRead(message, read, profileIds, state, existingKeys, existingEventKeys, new Date(), grades);
+    const todosToSave = [];
+    for (const todo of planned.todos) {
+      const near = chores.find((chore) => chore.title !== todo.title && duplicateBand(titleSimilarity(chore.title, todo.title)) !== "new");
+      if (near && duplicateBand(titleSimilarity(near.title, todo.title)) === "same") continue;
+      if (near) {
+        const verdict = await askJson(ai, READ_MODELS, "Decide if two household items are the same event or task. JSON {\"same\":boolean}", `${near.title}\n${todo.title}`);
+        if (verdict && typeof verdict === "object" && (verdict as { same?: unknown }).same === true) continue;
+      }
+      todosToSave.push(todo);
+    }
+    planned.todos = todosToSave;
+    if (planned.todos.length === 0 && planned.events.length === 0 && planned.changes.length === 0 && !read.newsletter) {
       keyword.push(message);
       continue;
     }
@@ -111,6 +126,23 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
     const saved = await storePlanned(userId, planned, timeZone, calendarId);
     todos.push(...saved.todos);
     events.push(...saved.events);
+    for (const fact of read.facts) {
+      const person = people.find((profile) => profile.name?.toLowerCase() === fact.member.toLowerCase());
+      if (!person) continue;
+      const have = person.facts ?? [];
+      if (have.some((line) => line.toLowerCase() === fact.value.toLowerCase())) continue;
+      const next = [...have, fact.value].slice(0, 20);
+      await storage.updateProfile(person.id, { facts: next }, userId);
+      person.facts = next;
+    }
+    for (const change of planned.changes) {
+      const event = savedEvents.find((item) => titleSimilarity(item.title, change.changeOf) >= 0.45);
+      if (!event || !change.when) continue;
+      const clock = change.time ? slipClock(change.time) : null;
+      const start = schoolEventStart(`${change.when} ${change.time ?? ""}`, clock?.hours ?? 9, clock?.minutes ?? 0, new Date(), timeZone);
+      await storage.updateEvent(event.id, { startTime: start, endTime: new Date(start.getTime() + 60 * 60 * 1000) }, userId);
+    }
+    for (const todo of planned.todos) void rememberRecord(userId, "chunk", `${todo.title}. ${todo.description}`);
   }
   if (keyword.length > 0) {
     const saved = await storePlanned(

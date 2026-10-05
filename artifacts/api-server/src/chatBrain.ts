@@ -3,6 +3,7 @@
  * asked, and confirm before deleting, remembering, muting, or dismissing mail.
  * A child never gets inbox tools.
  */
+import { mapsUrl, searchHits } from "./ai/parity";
 
 export type ChatProfile = {
   id: string;
@@ -49,10 +50,12 @@ export type ChatSnapshot = {
   celebrations: { name: string; monthDay: string; type?: string | null; year?: number | null }[];
   groceries: { name: string }[];
   weather?: { temperature?: number; condition?: string; location?: string } | null;
+  forecast?: { date: string; high: number; low: number }[];
+  notes?: string[];
 };
 
 export type ChatAction =
-  | { kind: "create_task"; title: string; profileIds: string[] }
+  | { kind: "create_task"; title: string; profileIds: string[]; description?: string; once?: boolean }
   | { kind: "complete_task"; choreId: string; profileId: string }
   | { kind: "create_event"; title: string; start: string; end: string; location: string | null; profileIds: string[] }
   | { kind: "update_event"; eventId: string; patch: Record<string, unknown> }
@@ -63,9 +66,10 @@ export type ChatAction =
   | { kind: "grocery_have"; name: string }
   | { kind: "mute_sender"; address: string }
   | { kind: "not_relevant"; title: string }
-  | { kind: "plan_dinners"; dinners: { date: string; name: string }[] };
+  | { kind: "plan_dinners"; dinners: { date: string; name: string }[] }
+  | { kind: "feedback"; text: string };
 
-const ADULT_ONLY = new Set(["mute_sender", "mark_not_relevant", "search_mail"]);
+const ADULT_ONLY = new Set(["mute_sender", "mark_not_relevant", "search", "get_newsletters"]);
 const NEEDS_YES = new Set(["delete_event", "remember_fact", "forget_school", "mute_sender", "mark_not_relevant", "plan_dinners"]);
 
 export function userSaidYes(text: string): boolean {
@@ -162,6 +166,7 @@ export function chatSystemPrompt(snap: ChatSnapshot): string {
     "- To plan dinners, call plan_dinners with a date (YYYY-MM-DD) and a name for each night. Prefer a saved meal name when one fits. Ask first, then call again with confirmed=true after they say yes. That writes the Meals tab.",
     "- Before delete_event, remember_fact, forget_school, mute_sender, mark_not_relevant, or plan_dinners, ask first. Call the tool with confirmed=true only after they say yes.",
     "- Events that live on Google, Outlook, or an iCal feed cannot be deleted or moved here. The tool will say to hand that off.",
+    "- Use search, get_plan, get_newsletters, get_profile, and get_weather instead of guessing. For a place, call maps_link and include its url. create_reminder puts a reminder on the plan. send_feedback sends a note to the makers.",
     "- Tonight means 8:00 PM unless they name a time.",
     "- Keep replies under about 80 words, or 120 for a week. Bold a few key words with ** at most.",
     snap.isChild
@@ -192,6 +197,14 @@ export function toolDeclarations(isChild: boolean): { name: string; description:
     { name: "mute_sender", description: "Stop mail from an address after they say yes.", parameters: obj({ address: str, confirmed: { type: "boolean" } }, ["address"]) },
     { name: "mark_not_relevant", description: "Remove a school-email to-do after they say yes.", parameters: obj({ title: str, confirmed: { type: "boolean" } }, ["title"]) },
     { name: "plan_dinners", description: "Put dinners on the meal plan after they say yes. Prefer saved meal names.", parameters: obj({ meals: { type: "array", items: obj({ date: str, name: str }, ["date", "name"]) }, confirmed: { type: "boolean" } }, ["meals"]) },
+    { name: "search", description: "Search to-dos, events, newsletters, and saved mail. Cite the source.", parameters: obj({ query: str }, ["query"]) },
+    { name: "get_newsletters", description: "Recent school newsletters and their highlights.", parameters: obj({}, []) },
+    { name: "get_plan", description: "The schedule and to-dos for one day, yyyy-MM-dd.", parameters: obj({ date: str }, ["date"]) },
+    { name: "get_profile", description: "School and remembered facts for one person, or everyone if name is omitted.", parameters: obj({ name: str }, []) },
+    { name: "get_weather", description: "The forecast at home for a day, yyyy-MM-dd.", parameters: obj({ date: str }, ["date"]) },
+    { name: "maps_link", description: "An Open in Maps link for a place. Put the url in the reply.", parameters: obj({ place: str }, ["place"]) },
+    { name: "create_reminder", description: "Add a reminder to the plan. when is a date or time the user named. Confirm that time in the reply.", parameters: obj({ text: str, when: str }, ["text"]) },
+    { name: "send_feedback", description: "Send a note about SuperHub to the people who make it.", parameters: obj({ text: str }, ["text"]) },
   ];
   return isChild ? all.filter((tool) => !ADULT_ONLY.has(tool.name)) : all;
 }
@@ -318,6 +331,63 @@ export function handleToolCall(
     if (dinners.length === 0) return { output: { error: "Name a date and a dinner." }, action: null, handoff: false };
     if (!confirmed) return ask(dinners.map((dinner) => `${dinner.date}: ${dinner.name}`).join(", "));
     return { output: { ok: true }, action: { kind: "plan_dinners", dinners }, handoff: false };
+  }
+  if (name === "search") {
+    const hits = searchHits([
+      ...snap.chores.map((chore) => ({ title: chore.title, text: chore.description ?? "", kind: chore.category === "school_email" ? "mail" : "todo" })),
+      ...snap.events.map((event) => ({ title: event.title, text: event.location ?? "", kind: "event" })),
+      ...(snap.notes ?? []).map((text) => ({ title: text.slice(0, 80), text, kind: "mail" })),
+    ], textArg(input, "query"));
+    return { output: { results: hits }, action: null, handoff: false };
+  }
+  if (name === "get_newsletters") {
+    const letters = snap.chores.filter((chore) => (chore.description ?? "").includes("Plan: newsletter")).slice(0, 6);
+    return { output: { letters: letters.map((chore) => ({ title: chore.title, note: (chore.description ?? "").slice(0, 400) })) }, action: null, handoff: false };
+  }
+  if (name === "get_plan") {
+    const day = textArg(input, "date");
+    const onDay = (value: string | Date) => {
+      const at = new Date(value);
+      return !Number.isNaN(at.getTime()) && new Intl.DateTimeFormat("en-CA", { timeZone: snap.timeZone || "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).format(at) === day;
+    };
+    return {
+      output: {
+        date: day,
+        events: snap.events.filter((event) => onDay(event.startTime)).map((event) => event.title),
+        todos: snap.chores.filter((chore) => chore.taskType === "todo" && !snap.doneIds.includes(chore.id)).slice(0, 12).map((chore) => chore.title),
+      },
+      action: null,
+      handoff: false,
+    };
+  }
+  if (name === "get_profile") {
+    const who = textArg(input, "name").toLowerCase();
+    const people = who ? snap.profiles.filter((person) => person.name.toLowerCase() === who) : snap.profiles;
+    if (who && people.length === 0) return { output: { error: "I don't see that person." }, action: null, handoff: false };
+    return { output: { people: people.map((person) => ({ name: person.name, school: person.school ?? null, facts: person.facts ?? [] })) }, action: null, handoff: false };
+  }
+  if (name === "get_weather") {
+    const day = textArg(input, "date");
+    const row = (snap.forecast ?? []).find((item) => item.date === day) ?? (snap.forecast ?? [])[0];
+    return { output: row ?? { error: "No forecast yet." }, action: null, handoff: false };
+  }
+  if (name === "maps_link") {
+    const place = textArg(input, "place");
+    if (!place) return { output: { error: "Name a place." }, action: null, handoff: false };
+    return { output: { url: mapsUrl(place), place }, action: null, handoff: false };
+  }
+  if (name === "create_reminder") {
+    const text = textArg(input, "text");
+    if (!text) return { output: { error: "A reminder needs words." }, action: null, handoff: false };
+    const when = textArg(input, "when");
+    const iso = when.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const due = iso ? `Due ${Number(iso[2])}/${Number(iso[3])}/${iso[1]}.` : when ? `Due ${when}.` : "";
+    return { output: { ok: true, when: when || "on the plan" }, action: { kind: "create_task", title: text, profileIds: [], description: `Plan: todo\n${due}`.trim(), once: true }, handoff: false };
+  }
+  if (name === "send_feedback") {
+    const text = textArg(input, "text");
+    if (!text) return { output: { error: "Feedback needs words." }, action: null, handoff: false };
+    return { output: { sent: true }, action: { kind: "feedback", text }, handoff: false };
   }
   return { output: { error: `Unknown tool ${name}` }, action: null, handoff: false };
 }
