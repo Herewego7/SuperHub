@@ -166,7 +166,7 @@ export function chatSystemPrompt(snap: ChatSnapshot): string {
     "- To plan dinners, call plan_dinners with a date (YYYY-MM-DD) and a name for each night. Prefer a saved meal name when one fits. Ask first, then call again with confirmed=true after they say yes. That writes the Meals tab.",
     "- Before delete_event, remember_fact, forget_school, mute_sender, mark_not_relevant, or plan_dinners, ask first. Call the tool with confirmed=true only after they say yes.",
     "- Events that live on Google, Outlook, or an iCal feed cannot be deleted or moved here. The tool will say to hand that off.",
-    "- Use search, get_plan, get_newsletters, get_profile, and get_weather instead of guessing. For a place, call maps_link and include its url. create_reminder puts a reminder on the plan. send_feedback sends a note to the makers.",
+    "- Use search, get_plan, get_newsletters, get_profile, and get_weather instead of guessing. For weather somewhere other than home, pass place and say the place name the tool returns. For a place, call maps_link and include its url. create_reminder puts a reminder on the plan. send_feedback sends a note to the makers.",
     "- Tonight means 8:00 PM unless they name a time.",
     "- Keep replies under about 80 words, or 120 for a week. Bold a few key words with ** at most.",
     snap.isChild
@@ -201,7 +201,7 @@ export function toolDeclarations(isChild: boolean): { name: string; description:
     { name: "get_newsletters", description: "Recent school newsletters and their highlights.", parameters: obj({}, []) },
     { name: "get_plan", description: "The schedule and to-dos for one day, yyyy-MM-dd.", parameters: obj({ date: str }, ["date"]) },
     { name: "get_profile", description: "School and remembered facts for one person, or everyone if name is omitted.", parameters: obj({ name: str }, []) },
-    { name: "get_weather", description: "The forecast at home for a day, yyyy-MM-dd.", parameters: obj({ date: str }, ["date"]) },
+    { name: "get_weather", description: "The forecast for a day, yyyy-MM-dd. Pass place as a city when they ask about somewhere other than home, and leave it empty for home.", parameters: obj({ date: str, place: str }, ["date"]) },
     { name: "maps_link", description: "An Open in Maps link for a place. Put the url in the reply.", parameters: obj({ place: str }, ["place"]) },
     { name: "create_reminder", description: "Add a reminder to the plan. when is a date or time the user named. Confirm that time in the reply.", parameters: obj({ text: str, when: str }, ["text"]) },
     { name: "send_feedback", description: "Send a note about SuperHub to the people who make it.", parameters: obj({ text: str }, ["text"]) },

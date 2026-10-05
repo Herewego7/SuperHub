@@ -175,6 +175,31 @@ export function gmailPayload(part: {
   };
 }
 
+const OUTLOOK_FILE = "#microsoft.graph.fileAttachment";
+
+/** One picture or PDF from an Outlook message. A real attachment wins over a logo pasted in the body. */
+export function outlookAttachment(rows: unknown[]): { id: string; mimeType: string; data?: string } | null {
+  const files = rows.flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const file = row as { id?: unknown; name?: unknown; contentType?: unknown; contentBytes?: unknown; size?: unknown; isInline?: unknown; "@odata.type"?: unknown };
+    const type = typeof file["@odata.type"] === "string" ? file["@odata.type"] : OUTLOOK_FILE;
+    const mime = typeof file.contentType === "string" ? file.contentType.toLowerCase() : "";
+    const id = typeof file.id === "string" ? file.id : "";
+    const size = typeof file.size === "number" ? file.size : 0;
+    if (type !== OUTLOOK_FILE || !id || size > 2_000_000) return [];
+    if (!mime.startsWith("image/") && mime !== "application/pdf") return [];
+    return [{
+      id,
+      mimeType: mime,
+      inline: file.isInline === true,
+      ...(typeof file.contentBytes === "string" && file.contentBytes.length > 0 && file.contentBytes.length < 2_000_000 ? { data: file.contentBytes } : {}),
+    }];
+  }).sort((a, b) => Number(a.inline) - Number(b.inline));
+  const picked = files[0];
+  if (!picked) return null;
+  return { id: picked.id, mimeType: picked.mimeType, ...(picked.data ? { data: picked.data } : {}) };
+}
+
 export function fileParts(part: GmailPart | undefined): { mimeType: string; filename: string; data?: string; attachmentId?: string }[] {
   const out: { mimeType: string; filename: string; data?: string; attachmentId?: string }[] = [];
   const walk = (node: GmailPart | undefined) => {

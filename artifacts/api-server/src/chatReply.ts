@@ -5,6 +5,7 @@
  */
 import { GoogleGenAI } from "@google/genai";
 import { type ChatAction, type ChatSnapshot, handleToolCall, chatSystemPrompt, toolDeclarations, userSaidYes } from "./chatBrain";
+import { forecastForPlace } from "./ai/weather";
 import { CHAT_MODELS, geminiClient } from "./geminiClient";
 
 export type ChatHistory = { role: "user" | "assistant"; text: string }[];
@@ -71,7 +72,10 @@ export async function replyWithChat(snap: ChatSnapshot, history: ChatHistory, te
     contents.push({ role: "model", parts: turn.modelParts });
     const responses = [];
     for (const call of turn.calls) {
-      const handled = handleToolCall(call.name, call.args, snap, saidYes);
+      const place = call.name === "get_weather" && typeof call.args.place === "string" ? call.args.place.trim() : "";
+      const handled = place
+        ? { output: await forecastForPlace(place, typeof call.args.date === "string" ? call.args.date : ""), action: null, handoff: false }
+        : handleToolCall(call.name, call.args, snap, saidYes);
       if (handled.handoff) return { fallback: true };
       if (handled.action) actions.push(handled.action);
       responses.push({ functionResponse: { name: call.name, response: handled.output } });

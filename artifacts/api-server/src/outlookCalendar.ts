@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { outlookInstancesToDelete } from "./lib/recurrenceRule";
-import { inboxFetchLimit, inboxSinceIso, INBOX_RECENT_DAYS, outlookToInbound, type InboundMessage } from "./ingest/parse";
+import { inboxFetchLimit, inboxSinceIso, INBOX_RECENT_DAYS, outlookAttachment, outlookToInbound, type InboundMessage } from "./ingest/parse";
 import { graphNextLink, inboxListStopped } from "./ingest/process";
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
@@ -187,7 +187,7 @@ export class OutlookCalendarService {
     let url: string | null = `${GRAPH_API_BASE}/me/mailFolders/inbox/messages`;
     let params: Record<string, string | number> | undefined = {
       $top: Math.min(50, limit),
-      $select: "subject,from,bodyPreview,body,receivedDateTime",
+      $select: "id,subject,from,bodyPreview,body,receivedDateTime,hasAttachments",
       $orderby: "receivedDateTime desc",
     };
     while (url && out.length < limit) {
@@ -212,7 +212,27 @@ export class OutlookCalendarService {
           older = true;
           continue;
         }
-        out.push(outlookToInbound(row, accountId));
+        const inbound = outlookToInbound(row, accountId);
+        if (row?.hasAttachments && typeof row?.id === "string") {
+          try {
+            const listed = await graph.get(`${GRAPH_API_BASE}/me/messages/${encodeURIComponent(row.id)}/attachments`, {
+              headers: { Authorization: `Bearer ${accessToken}` },
+              params: { $top: 10 },
+            });
+            const picked = outlookAttachment(Array.isArray(listed.data?.value) ? listed.data.value : []);
+            let data = picked?.data;
+            if (picked && !data) {
+              const one = await graph.get(`${GRAPH_API_BASE}/me/messages/${encodeURIComponent(row.id)}/attachments/${encodeURIComponent(picked.id)}`, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              });
+              data = typeof one.data?.contentBytes === "string" ? one.data.contentBytes : undefined;
+            }
+            if (picked && data && data.length < 2_000_000) inbound.file = { mimeType: picked.mimeType, data };
+          } catch (err) {
+            console.warn("Outlook attachment skipped:", err instanceof Error ? err.message : err);
+          }
+        }
+        out.push(inbound);
         if (out.length >= limit) break;
       }
       if (older || out.length >= limit) break;

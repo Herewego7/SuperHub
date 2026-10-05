@@ -7,6 +7,7 @@ import { replyWithChat, type ChatHistory } from "../chatReply";
 import type { ChatAction, ChatSnapshot } from "../chatBrain";
 import { choresDismissedBySlip, dismissSlip, muteSender } from "../ingest/process";
 import { slipKey } from "../ingest/parse";
+import { draftLine, draftWrite, normalizeDraft, readDraft } from "../ai/draft";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp } from "../meals/dinnerEvent";
 import { syncEventCreate, syncEventDelete, syncEventUpdate } from "../calendarSync";
 
@@ -224,6 +225,72 @@ async function rememberedNotes(userId: string): Promise<string[]> {
 }
 
 export function registerChatRoutes(app: Express): void {
+  app.post("/api/plan/draft", isAuthenticated, async (req: any, res) => {
+    try {
+      const text = typeof req.body?.text === "string" ? req.body.text.trim().slice(0, 1000) : "";
+      if (!text) {
+        res.status(400).json({ message: "Type a sentence first." });
+        return;
+      }
+      const userId = ownerId(req);
+      const profiles = await storage.getProfilesByUser(userId);
+      const names = profiles.filter((profile: { isAllFamilyProfile?: boolean | null }) => !profile.isAllFamilyProfile).map((profile: { name: string }) => profile.name);
+      const draft = await readDraft(text, names, new Date());
+      res.json({ draft, line: draftLine(draft) });
+    } catch (err) {
+      console.error("Plan draft failed:", err);
+      res.status(500).json({ message: "Couldn't read that sentence." });
+    }
+  });
+
+  app.post("/api/plan/draft/save", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = ownerId(req);
+      const profiles = await storage.getProfilesByUser(userId);
+      const people = profiles
+        .filter((profile: { isAllFamilyProfile?: boolean | null }) => !profile.isAllFamilyProfile)
+        .map((profile: { id: string; name: string }) => ({ id: profile.id, name: profile.name }));
+      const draft = normalizeDraft(req.body?.draft, people.map((person: { name: string }) => person.name));
+      if (!draft) {
+        res.status(400).json({ message: "That draft is missing a title." });
+        return;
+      }
+      const location = await storage.getLocationSettingsByUser(userId);
+      const write = draftWrite(draft, people, new Date(), location?.timezone || "America/Chicago");
+      if (!write) {
+        res.status(400).json({ message: "Add a date before saving this." });
+        return;
+      }
+      if (write.kind === "todo") {
+        await storage.createChore({
+          userId,
+          title: write.title,
+          description: write.description,
+          taskType: "todo",
+          points: 0,
+          profileIds: write.profileIds,
+          daysOfWeek: [],
+          isActive: true,
+        });
+      } else {
+        await storage.createEvent({
+          userId,
+          title: write.title,
+          description: write.description || null,
+          startTime: write.start,
+          endTime: write.end,
+          isAllDay: write.allDay,
+          profileIds: write.profileIds,
+          source: "app",
+        });
+      }
+      res.json({ saved: true, kind: write.kind });
+    } catch (err) {
+      console.error("Plan draft save failed:", err);
+      res.status(500).json({ message: "Couldn't save that." });
+    }
+  });
+
   app.post("/api/chat", isAuthenticated, async (req: any, res) => {
     try {
       const userId = ownerId(req);
