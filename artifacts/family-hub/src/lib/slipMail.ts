@@ -5,7 +5,7 @@ export function slipSender(description: string | null | undefined): string | nul
 
 export function slipText(description: string | null | undefined): string {
   if (!description) return "";
-  return description.replace(/^From: \S+\n/, "");
+  return description.replace(/^From: \S+\n/, "").replace(/^Plan: (?:newsletter|keydate|todo)\n/, "").replace(/^Ref: .+\n/, "");
 }
 
 export function slipQuote(description: string | null | undefined): string {

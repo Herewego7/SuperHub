@@ -624,6 +624,13 @@ function mailTask(text: string): boolean {
   return /\b(due|bring|return|sign|wear|turn in|permission)\b/i.test(text);
 }
 
+/** A row Gemini filed. Older mail has no mark and keeps the keyword rules. */
+function planMark(text: string): "newsletter" | "keydate" | "todo" | null {
+  const match = text.match(/(?:^|\n)Plan: (newsletter|keydate|todo)(?:\n|$)/);
+  if (match?.[1] === "newsletter" || match?.[1] === "keydate" || match?.[1] === "todo") return match[1];
+  return null;
+}
+
 function completionOn<T extends { choreId: string; completedAt?: Date | string | null }>(todoId: string, completions: T[], day: Date): T | null {
   const start = dayStart(day);
   const end = new Date(start);
@@ -681,7 +688,9 @@ export function mailKeyDates<T extends PlanChore>(
   const rows: (T & { start: Date; end: Date | null; time: string | null })[] = [];
   for (const todo of todos) {
     if (todo.category !== "school_email") continue;
-    if (mailTask(noteOf(todo)) || mailClock(noteOf(todo))) continue;
+    const mark = planMark(noteOf(todo));
+    if (mark === "newsletter" || mark === "todo") continue;
+    if (mark !== "keydate" && (mailTask(noteOf(todo)) || mailClock(noteOf(todo)))) continue;
     const span = mailSpan(noteOf(todo), today);
     if (!span || dayStart(span.end ?? span.start) < today) continue;
     const covered = events.some((event) => titlesMatch(event.title, todo.title) && sameDay(new Date(event.startTime), span.start));
@@ -701,6 +710,8 @@ export function mailOffCalendar<T extends PlanChore>(
   const rows: (T & { time: string })[] = [];
   for (const todo of todos) {
     if (todo.category !== "school_email") continue;
+    const mark = planMark(noteOf(todo));
+    if (mark === "newsletter" || mark === "keydate") continue;
     const time = mailClock(noteOf(todo));
     if (!time) continue;
     const due = mailDate(noteOf(todo), now);
@@ -725,7 +736,10 @@ export function horizonDatedTodos<T extends PlanChore>(
   const rows: (T & { start: Date })[] = [];
   for (const todo of todos) {
     const note = noteOf(todo);
-    if (!mailTask(note) || mailClock(note)) continue;
+    const mark = planMark(note);
+    if (mark === "newsletter" || mark === "keydate") continue;
+    if (mark !== "todo" && (!mailTask(note) || mailClock(note))) continue;
+    if (mark === "todo" && mailClock(note)) continue;
     const due = mailDate(note, day);
     if (!due || due < from || due >= until) continue;
     if (events.some((event) => titlesMatch(event.title, todo.title) && sameDay(new Date(event.startTime), due))) continue;
@@ -747,6 +761,8 @@ export function horizonMail<T extends PlanChore>(
   const rows: (T & { start: Date; time: string })[] = [];
   for (const todo of todos) {
     if (todo.category !== "school_email") continue;
+    const mark = planMark(noteOf(todo));
+    if (mark === "newsletter" || mark === "keydate" || mark === "todo") continue;
     const time = mailClock(noteOf(todo));
     const due = mailDate(noteOf(todo), day);
     if (!time || !due || due < from || due >= until) continue;
@@ -763,8 +779,9 @@ export function newsletterIssues<T extends PlanChore>(todos: T[], now: Date): (T
   earliest.setDate(earliest.getDate() - 13);
   const datedIds = new Set(mailKeyDates(todos, [], now).map((row) => row.id));
   const recent = todos.filter((todo) => {
-    if (todo.category !== "school_email" || datedIds.has(todo.id)) return false;
-    if (mailTask(noteOf(todo)) || mailClock(noteOf(todo))) return false;
+    const mark = planMark(noteOf(todo));
+    if (todo.category !== "school_email" || mark === "keydate" || mark === "todo") return false;
+    if (mark !== "newsletter" && (datedIds.has(todo.id) || mailTask(noteOf(todo)) || mailClock(noteOf(todo)))) return false;
     const at = todo.createdAt ? new Date(todo.createdAt) : today;
     return at >= earliest && at < new Date(today.getTime() + 86400000);
   });
