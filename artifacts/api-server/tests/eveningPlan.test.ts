@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Event } from "@workspace/db";
-import { appendPlace, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, googlePlanRows, heldSchoolTitles, icalPlanRows, moveClock, moveLabel, outlookPlanRows, planBirthdayLine, planBody, planDayEvents, planEventTitle, planKeysForClaim, planOpenPath, planTitle, planWho, pushesForProfile, uniqueExternalRows, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
+import { appendPlace, changedPlanLines, choresForPlan, claimPlanSend, dueForPlan, eventClockTitle, eventsForPlan, googlePlanRows, heldSchoolTitles, icalPlanRows, morningNoteText, moveClock, moveLabel, outlookPlanRows, planBirthdayLine, planBody, planChatText, planDayEvents, planEventTitle, planKeysForClaim, planLookahead, planOpenPath, planSnapshotBody, planSnapshotKey, planTitle, planWho, pushesForProfile, uniqueExternalRows, withoutSchoolEventsHeldToday } from "../src/scheduler/eveningPlan.ts";
 
 test("a Google event can be named on the evening plan", () => {
   const rows = googlePlanRows([
@@ -390,4 +390,27 @@ test("the plan link opens chat with the dinner line", () => {
   assert.equal(params.get("openTab"), "chat");
   assert.equal(params.get("openProfile"), "liam");
   assert.equal(params.get("openPlan")?.includes("Dinner. Tacos"), true);
+});
+
+test("the evening chat names what is unusual, then the same lines", () => {
+  const quiet = planLookahead("tomorrow", ["Make bed", "Dinner. Tacos"]);
+  assert.equal(quiet, "Nothing out of the ordinary for tomorrow.");
+  const ready = planLookahead("tomorrow", ["Sign the permission slip"]);
+  assert.equal(ready, "A regular day tomorrow. Tonight: Sign the permission slip.");
+  const moved = planLookahead("tomorrow", ["Soccer, 5:30 PM, moved from 4:00 PM", "Liam driving"]);
+  assert.equal(moved, "Soccer, 5:30 PM, moved from 4:00 PM. Liam driving.");
+  const chat = planChatText("Tomorrow's plan", quiet, "Make bed\nDinner. Tacos");
+  assert.equal(chat, "Tomorrow's plan\n\nNothing out of the ordinary for tomorrow.\n\n• Make bed\n• Dinner. Tacos");
+});
+
+test("a morning note goes out only when the plan changed", () => {
+  const lastNight = "Make bed\nSoccer, 4:00 PM";
+  assert.deepEqual(changedPlanLines(lastNight, lastNight), []);
+  assert.equal(morningNoteText([]), "");
+  const added = changedPlanLines(lastNight, "Make bed\nSoccer, 5:30 PM, moved from 4:00 PM");
+  assert.deepEqual(added, ["Soccer, 5:30 PM, moved from 4:00 PM", "Soccer, 4:00 PM is no longer on the plan"]);
+  assert.equal(morningNoteText(added), "Overnight, the plan changed. Soccer, 5:30 PM, moved from 4:00 PM. Soccer, 4:00 PM is no longer on the plan.");
+  const key = planSnapshotKey("dad", "2026-10-03", lastNight);
+  assert.equal(planSnapshotBody([key], "dad", "2026-10-03"), lastNight);
+  assert.equal(planSnapshotBody([key], "dad", "2026-10-04"), null);
 });

@@ -3,12 +3,20 @@ import { OutlookCalendarService } from "../outlookCalendar";
 import { getFreshOutlookAccessToken } from "../calendarSync";
 import { storage } from "../storage";
 import { applyIngestedMail } from "./saveMail";
-import { inboxFailure, inboxScanEnabled, shareScan } from "./process";
+import { inboxMailFailure, inboxScanEnabled, shareScan } from "./process";
 
 const inflight = new Map<string, Promise<Awaited<ReturnType<typeof scanOnce>>>>();
 
 export function scanConnectedInboxes(userId: string) {
   return shareScan(inflight, userId, () => scanOnce(userId));
+}
+
+/** A new Google or Outlook connection starts the mail scan. The redirect does not wait on it. */
+export function scanAfterConnect(profileId: string) {
+  return storage.getProfile(profileId).then((profile) => {
+    if (!profile?.userId) return null;
+    return scanConnectedInboxes(profile.userId);
+  });
 }
 
 async function scanOnce(userId: string) {
@@ -24,6 +32,13 @@ async function scanOnce(userId: string) {
   const messages = [];
   let connected = 0;
   let needsReconnect = false;
+  let mailProblem: "scope" | "unavailable" | null = null;
+  const note = (err: unknown, label: string) => {
+    const kind = inboxMailFailure(err);
+    if (kind === "auth") needsReconnect = true;
+    else if (kind === "scope" || kind === "unavailable") mailProblem = kind;
+    else console.warn(`${label} inbox scan failed:`, err instanceof Error ? err.message : err);
+  };
   for (const owner of owners) {
     const tokens = await storage.getGoogleCalendarTokens(owner.id);
     if (tokens?.accessToken) {
@@ -31,8 +46,7 @@ async function scanOnce(userId: string) {
       try {
         messages.push(...await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry));
       } catch (err) {
-        if (inboxFailure(err) === "reconnect") needsReconnect = true;
-        else console.warn("Inbox scan failed:", err instanceof Error ? err.message : err);
+        note(err, "Google");
       }
     }
     const outlookTokens = await storage.getOutlookCalendarTokens(owner.id);
@@ -42,11 +56,10 @@ async function scanOnce(userId: string) {
         const access = (await getFreshOutlookAccessToken(owner.id)) ?? outlookTokens.accessToken;
         messages.push(...await outlook.listInbox(access, outlookTokens.email || owner.id));
       } catch (err) {
-        if (inboxFailure(err) === "reconnect") needsReconnect = true;
-        else console.warn("Outlook inbox scan failed:", err instanceof Error ? err.message : err);
+        note(err, "Outlook");
       }
     }
   }
   const saved = await applyIngestedMail(userId, messages, audience);
-  return { ...saved, connected, needsReconnect };
+  return { ...saved, connected, needsReconnect, mailProblem };
 }

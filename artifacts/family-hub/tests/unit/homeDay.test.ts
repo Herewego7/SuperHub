@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, forecastFor, homeBirthdayLine, horizonBirthdays, horizonEvents, horizonMail, horizonWithoutChecked, mailDate, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, newsletterIssues, openTodos, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, forecastFor, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonEvents, horizonMail, horizonWithoutChecked, mailDate, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, newsletterIssues, openTodos, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -323,6 +323,8 @@ test("a to-do lands on its day, stays overdue for a week, and a check stays on t
   assert.deepEqual(onToday.map((row) => row.id), ["slip", "milk"]);
   assert.equal(onToday[0]?.overdue, true);
   assert.deepEqual(planTodoRows(rows, [], new Date(2026, 9, 6), today).map((row) => row.id), ["pic"]);
+  assert.deepEqual(horizonDatedTodos(rows, [], today).map((row) => row.id), ["pic"]);
+  assert.equal(horizonDatedTodos(rows, [{ title: "Picture day form", startTime: new Date(2026, 9, 6) }], today).length, 0);
   const done = planTodoRows(rows, [{ choreId: "milk", completedAt: today }], today, today);
   assert.equal(done.find((row) => row.id === "milk")?.done, true);
   assert.equal(planTodoRows(rows, [{ choreId: "milk", completedAt: new Date(2026, 9, 1) }], today, today).some((row) => row.id === "milk"), false);

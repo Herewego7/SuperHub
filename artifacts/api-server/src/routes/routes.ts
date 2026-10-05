@@ -29,7 +29,7 @@ import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
 import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, holdSchoolEvent, muteSender, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
 import { applyIngestedMail } from "../ingest/saveMail";
-import { scanConnectedInboxes } from "../ingest/scanHousehold";
+import { scanAfterConnect, scanConnectedInboxes } from "../ingest/scanHousehold";
 import { markSchedulerWorkDirty } from "../lib/workGate";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp, dinnersToCopy } from "../meals/dinnerEvent";
 import { slipKey } from "../ingest/parse";
@@ -3633,6 +3633,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // redirect back to the app.
       retryFailedSyncsForProfile(profileId, "google").catch((e) =>
         console.warn("Retry after Google reconnect failed:", e instanceof Error ? e.message : e));
+      scanAfterConnect(profileId).catch((e) =>
+        console.warn("Inbox scan after Google connect failed:", e instanceof Error ? e.message : e));
 
       // Redirect back to app with success and profileId
       if (mobileRedirect) {
@@ -4666,6 +4668,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       retryFailedSyncsForProfile(profileId, "outlook").catch((e) =>
         console.warn("Retry after Outlook reconnect failed:", e instanceof Error ? e.message : e));
+      scanAfterConnect(profileId).catch((e) =>
+        console.warn("Inbox scan after Outlook connect failed:", e instanceof Error ? e.message : e));
 
       // Redirect back to app with success
       if (outlookMobileRedirect) {
