@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { requireGemini } from "./geminiClient";
 import { ObjectStorageService } from "./objectStorage";
 import { splitIngredient } from "./recipeImport";
 
@@ -44,12 +45,7 @@ export const MAX_RECIPE_IMAGES = 5;
 const MAX_TOTAL_BYTES = 15 * 1024 * 1024;
 
 function fetchGemini(): GoogleGenAI {
-  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
-  const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
-  if (!apiKey || !baseUrl) {
-    throw new Error("Gemini AI integration is not configured");
-  }
-  return new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "", baseUrl } });
+  return requireGemini();
 }
 
 function inferImageMimeType(objectName: string, buffer?: Buffer): string {
