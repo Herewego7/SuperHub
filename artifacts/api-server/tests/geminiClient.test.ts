@@ -32,14 +32,14 @@ test("a service account on Bot Life's project uses Vertex, ahead of Replit", () 
   assert.equal(setup.kind, "vertex");
   if (setup.kind !== "vertex") return;
   assert.equal(setup.project, "botlife");
-  assert.equal(setup.location, "us-central1");
+  assert.equal(setup.location, "global");
   assert.equal(setup.credentials.client_email, "superhub@botlife.iam.gserviceaccount.com");
 });
 
 test("the region can be overridden, and a bad secret falls back to Replit", () => {
-  const moved = geminiSetup({ GOOGLE_CLOUD_PROJECT: "botlife", GOOGLE_CLOUD_LOCATION: "global", GOOGLE_SERVICE_ACCOUNT_JSON: account });
+  const moved = geminiSetup({ GOOGLE_CLOUD_PROJECT: "botlife", GOOGLE_CLOUD_LOCATION: "us-central1", GOOGLE_SERVICE_ACCOUNT_JSON: account });
   assert.equal(moved.kind, "vertex");
-  if (moved.kind === "vertex") assert.equal(moved.location, "global");
+  if (moved.kind === "vertex") assert.equal(moved.location, "us-central1");
   const fallback = geminiSetup({
     GOOGLE_CLOUD_PROJECT: "botlife",
     GOOGLE_SERVICE_ACCOUNT_JSON: "not-json",
