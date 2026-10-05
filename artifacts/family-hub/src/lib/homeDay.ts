@@ -712,6 +712,28 @@ export function mailOffCalendar<T extends PlanChore>(
   return rows;
 }
 
+/** A dated to-do due later this week. Timed mail stays with horizonMail, and a date to add stays a key date. */
+export function horizonDatedTodos<T extends PlanChore>(
+  todos: T[],
+  events: { title: string; startTime: Date | string }[],
+  day: Date,
+): (T & { start: Date })[] {
+  const from = dayStart(day);
+  from.setDate(from.getDate() + 1);
+  const until = dayStart(day);
+  until.setDate(until.getDate() + 8);
+  const rows: (T & { start: Date })[] = [];
+  for (const todo of todos) {
+    const note = noteOf(todo);
+    if (!mailTask(note) || mailClock(note)) continue;
+    const due = mailDate(note, day);
+    if (!due || due < from || due >= until) continue;
+    if (events.some((event) => titlesMatch(event.title, todo.title) && sameDay(new Date(event.startTime), due))) continue;
+    rows.push({ ...todo, start: due });
+  }
+  return rows.sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
 /** Timed mail in the week after the day on screen, still missing from the calendar. */
 export function horizonMail<T extends PlanChore>(
   todos: T[],

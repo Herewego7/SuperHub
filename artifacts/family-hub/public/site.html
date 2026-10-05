@@ -258,6 +258,14 @@
     margin-top:12px; font-size:12px; color:var(--ink-3); text-align:center;
     font-weight:500; letter-spacing:.02em;
   }
+  .shot-placeholder{
+    height:var(--shot-h); width:calc(var(--shot-h) * 0.48);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    background:linear-gradient(180deg,#E7F1F6,#f7f4ef); color:#5E8FAD; text-align:center; padding:20px;
+  }
+  .tablet .shot-placeholder{width:calc(var(--shot-h) * 1.25)}
+  .shot-placeholder strong{font-size:18px; color:#243038; font-weight:700}
+  .shot-placeholder span{font-size:13px; color:#6e6e78; max-width:16ch}
   .app-top{padding:14px 14px 10px; background:var(--paper-3); border-bottom:1px solid var(--rule)}
   .avatars{display:flex; gap:7px; margin-bottom:12px}
   .av{width:30px; height:30px; border-radius:50%; display:grid; place-items:center;
@@ -597,7 +605,7 @@
 
       <div class="phone-stack">
         <div>
-          <div class="single-shot"><div class="phone tilt"><div class="screen"><img src="shots/home.jpg" alt="The Home screen on iPhone" loading="lazy" decoding="async"></div></div><p class="shot-note">Today at a glance — who's going where, what's left to do, and what's for dinner</p></div>
+          <div class="single-shot"><div class="phone tilt"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPhone screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><p class="shot-note">Today at a glance — who's going where, what's left to do, and what's for dinner</p></div>
         </div>
       </div>
     </div>
@@ -698,7 +706,7 @@
             <rect x="711" y="250" width="179" height="233" rx="14" fill="#1b1a19"/>
           </g>
           <rect x="712.5" y="251.5" width="176" height="230" rx="13" fill="none" stroke="#4a4845" stroke-width="1.5"/>
-          <image href="shots/ipad-home.jpg" x="719" y="258" width="163" height="217" preserveAspectRatio="xMidYMin slice" clip-path="url(#kw-screen)"/>
+          <rect x="719" y="258" width="163" height="217" fill="#E7F1F6" clip-path="url(#kw-screen)"/>
 
           <!-- counter: thick marble top, green lowers with brass knobs -->
           <rect x="420" y="692" width="1180" height="28" fill="#f5f3ef"/>
@@ -744,7 +752,7 @@
         </ul>
       </div>
       <div class="art">
-        <div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><img src="shots/cal-month.jpg" alt="Month, on a phone" loading="lazy" decoding="async"></div></div><figcaption><b>Month, on a phone</b>A dot per person, sized by how much of the day is theirs</figcaption></figure><figure class="slide"><div class="phone"><div class="screen"><img src="shots/cal-day.jpg" alt="Today, hour by hour" loading="lazy" decoding="async"></div></div><figcaption><b>Today, hour by hour</b>Who's driving, who's going, and what overlaps</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><img src="shots/ipad-cal-month.jpg" alt="Month, on the iPad" loading="lazy" decoding="async"></div></div><figcaption><b>Month, on the iPad</b>The whole month with every event named</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><img src="shots/ipad-cal-week.jpg" alt="The working week" loading="lazy" decoding="async"></div></div><figcaption><b>The working week</b>Five columns wide enough to read at a glance</figcaption></figure></div></div>
+        <div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPhone screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>Month, on a phone</b>A dot per person, sized by how much of the day is theirs</figcaption></figure><figure class="slide"><div class="phone"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPhone screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>Today, hour by hour</b>Who's driving, who's going, and what overlaps</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPad screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>Month, on the iPad</b>The whole month with every event named</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPad screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>The working week</b>Five columns wide enough to read at a glance</figcaption></figure></div></div>
       </div>
     </div>
   </section>
@@ -768,7 +776,7 @@
         </ul>
       </div>
       <div class="art">
-        <div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><img src="shots/chores.jpg" alt="Everyone's progress" loading="lazy" decoding="async"></div></div><figcaption><b>Everyone's progress</b>Each person's chores, stars and streak in one list</figcaption></figure><figure class="slide"><div class="phone"><div class="screen"><img src="shots/rewards.jpg" alt="What the stars buy" loading="lazy" decoding="async"></div></div><figcaption><b>What the stars buy</b>A shelf you set the prices on, from small to worth saving for</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><img src="shots/ipad-chores.jpg" alt="The whole picture on iPad" loading="lazy" decoding="async"></div></div><figcaption><b>The whole picture on iPad</b>Chores, rewards, bonus jobs and star insights together</figcaption></figure></div></div>
+        <div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPhone screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>Everyone's progress</b>Each person's chores, stars and streak in one list</figcaption></figure><figure class="slide"><div class="phone"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPhone screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>What the stars buy</b>A shelf you set the prices on, from small to worth saving for</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPad screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>The whole picture on iPad</b>Chores, rewards, bonus jobs and star insights together</figcaption></figure></div></div>
       </div>
     </div>
   </section>
@@ -792,7 +800,7 @@
         </ul>
       </div>
       <div class="art">
-        <div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><img src="shots/meals.jpg" alt="A week of meals" loading="lazy" decoding="async"></div></div><figcaption><b>A week of meals</b>Breakfast, lunch and dinner planned in one grid</figcaption></figure><figure class="slide"><div class="phone"><div class="screen"><img src="shots/meals-week.jpg" alt="Built from your own ideas" loading="lazy" decoding="async"></div></div><figcaption><b>Built from your own ideas</b>Saved recipes drop straight onto a day</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><img src="shots/ipad-meals.jpg" alt="Planning on the iPad" loading="lazy" decoding="async"></div></div><figcaption><b>Planning on the iPad</b>The full week without scrolling sideways</figcaption></figure></div></div>
+        <div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPhone screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>A week of meals</b>Breakfast, lunch and dinner planned in one grid</figcaption></figure><figure class="slide"><div class="phone"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPhone screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>Built from your own ideas</b>Saved recipes drop straight onto a day</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPad screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>Planning on the iPad</b>The full week without scrolling sideways</figcaption></figure></div></div>
       </div>
     </div>
   </section>
@@ -816,7 +824,7 @@
         </ul>
       </div>
       <div class="art">
-        <div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><img src="shots/celebrations.jpg" alt="Counted down, not announced" loading="lazy" decoding="async"></div></div><figcaption><b>Counted down, not announced</b>Every birthday and anniversary with the days left beside it</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><img src="shots/ipad-celebrations.jpg" alt="Gift ideas kept with the date" loading="lazy" decoding="async"></div></div><figcaption><b>Gift ideas kept with the date</b>So the planning happens while there is still time</figcaption></figure></div></div>
+        <div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPhone screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>Counted down, not announced</b>Every birthday and anniversary with the days left beside it</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPad screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>Gift ideas kept with the date</b>So the planning happens while there is still time</figcaption></figure></div></div>
       </div>
     </div>
   </section>
@@ -845,7 +853,7 @@
           <p>A record of who did what, and when — easy to check when someone's sure it wasn't their turn.</p>
         </div>
       </div>
-      <div style="margin-top:44px"><div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><img src="shots/todos.jpg" alt="To-dos, with sub-tasks" loading="lazy" decoding="async"></div></div><figcaption><b>To-dos, with sub-tasks</b>The one-off jobs, broken down when they need it</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><img src="shots/ipad-achievements.jpg" alt="Achievements" loading="lazy" decoding="async"></div></div><figcaption><b>Achievements</b>Milestones worth noticing, kept where the family can see them</figcaption></figure></div></div></div>
+      <div style="margin-top:44px"><div class="shots"><div class="strip"><figure class="slide"><div class="phone"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPhone screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>To-dos, with sub-tasks</b>The one-off jobs, broken down when they need it</figcaption></figure><figure class="slide"><div class="tablet"><div class="screen"><div class="shot-placeholder" role="img" aria-label="iPad screenshot coming soon"><strong>SuperHub</strong><span>Screenshot coming soon</span></div></div></div><figcaption><b>Achievements</b>Milestones worth noticing, kept where the family can see them</figcaption></figure></div></div></div>
     </div>
   </section>
 

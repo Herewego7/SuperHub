@@ -37,11 +37,34 @@ export function inboxListStopped(err: unknown, have: number): boolean {
 }
 
 export function inboxFailure(err: unknown): "reconnect" | "skip" {
-  if (!err || typeof err !== "object") return "skip";
+  const kind = inboxMailFailure(err);
+  return kind === "auth" || kind === "scope" ? "reconnect" : "skip";
+}
+
+function mailStatus(err: object): number | undefined {
   const code = "code" in err ? (err as { code?: unknown }).code : undefined;
-  const status = "response" in err ? (err as { response?: { status?: number } }).response?.status : undefined;
-  const value = typeof code === "number" ? code : typeof code === "string" ? Number(code) : undefined;
-  if (value === 401 || value === 403 || status === 401 || status === 403) return "reconnect";
+  const fromCode = typeof code === "number" ? code : typeof code === "string" ? Number(code) : undefined;
+  const status = "status" in err ? (err as { status?: unknown }).status : undefined;
+  const fromStatus = typeof status === "number" ? status : undefined;
+  const response = "response" in err ? (err as { response?: { status?: number; data?: { error?: { errors?: { reason?: string }[]; status?: string } } } }).response : undefined;
+  return fromStatus ?? response?.status ?? (Number.isFinite(fromCode) ? fromCode : undefined);
+}
+
+function mailReason(err: object): string {
+  const response = "response" in err ? (err as { response?: { data?: { error?: { errors?: { reason?: string }[]; status?: string; message?: string } } } }).response : undefined;
+  const error = response?.data?.error;
+  return error?.errors?.[0]?.reason || error?.status || "";
+}
+
+/** A dead token is auth. Mail scope missing is scope. Gmail switched off for the project is unavailable. */
+export function inboxMailFailure(err: unknown): "auth" | "scope" | "unavailable" | "skip" {
+  if (!err || typeof err !== "object") return "skip";
+  const reason = mailReason(err);
+  if (reason === "accessNotConfigured") return "unavailable";
+  if (reason === "insufficientPermissions") return "scope";
+  const status = mailStatus(err);
+  if (status === 401) return "auth";
+  if (status === 403) return "scope";
   return "skip";
 }
 

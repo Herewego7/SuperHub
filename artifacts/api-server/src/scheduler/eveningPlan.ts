@@ -581,6 +581,104 @@ export function planOpenPath(body: string, profileId?: string): string {
   return `/?openTab=chat&openPlan=${encodeURIComponent(body)}${person}`;
 }
 
+const PREP_LINE = /\b(due|bring|return|sign|wear|turn in|permission|backpack)\b/i;
+const UNUSUAL_LINE = /moved from|turns \d|anniversary|adoption day/i;
+
+function planSentence(text: string): string {
+  const trimmed = text.trim().replace(/[.?!]+$/, "");
+  return trimmed ? `${trimmed}.` : "";
+}
+
+/** What is unusual about the plan's day: a change, something to get ready, or a drive. */
+export function planLookahead(when: string, lines: string[]): string {
+  const unusual: string[] = [];
+  const prep: string[] = [];
+  const driving: string[] = [];
+  const seen = new Set<string>();
+  const add = (list: string[], text: string, max: number) => {
+    const key = text.trim().toLowerCase();
+    if (!key || seen.has(key) || list.length >= max) return;
+    seen.add(key);
+    list.push(text.trim());
+  };
+  for (const line of lines) {
+    if (UNUSUAL_LINE.test(line)) add(unusual, line, 2);
+    else if (/\bdriving\b/i.test(line)) add(driving, line, 1);
+    else if (PREP_LINE.test(line) && !/^dinner\b/i.test(line)) add(prep, line, 3);
+  }
+  const parts: string[] = [];
+  const quiet = unusual.length === 0 && driving.length === 0;
+  if (quiet) {
+    const named = when === "today" || when === "tomorrow";
+    parts.push(
+      prep.length === 0
+        ? `Nothing out of the ordinary for ${when}.`
+        : named
+          ? `A regular day ${when}.`
+          : `A regular ${when}.`,
+    );
+  } else {
+    for (const line of unusual) parts.push(planSentence(line));
+  }
+  if (prep.length > 0) {
+    const lead = when === "today" ? "Before you head out" : "Tonight";
+    parts.push(`${lead}: ${prep.map(planSentence).join(" ")}`);
+  }
+  for (const line of driving) parts.push(planSentence(line));
+  return parts.join(" ");
+}
+
+/** The chat copy: the notification's title, the lookahead, and the same lines. */
+export function planChatText(title: string, lookahead: string, body: string): string {
+  const bullets = body
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && line !== "Nothing on the plan.")
+    .map((line) => `• ${line}`);
+  const list = bullets.length > 0 ? bullets.join("\n") : "Nothing on the plan.";
+  return [title.trim(), lookahead.trim(), list].filter((part) => part.length > 0).join("\n\n");
+}
+
+function planLines(body: string): string[] {
+  return body.split("\n").map((line) => line.trim()).filter((line) => line.length > 0 && line !== "Nothing on the plan.");
+}
+
+/** What this morning's plan says that last night's did not, including a line that dropped off. */
+export function changedPlanLines(previous: string, next: string): string[] {
+  const oldLines = planLines(previous);
+  const newLines = planLines(next);
+  const oldSet = new Set(oldLines);
+  const newSet = new Set(newLines);
+  return [
+    ...newLines.filter((line) => !oldSet.has(line)),
+    ...oldLines.filter((line) => !newSet.has(line)).map((line) => `${line} is no longer on the plan`),
+  ];
+}
+
+export function morningNoteText(lines: string[]): string {
+  if (lines.length === 0) return "";
+  return `Overnight, the plan changed. ${lines.map(planSentence).join(" ")}`;
+}
+
+export function planSnapshotKey(profileId: string, planDay: string, body: string): string {
+  return `${profileId}:${planDay}:snap:${Buffer.from(body, "utf8").toString("base64url")}`;
+}
+
+export function planSnapshotBody(keys: string[] | null | undefined, profileId: string, planDay: string): string | null {
+  const prefix = `${profileId}:${planDay}:snap:`;
+  const key = (keys ?? []).find((item) => item.startsWith(prefix));
+  if (!key) return null;
+  try {
+    const body = Buffer.from(key.slice(prefix.length), "base64url").toString("utf8");
+    return body.trim() ? body : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Parents who got the plan the evening before hear about a change at 7:00. */
+export const MORNING_NOTE_TIME = "07:00";
+
 const CATCH_UP_MINUTES = 30;
 
 function nextDayKey(day: string): string {
@@ -596,6 +694,72 @@ function minutesSince(scheduled: string, currentHHMM: string): number {
   return ch * 60 + cm - (sh * 60 + sm);
 }
 
+type PlanPerson = {
+  id: string;
+  userId: string;
+  name: string;
+  role?: string | null;
+  isChild?: boolean | null;
+};
+
+/** The lines for one person's plan on `target` (YYYY-MM-DD). */
+async function planTextFor(profile: PlanPerson, now: Date, tz: string, target: string, dismissed: string[]): Promise<string> {
+  const isChild = profile.role === "child" || profile.isChild === true;
+  const chores = await storage.getChoresByUser(profile.userId);
+  const completions = await storage.getChoreCompletionsByUser(profile.userId);
+  const assignments = await storage.getCalendarAssignmentsByUser(profile.userId);
+  const events = [
+    ...await storage.getEventsByUser(profile.userId),
+    ...uniqueExternalRows([
+      ...await googleEventsForPlan(profile.userId, assignments),
+      ...await outlookEventsForPlan(profile.userId, assignments),
+      ...await icalEventsForPlan(profile.userId),
+    ]),
+  ];
+  const meals = await storage.getMealsByUser(profile.userId);
+  const celebrations = await storage.getCelebrationsByUser(profile.userId);
+  const dinner = meals.find((meal) => meal.date === target && meal.slot === "dinner")?.name ?? null;
+  const doneToday = completions
+    .filter((completion) => completion.completedAt && localDate(new Date(completion.completedAt), tz) === target)
+    .map((completion) => completion.choreId);
+  const finishedTodos = completions
+    .filter((completion) => chores.some((chore) => chore.id === completion.choreId && chore.taskType === "todo"))
+    .map((completion) => completion.choreId);
+  const heldSchool = heldSchoolTitles(chores, completions);
+  const family = new Map((await loadProfiles(eq(profiles.userId, profile.userId))).map((person) => [person.id, person.name]));
+  const otherNames = (ids: string[] | null | undefined) => {
+    if (isChild) return [];
+    const list = ids ?? [];
+    if (list.length === 0 || list.includes(profile.id)) return [];
+    return list.map((id) => family.get(id)).filter((name): name is string => !!name);
+  };
+  const openChores = dueForPlan(
+    choresForPlan(withoutDismissedChores(chores, dismissed), doneToday, isChild ? profile.id : null, finishedTodos),
+    new Date(`${target}T12:00:00`),
+  ).map((chore) => ({ ...chore, who: otherNames(chore.profileIds) }));
+  const watched = eventsOnWatchedCalendars(planDayEvents(withoutDismissedSlips(events, dismissed), target, tz), assignments);
+  const dayEvents = (isChild ? eventsForPlan(watched, profile.id) : watched)
+    .map((event) => ({
+      title: planEventTitle(
+        appendPlace(eventClockTitle(event.title, new Date(event.startTime), tz, event.isAllDay === true), event.location),
+        driverIdsOf(event).map((id) => family.get(id)).filter((name): name is string => !!name),
+      ),
+      description: event.description,
+      movedFrom: moveLabel(event.movedFrom, now),
+      source: event.source,
+      driving: driverIdsOf(event).includes(profile.id),
+      who: otherNames(event.profileIds),
+    }));
+  return planBody({
+    isChild,
+    kidName: isChild ? profile.name : null,
+    chores: openChores,
+    events: withoutSchoolEventsHeldToday(dayEvents, heldSchool),
+    dinner,
+    birthday: planBirthdayLine(celebrations, target),
+  });
+}
+
 export async function runEveningPlanTick(now: Date = new Date()): Promise<boolean> {
   const candidates = await loadProfiles(isNotNull(profiles.eveningPlanTime));
   if (candidates.length === 0) return false;
@@ -607,7 +771,40 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     const tz = loc[0]?.timezone ?? DEFAULT_TIMEZONE;
     const day = localDate(now, tz);
     const elapsed = minutesSince(profile.eveningPlanTime, localHHMM(now, tz));
-    if (elapsed < 0 || elapsed > CATCH_UP_MINUTES) continue;
+    const inEvening = elapsed >= 0 && elapsed <= CATCH_UP_MINUTES;
+    const morningElapsed = minutesSince(MORNING_NOTE_TIME, localHHMM(now, tz));
+    const inMorning = profile.eveningPlanTiming !== "morningOf" && morningElapsed >= 0 && morningElapsed <= CATCH_UP_MINUTES;
+    if (inMorning) {
+      const morningKey = `${profile.id}:${day}:morning`;
+      const savedKeys = settings?.planSentKeys ?? [];
+      const previous = planSnapshotBody(savedKeys, profile.id, day);
+      if (previous && !savedKeys.includes(morningKey)) {
+        try {
+          const nextBody = await planTextFor(profile, now, tz, day, settings?.dismissedSlipKeys ?? []);
+          const added = changedPlanLines(previous, nextBody);
+          if (added.length > 0 && await storage.claimPlanKey(profile.userId, morningKey, day)) {
+            const note = morningNoteText(added);
+            const result = await sendPushToUser(
+              { userId: profile.userId, profileId: profile.id },
+              {
+                title: "Your plan changed",
+                body: note,
+                url: planOpenPath(note, profile.id),
+                tag: `evening-plan-${profile.id}-morning`,
+                apnsCategory: "EVENING_PLAN",
+                data: { kind: "evening-plan", profileId: profile.id, body: note },
+              },
+            );
+            if (!pushReachedSomeone(result)) {
+              await storage.releasePlanKey(profile.userId, morningKey);
+            }
+          }
+        } catch (err) {
+          logger.warn({ err, profileId: profile.id }, "Morning plan note failed");
+        }
+      }
+    }
+    if (!inEvening) continue;
     const claimKey = `${profile.id}:${day}`;
     let claimed = false;
     try {
@@ -618,73 +815,28 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     }
     if (!claimed) continue;
     try {
-    const isChild = profile.role === "child" || profile.isChild === true;
-    const chores = await storage.getChoresByUser(profile.userId);
-    const completions = await storage.getChoreCompletionsByUser(profile.userId);
-    const assignments = await storage.getCalendarAssignmentsByUser(profile.userId);
-    const events = [
-      ...await storage.getEventsByUser(profile.userId),
-      ...uniqueExternalRows([
-        ...await googleEventsForPlan(profile.userId, assignments),
-        ...await outlookEventsForPlan(profile.userId, assignments),
-        ...await icalEventsForPlan(profile.userId),
-      ]),
-    ];
-    const meals = await storage.getMealsByUser(profile.userId);
-    const celebrations = await storage.getCelebrationsByUser(profile.userId);
-    const target = profile.eveningPlanTiming === "morningOf" ? day : nextDayKey(day);
-    const dinner = meals.find((meal) => meal.date === target && meal.slot === "dinner")?.name ?? null;
-    const doneToday = completions
-      .filter((completion) => completion.completedAt && localDate(new Date(completion.completedAt), tz) === target)
-      .map((completion) => completion.choreId);
-    const finishedTodos = completions
-      .filter((completion) => chores.some((chore) => chore.id === completion.choreId && chore.taskType === "todo"))
-      .map((completion) => completion.choreId);
-    const heldSchool = heldSchoolTitles(chores, completions);
-    const family = new Map((await loadProfiles(eq(profiles.userId, profile.userId))).map((person) => [person.id, person.name]));
-    const otherNames = (ids: string[] | null | undefined) => {
-      if (isChild) return [];
-      const list = ids ?? [];
-      if (list.length === 0 || list.includes(profile.id)) return [];
-      return list.map((id) => family.get(id)).filter((name): name is string => !!name);
-    };
-    const openChores = dueForPlan(
-      choresForPlan(withoutDismissedChores(chores, settings?.dismissedSlipKeys ?? []), doneToday, isChild ? profile.id : null, finishedTodos),
-      new Date(`${target}T12:00:00`),
-    ).map((chore) => ({ ...chore, who: otherNames(chore.profileIds) }));
-    const watched = eventsOnWatchedCalendars(planDayEvents(withoutDismissedSlips(events, settings?.dismissedSlipKeys ?? []), target, tz), assignments);
-    const dayEvents = (isChild ? eventsForPlan(watched, profile.id) : watched)
-      .map((event) => ({
-        title: planEventTitle(
-          appendPlace(eventClockTitle(event.title, new Date(event.startTime), tz, event.isAllDay === true), event.location),
-          driverIdsOf(event).map((id) => family.get(id)).filter((name): name is string => !!name),
-        ),
-        description: event.description,
-        movedFrom: moveLabel(event.movedFrom, now),
-        source: event.source,
-        driving: driverIdsOf(event).includes(profile.id),
-        who: otherNames(event.profileIds),
-      }));
-    const body = planBody({
-      isChild,
-      kidName: isChild ? profile.name : null,
-      chores: openChores,
-      events: withoutSchoolEventsHeldToday(dayEvents, heldSchool),
-      dinner,
-      birthday: planBirthdayLine(celebrations, target),
-    });
+      const target = profile.eveningPlanTiming === "morningOf" ? day : nextDayKey(day);
+      const body = await planTextFor(profile, now, tz, target, settings?.dismissedSlipKeys ?? []);
+      const when = profile.eveningPlanTiming === "morningOf" ? "today" : "tomorrow";
+      const title = planTitle(profile.role === "child" || profile.isChild === true, profile.eveningPlanTiming);
+      const chat = planChatText(title, planLookahead(when, body.split("\n")), body);
       const result = await sendPushToUser(
         { userId: profile.userId, profileId: profile.id },
         {
-          title: planTitle(isChild, profile.eveningPlanTiming),
+          title,
           body,
-          url: planOpenPath(body, profile.id),
+          url: planOpenPath(chat, profile.id),
           tag: `evening-plan-${profile.id}`,
           apnsCategory: "EVENING_PLAN",
-          data: { kind: "evening-plan", profileId: profile.id, body },
+          data: { kind: "evening-plan", profileId: profile.id, body: chat },
         },
       );
       if (!pushReachedSomeone(result)) throw new Error("Evening plan reached nobody");
+      try {
+        await storage.claimPlanKey(profile.userId, planSnapshotKey(profile.id, target, body), day);
+      } catch (err) {
+        logger.warn({ err, profileId: profile.id }, "Evening plan snapshot failed");
+      }
     } catch (err) {
       await storage.releasePlanKey(profile.userId, claimKey);
       logger.warn({ err, profileId: profile.id }, "Evening plan failed");

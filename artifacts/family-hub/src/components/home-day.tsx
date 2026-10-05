@@ -1,15 +1,16 @@
-import { useRef, useState } from "react";
-import { AlarmClock, Calendar, CalendarPlus, Check, CheckCheck, ChevronLeft, ChevronRight, ClipboardList, Cloud, CloudRain, ListTodo, MoreVertical, Newspaper, Plus, RefreshCw, Snowflake, Sun } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlarmClock, Calendar, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Cloud, CloudRain, ListTodo, MoreVertical, Newspaper, Plus, RefreshCw, Snowflake, Sun } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, eventsOnHomeDay, forecastFor, homeBirthdayLine, horizonBirthdays, horizonMail, horizonWithoutChecked, mailClockParts, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, newsletterIssues, newsletterInitials, PLAN_HORIZON, PLAN_KEY_DATES, PLAN_NEWSLETTERS, PLAN_TODO_FOLD, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, eventsOnHomeDay, forecastFor, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonMail, horizonWithoutChecked, mailClockParts, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, newsletterIssues, newsletterInitials, PLAN_HORIZON, PLAN_KEY_DATES, PLAN_NEWSLETTERS, PLAN_TODO_FOLD, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { appendPlace, eventClockLine, planEventTitle, pointsProfileId } from "@/lib/chatTools";
 import { confirmDialog } from "@/lib/confirmDialog";
 import { openEmailHref, schoolSaveTarget, slipQuote, slipSender, slipText } from "@/lib/slipMail";
+import { readInboxScanOpen } from "@/lib/inboxScan";
 
 type Person = { id: string; name: string; color?: string | null; school?: string | null; isChild?: boolean | null; role?: string | null; connected?: boolean };
 type HomeEvent = Event & { calendarColor?: string | null; recurringEventId?: string | null };
@@ -46,6 +47,30 @@ function readSnooze(): Record<string, number> {
   }
 }
 
+function InboxScanBanner() {
+  const [open, setOpen] = useState(() => readInboxScanOpen());
+  const { data: settings } = useQuery<{ scanInbox?: boolean | null }>({ queryKey: ["/api/calendar-settings"] });
+  useEffect(() => {
+    const sync = () => setOpen(readInboxScanOpen());
+    window.addEventListener("superhub-inbox-scan", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("superhub-inbox-scan", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+  if (!open || settings?.scanInbox === false) return null;
+  return (
+    <section className="plan-card flex items-start gap-3" data-testid="inbox-scan-banner">
+      <span className="mt-1 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#5E8FAD] border-t-transparent" aria-hidden="true" />
+      <div>
+        <p className="text-[15px] font-semibold">Scanning your inbox</p>
+        <p className="text-sm text-[#6e6e78]">Your full plan will be ready within 24 hours. New items appear as we find them.</p>
+      </div>
+    </section>
+  );
+}
+
 function logoInk(text: string): string {
   const sum = [...text].reduce((total, char) => total + char.charCodeAt(0), 0);
   return LOGO_INKS[sum % LOGO_INKS.length];
@@ -54,6 +79,7 @@ function logoInk(text: string): string {
 export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, kidName, personId, people = [], onOpenChores, onAddTodo, onEditTodo, onDeleteTodo, onOpenCalendar, onOpenEvent, onShiftDay, onRefresh }: Props) {
   const [earlierOpen, setEarlierOpen] = useState(false);
   const [showAllTodos, setShowAllTodos] = useState(false);
+  const [showDoneTodos, setShowDoneTodos] = useState(false);
   const [showAllKeys, setShowAllKeys] = useState(false);
   const [showAllHorizon, setShowAllHorizon] = useState(false);
   const [showAllLetters, setShowAllLetters] = useState(false);
@@ -248,6 +274,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
     }),
   ].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   const laterMail = horizonMail(stillOpen, homeEvents, day).filter((row) => !hidden(row.id));
+  const laterTodos = horizonDatedTodos(stillOpen, homeEvents, day).filter((row) => !hidden(row.id));
   const allSelected = familyIds.length > 0 && familyIds.every((id) => selectedIds.includes(id));
   const earlier = completedActions(
     completions.filter((completion) => selectedIds.length === 0 || allSelected || (!!completion.profileId && selectedIds.includes(completion.profileId))),
@@ -256,8 +283,20 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   const daysOut = Math.round((new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
   const todosTitle = daysOut === 0 ? "Today's To-dos" : daysOut === 1 ? "Tomorrow's To-dos" : `${day.toLocaleDateString("en-US", { weekday: "long" })}'s To-dos`;
   const scheduleTitle = daysOut === 0 ? "Today's Schedule" : "Schedule";
-  const folded = !showAllTodos && todoRows.length > PLAN_TODO_FOLD;
-  const visibleTodos = folded ? todoRows.slice(0, PLAN_TODO_FOLD) : todoRows;
+  const openTodos = todoRows.filter((todo) => !todo.done);
+  const doneTodos = todoRows.filter((todo) => todo.done).sort((a, b) => {
+    const at = (id: string) => completions
+      .filter((completion) => completion.choreId === id && completion.completedAt)
+      .reduce((latest, completion) => Math.max(latest, new Date(completion.completedAt ?? 0).getTime()), 0);
+    return at(b.id) - at(a.id);
+  });
+  const folded = !showAllTodos && openTodos.length > PLAN_TODO_FOLD;
+  const visibleTodos = folded ? openTodos.slice(0, PLAN_TODO_FOLD) : openTodos;
+  const dayStamp = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+  useEffect(() => {
+    setShowAllTodos(false);
+    setShowDoneTodos(false);
+  }, [dayStamp]);
   const visibleKeys = showAllKeys ? keyDates : keyDates.slice(0, PLAN_KEY_DATES);
   const visibleLetters = showAllLetters ? letters : letters.slice(0, PLAN_NEWSLETTERS);
   const forecast = forecastFor(weather?.days, day) ?? (daysOut === 0 && weather ? { high: weather.high, low: weather.low, condition: weather.condition } : null);
@@ -309,6 +348,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
 
   return (
     <div className="flex flex-col gap-3.5" data-testid="home-day">
+      <InboxScanBanner />
       <section
         className="plan-card flex items-center gap-1"
         onPointerDown={(event) => { drag.current = { x: event.clientX, y: event.clientY, id: "day" }; }}
@@ -414,8 +454,47 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
         )}
         {folded && (
           <button type="button" className="mt-1 text-sm font-semibold text-[#5E8FAD]" onClick={() => setShowAllTodos(true)}>
-            Show {todoRows.length - visibleTodos.length} more
+            Show {openTodos.length - visibleTodos.length} more
           </button>
+        )}
+        {doneTodos.length > 0 && (
+          <div className="mt-1 border-t border-[#ececf0] pt-2">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 text-left"
+              aria-expanded={showDoneTodos}
+              aria-label={showDoneTodos ? `Hide ${doneTodos.length} done` : `Show ${doneTodos.length} done`}
+              onClick={() => setShowDoneTodos((open) => !open)}
+            >
+              <span className="text-sm font-semibold text-[#5E8FAD]">{showDoneTodos ? "Hide done" : "Done"}</span>
+              <span className="inline-flex min-h-[22px] min-w-[22px] items-center justify-center rounded-full bg-[#E7F1F6] px-1.5 text-xs font-semibold text-[#5E8FAD]">{doneTodos.length}</span>
+              {showDoneTodos ? <ChevronUp className="ml-auto h-4 w-4 text-[#a0a0a8]" /> : <ChevronDown className="ml-auto h-4 w-4 text-[#a0a0a8]" />}
+            </button>
+            {showDoneTodos && (
+              <ul className="flex flex-col">
+                {doneTodos.map((todo) => {
+                  const title = todo.category === "school_email" ? schoolHomeTitle(todo.title, events, day, people) : todo.title;
+                  return (
+                    <li key={todo.id} data-testid={`home-todo-done-${todo.id}`} className="border-t border-[#ececf0] first:border-t-0">
+                      <div className="flex items-start gap-3 py-3">
+                        <button
+                          type="button"
+                          aria-label={`Mark ${title} not done`}
+                          className="mt-0.5 grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border-[1.5px] border-[#5E8FAD] bg-[#5E8FAD] text-white"
+                          onClick={() => undo.mutate(todo.id)}
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                        <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setSheet({ chore: todo, mode: "source" })}>
+                          <div className="text-[15px] font-medium leading-snug line-clamp-2 text-[#a0a0a8] line-through">{title}</div>
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         )}
       </section>
 
@@ -581,7 +660,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
         <div className="mb-1 flex items-center gap-2.5">
           <h2 className="text-[17px] font-medium">On the Horizon</h2>
         </div>
-        {comingEvents.length === 0 && laterMail.length === 0 ? (
+        {comingEvents.length === 0 && laterMail.length === 0 && laterTodos.length === 0 ? (
           <p className="text-sm text-muted-foreground">A quiet week ahead.</p>
         ) : (
           <ul className="flex flex-col">
@@ -599,6 +678,23 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
                 </button>
               </li>
             ))}
+            {laterTodos.map((row) => {
+              const sender = slipSender(row.description);
+              const who = people.find((person) => person.id === (row.profileIds ?? [])[0]);
+              return (
+                <li key={row.id} data-testid={`home-horizon-todo-${row.id}`} className="flex items-start gap-3 border-t border-[#ececf0] py-3">
+                  <button type="button" aria-label={`Check off ${row.title}`} className="mt-0.5 h-[22px] w-[22px] shrink-0 rounded-full border-[1.5px] border-[#a0a0a8]" onClick={() => complete.mutate(row.id)} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[15px] font-medium leading-snug">{row.title}</div>
+                    <div className="mt-1 text-xs text-[#6e6e78]">{planDateLabel(row.start, null)}</div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="inline-flex max-w-[55%] truncate rounded-full bg-[#F1F1F4] px-2.5 py-1 text-xs">{sourceChipLabel(sender, row.category === "school_email" ? "mail" : "todo")}</span>
+                      <AssigneeMenu people={people} personId={personId} who={who?.name} onPick={(ids) => assign.mutate({ choreId: row.id, profileIds: ids })} />
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
             {laterMail.map((row) => {
               const sender = slipSender(row.description);
               const who = people.find((person) => person.id === (row.profileIds ?? [])[0]);
