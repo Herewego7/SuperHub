@@ -9,7 +9,7 @@ import { PIN_GATE_FEATURES, PIN_GATE_DEFAULT_FEATURES, isKidProfile } from "@/li
 import { canOpenStoreReviewPage, openStoreReviewPage } from "@/lib/reviewPrompt";
 import { sentryEnabled, captureTestError } from "@/lib/sentry";
 import { markOnboardingStepDone } from "@/lib/onboardingStatus";
-import { noteInboxScan } from "@/lib/inboxScan";
+import { clearInboxScan, noteInboxScan } from "@/lib/inboxScan";
 import { useSpotlight } from "@/lib/spotlight";
 import { Button } from "@/components/ui/button";
 import { ColorSpectrumPicker } from "@/components/color-spectrum-picker";
@@ -1524,19 +1524,23 @@ export function CalendarConnectionsSection({
       return res.json() as Promise<{ todos: unknown[]; started?: boolean; needsReconnect?: boolean; connected?: number; scanOff?: boolean; mailProblem?: "scope" | "unavailable" | null }>;
     },
     onMutate: () => {
-      noteInboxScan();
-      setScanNote("Scanning your inbox.");
+      setScanNote("Checking that email can be read.");
     },
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      if (data.started) setScanNote("Reading your mail. Home updates when the read finishes. Leave SuperHub open.");
-      else if (data.scanOff) setScanNote("Scan is off.");
-      else if (data.mailProblem === "scope") setScanNote("Connected. Connect it again and allow reading email.");
-      else if (data.mailProblem === "unavailable") setScanNote("Connected. Mail reading isn't available for that account yet.");
-      else if (data.needsReconnect) setScanNote("Reconnect the account to read mail.");
-      else if (!data.connected) setScanNote("Connect an account first.");
-      else setScanNote(data.todos.length ? `Added ${data.todos.length}.` : "No new school mail. Still checking through the first day.");
+      if (data.started) {
+        noteInboxScan();
+        setScanNote("Reading your mail. You can leave SuperHub. Home updates when the read finishes.");
+      } else {
+        clearInboxScan();
+        if (data.scanOff) setScanNote("Scan is off.");
+        else if (data.mailProblem === "scope") setScanNote("This account can see the calendar, but it was never allowed to read email. Reconnect it and allow email.");
+        else if (data.mailProblem === "unavailable") setScanNote("Email reading isn't available for that Google connection yet.");
+        else if (data.needsReconnect) setScanNote("Reconnect the account to read mail.");
+        else if (!data.connected) setScanNote("Connect an account first.");
+        else setScanNote(data.todos.length ? `Added ${data.todos.length}.` : "No new school mail.");
+      }
     },
   });
 

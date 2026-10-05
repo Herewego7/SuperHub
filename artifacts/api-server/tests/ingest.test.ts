@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, graphNextLink, holdSchoolEvent, inboxFailure, inboxListStopped, inboxMailFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, graphNextLink, holdSchoolEvent, inboxBlockReason, inboxFailure, inboxListStopped, inboxMailFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
 import { fileParts, gmailInboxQuery, gmailNewsletterQuery, gmailPayload, inboxFetchLimit, inboxSinceIso, latestPerSender, outlookAttachments, outlookToInbound, toInbound } from "../src/ingest/parse.ts";
 
 test("a catch-up scan reads 30 days, and the regular check stays at 2", () => {
@@ -72,6 +72,12 @@ test("one bad inbox message is skipped and a refused account reconnects", () => 
   assert.equal(inboxMailFailure({ response: { status: 401 } }), "auth");
   assert.equal(inboxMailFailure({ response: { status: 403, data: { error: { errors: [{ reason: "insufficientPermissions" }] } } } }), "scope");
   assert.equal(inboxMailFailure({ response: { status: 403, data: { error: { errors: [{ reason: "accessNotConfigured" }] } } } }), "unavailable");
+  assert.equal(gmailScopeGranted(["https://www.googleapis.com/auth/calendar"]), false);
+  assert.equal(gmailScopeGranted(["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/gmail.readonly"]), true);
+  assert.equal(gmailScopeGranted(undefined), null);
+  assert.equal(inboxBlockReason(["scope", "auth"]), "scope");
+  assert.equal(inboxBlockReason(["ok", "scope"]), "ok");
+  assert.equal(inboxBlockReason([]), "none");
 });
 
 test("five pictures are kept and a ninth megabyte is not", () => {

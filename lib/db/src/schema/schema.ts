@@ -354,6 +354,12 @@ export const calendarSettings = pgTable("calendar_settings", {
   familyCalendarProfileId: text("family_calendar_profile_id"),
   familyCalendarProvider: text("family_calendar_provider"),
   scanInbox: boolean("scan_inbox").notNull().default(true),
+  // A full inbox read that should finish even after the phone is closed.
+  // requestedAt newer than finishedAt means it is still owed. startedAt is a
+  // heartbeat so a second run does not read the same mail at the same time.
+  inboxScanRequestedAt: timestamp("inbox_scan_requested_at"),
+  inboxScanStartedAt: timestamp("inbox_scan_started_at"),
+  inboxScanFinishedAt: timestamp("inbox_scan_finished_at"),
   shareOriginals: boolean("share_originals").notNull().default(false),
   mealsOnCalendar: boolean("meals_on_calendar").notNull().default(false),
   mutedSenders: jsonb("muted_senders").$type<string[]>().notNull().default([]),

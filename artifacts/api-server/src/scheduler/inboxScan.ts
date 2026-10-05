@@ -4,7 +4,7 @@ import { logger } from "../lib/logger";
 import { createWorkGate } from "../lib/workGate";
 import { scanConnectedInboxes } from "../ingest/scanHousehold";
 
-async function connectedUserIds(): Promise<string[]> {
+export async function connectedUserIds(): Promise<string[]> {
   const google = await db.select({ userId: profiles.userId }).from(googleCalendarTokens)
     .innerJoin(profiles, eq(profiles.id, googleCalendarTokens.profileId))
     .where(eq(googleCalendarTokens.isActive, true));

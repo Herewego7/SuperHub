@@ -1,6 +1,6 @@
 import { google, calendar_v3 } from 'googleapis';
 import { attachFiles, fileParts, gmailInboxQuery, gmailPayload, header, inboxFetchLimit, INBOX_RECENT_DAYS, messageText, parseAddress, threadLines, toInbound, type InboundMessage } from './ingest/parse';
-import { inboxFailure, inboxListStopped, inboxTokenExpiry } from './ingest/process';
+import { gmailScopeGranted, inboxFailure, inboxListStopped, inboxMailFailure, inboxTokenExpiry } from './ingest/process';
 
 // Calendar plus read-only mail. No userinfo.email/userinfo.profile. Those
 // identity scopes are what makes Google's consent screen read as
@@ -263,7 +263,7 @@ export class GoogleCalendarService {
     }
   }
 
-  async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string, tokenExpiry?: Date | string | null, days = INBOX_RECENT_DAYS, scope?: { query: string; limit: number }): Promise<InboundMessage[]> {
+  private gmailAuth(accessToken: string, refreshToken: string | undefined, tokenExpiry?: Date | string | null) {
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
@@ -273,6 +273,39 @@ export class GoogleCalendarService {
       refresh_token: refreshToken,
       expiry_date: inboxTokenExpiry(tokenExpiry, !!refreshToken),
     });
+    return oauth2Client;
+  }
+
+  /** Calendar access does not include email. A Family Hub connection is calendar-only until they connect again. */
+  async gmailAccess(accessToken: string, refreshToken: string | undefined, tokenExpiry?: Date | string | null): Promise<"ok" | "scope" | "unavailable" | "auth"> {
+    const oauth2Client = this.gmailAuth(accessToken, refreshToken, tokenExpiry);
+    let access = accessToken;
+    try {
+      const got = await oauth2Client.getAccessToken();
+      if (got.token) access = got.token;
+    } catch (err) {
+      console.warn("Gmail token refresh failed:", err instanceof Error ? err.message : err);
+      return "auth";
+    }
+    try {
+      const info = await oauth2Client.getTokenInfo(access);
+      if (gmailScopeGranted(info.scopes) === false) return "scope";
+    } catch (err) {
+      console.warn("Gmail token check failed:", err instanceof Error ? err.message : err);
+    }
+    try {
+      const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+      await gmail.users.messages.list({ userId: "me", maxResults: 1 });
+      return "ok";
+    } catch (err) {
+      const kind = inboxMailFailure(err);
+      if (kind === "auth" || kind === "scope" || kind === "unavailable") return kind;
+      return "ok";
+    }
+  }
+
+  async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string, tokenExpiry?: Date | string | null, days = INBOX_RECENT_DAYS, scope?: { query: string; limit: number }): Promise<InboundMessage[]> {
+    const oauth2Client = this.gmailAuth(accessToken, refreshToken, tokenExpiry);
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
     const limit = scope?.limit ?? inboxFetchLimit(days);
     const ids: string[] = [];
