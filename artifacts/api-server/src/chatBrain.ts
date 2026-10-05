@@ -187,7 +187,7 @@ export function chatSystemPrompt(snap: ChatSnapshot): string {
     "- Say who each thing is for. Include every meeting and event on the calendar. Leave one out only when they ask you to.",
     "- Mention the weather only when it changes something, like a big temperature drop, rain during something outdoors, or heat, and say what to do about it.",
     "- Change the calendar, to-dos, chores, meals, or groceries only when they ask in this conversation.",
-    "- To plan dinners, call plan_dinners with a date (YYYY-MM-DD) and a name for each night. Prefer a saved meal name when one fits. Ask first, then call again with confirmed=true after they say yes. That writes the Meals tab.",
+    "- To plan dinners, call plan_dinners with a date (YYYY-MM-DD) and a name for each night. Prefer a saved meal name when one fits. A week you are suggesting is also a list, one line each, like Wednesday: Tacos. Stop there. The app asks them to confirm, and only that yes writes the Meals tab. Say a dinner is on the plan only after plan_dinners returns ok. Never say you added a dinner when that tool did not.",
     "- Before delete_event, remember_fact, forget_school, mute_sender, mark_not_relevant, or plan_dinners, ask first. Call the tool with confirmed=true only after they say yes.",
     "- Events that live on Google, Outlook, or an iCal feed cannot be deleted or moved here. The tool will say to hand that off.",
     "- Use search, get_plan, get_newsletters, get_profile, and get_weather instead of guessing. For weather somewhere other than home, pass place and say the place name the tool returns. For a place, call maps_link and include its url. create_reminder puts a reminder on the plan. send_feedback sends a note to the makers.",
@@ -264,7 +264,7 @@ export function handleToolCall(
   }
   const input = asRecord(args);
   const confirmed = input.confirmed === true && saidYes;
-  if (NEEDS_YES.has(name) && !confirmed) return ask(name.split("_").join(" "));
+  if (NEEDS_YES.has(name) && name !== "plan_dinners" && !confirmed) return ask(name.split("_").join(" "));
 
   if (name === "create_task") {
     const title = textArg(input, "title");
@@ -353,7 +353,7 @@ export function handleToolCall(
       return [{ date, name: meal.slice(0, 80) }];
     }).slice(0, 14);
     if (dinners.length === 0) return { output: { error: "Name a date and a dinner." }, action: null, handoff: false };
-    if (!confirmed) return ask(dinners.map((dinner) => `${dinner.date}: ${dinner.name}`).join(", "));
+    if (!confirmed) return { output: { needsConfirmation: true, dinners, ask: `Ask the user to confirm first: ${dinners.map((dinner) => `${dinner.date}: ${dinner.name}`).join(", ")}. Call again with confirmed=true only after they say yes.` }, action: null, handoff: false };
     return { output: { ok: true }, action: { kind: "plan_dinners", dinners }, handoff: false };
   }
   if (name === "search") {

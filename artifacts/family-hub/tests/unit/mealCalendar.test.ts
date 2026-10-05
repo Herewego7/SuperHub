@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dinnerCopyRange, dinnerPlanReply, dinnerReply, dinnersFromSaved, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, groceryListAfterHave, mealEvents, statedDinners, wantsDinnerPlan, withSavedMeals } from "../../src/lib/mealCalendar";
+import { assignedDinners, dinnerCopyRange, dinnerPlanReply, dinnerReply, dinnersFromSaved, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, groceryListAfterHave, mealEvents, proposedDinners, statedDinners, wantsDinnerPlan, withSavedMeals } from "../../src/lib/mealCalendar";
 
 test("turning dinners on copies the weeks ahead, not only the week on screen", () => {
   const range = dinnerCopyRange("2026-10-05", "2026-10-11", new Date(2026, 9, 1));
@@ -82,6 +82,24 @@ test("named nights become dinners, and a question does not", () => {
     { date: "2026-10-07", name: "soup" },
   ]);
   assert.deepEqual(statedDinners("what's for dinner tonight", friday), []);
+  assert.deepEqual(
+    assignedDinners("Let's do tacos on wednesday for sure. Let me think about the other options", new Date(2026, 9, 5)),
+    [{ date: "2026-10-07", name: "tacos" }],
+  );
+  assert.deepEqual(assignedDinners("Does this sound good?", new Date(2026, 9, 5)), []);
+  const monday = new Date(2026, 9, 5);
+  assert.deepEqual(proposedDinners(`Here is a proposed meal plan for the rest of the week:
+- Wednesday: Tacos
+- Thursday: Chicken Stir Fry
+Does this sound good?`, monday), [
+    { date: "2026-10-07", name: "Tacos" },
+    { date: "2026-10-08", name: "Chicken Stir Fry" },
+  ]);
+  assert.deepEqual(proposedDinners("On the meal plan.\nWed, Oct 7: Tacos\nThu, Oct 8: Pizza", monday), []);
+  assert.deepEqual(proposedDinners("Wed, Oct 7: Tacos\nThu, Oct 8: Pizza\nReply yes to put these on the meal plan.", monday), [
+    { date: "2026-10-07", name: "Tacos" },
+    { date: "2026-10-08", name: "Pizza" },
+  ]);
   assert.equal(wantsDinnerPlan("plan dinners for the week"), true);
   assert.equal(wantsDinnerPlan("what's for dinner"), false);
 });

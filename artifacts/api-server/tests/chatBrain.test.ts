@@ -98,6 +98,7 @@ describe("chat brain", () => {
     const args = { meals: [{ date: "2026-10-05", name: "Tacos" }, { date: "bad", name: "" }], confirmed: true };
     const blocked = handleToolCall("plan_dinners", args, snap, false);
     assert.equal(blocked.action, null);
+    assert.deepEqual((blocked.output as { dinners: { date: string; name: string }[] }).dinners, [{ date: "2026-10-05", name: "Tacos" }]);
     const allowed = handleToolCall("plan_dinners", args, snap, true);
     assert.deepEqual(allowed.action, { kind: "plan_dinners", dinners: [{ date: "2026-10-05", name: "Tacos" }] });
     assert.match(chatBriefing({ ...snap, savedMeals: [{ id: "a", name: "Pasta" }] }), /Pasta/);

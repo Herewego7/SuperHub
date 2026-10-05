@@ -10,11 +10,17 @@ import { choresDismissedBySlip, dismissSlip, muteSender } from "../ingest/proces
 import { slipKey } from "../ingest/parse";
 import { draftLine, draftWrite, normalizeDraft, readDraft } from "../ai/draft";
 import { conditionText, type TemperatureUnit } from "../ai/weather";
+import { acceptedMealPlan, assignedDinners, dinnerConfirmText, proposedDinners, type DinnerNight } from "../meals/assignDinner";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp } from "../meals/dinnerEvent";
 import { syncEventCreate, syncEventDelete, syncEventUpdate } from "../calendarSync";
 
 function ownerId(req: any): string {
   return req.familyOwnerId ?? req.user?.claims?.sub;
+}
+
+function savedDinnerText(dinners: DinnerNight[]): string {
+  const lines = dinnerConfirmText(dinners).split("\n").slice(0, -1);
+  return `On the meal plan.\n${lines.join("\n")}`;
 }
 
 function historyOf(body: unknown): ChatHistory {
@@ -320,6 +326,34 @@ export function registerChatRoutes(app: Express): void {
         authStorage.getUser(req.user?.claims?.sub),
         connectedCalendarEvents(userId).catch(() => []),
       ]);
+      const timeZone = location?.timezone || "America/Chicago";
+      const now = new Date();
+      const assigned = assignedDinners(text, now, timeZone);
+      if (assigned.length > 0) {
+        const groceryMeals = await placeDinners(userId, assigned);
+        res.json({
+          fallback: false,
+          text: savedDinnerText(assigned),
+          changed: ["meals", "events"],
+          groceryMeals: groceryMeals.filter((meal) => meal.ingredients.length > 0),
+        });
+        return;
+      }
+      const history = historyOf(req.body?.history);
+      if (acceptedMealPlan(text)) {
+        const last = [...history].reverse().find((turn) => turn.role === "assistant");
+        const nights = last ? proposedDinners(last.text, now, timeZone) : [];
+        if (nights.length > 0) {
+          const groceryMeals = await placeDinners(userId, nights);
+          res.json({
+            fallback: false,
+            text: savedDinnerText(nights),
+            changed: ["meals", "events"],
+            groceryMeals: groceryMeals.filter((meal) => meal.ingredients.length > 0),
+          });
+          return;
+        }
+      }
       const events = eventsForChat(storedEvents, outsideEvents);
       const people = profiles.filter((profile: { isAllFamilyProfile?: boolean | null }) => !profile.isAllFamilyProfile);
       const snap: ChatSnapshot = {
@@ -368,16 +402,18 @@ export function registerChatRoutes(app: Express): void {
           return searchMemory(userId, query);
         },
       };
-      const brain = await replyWithChat(snap, historyOf(req.body?.history), text);
+      const brain = await replyWithChat(snap, history, text);
       if (brain.fallback) {
         res.json({ fallback: true });
         return;
       }
       const groceryMeals: PlacedDinner[] = [];
       for (const action of brain.actions) groceryMeals.push(...await applyAction(userId, action));
+      const saved = brain.actions.some((action) => action.kind === "plan_dinners");
+      const nights = saved ? [] : proposedDinners(brain.text, now, timeZone);
       res.json({
         fallback: false,
-        text: brain.text,
+        text: nights.length > 0 ? dinnerConfirmText(nights) : brain.text,
         changed: changedKeys(brain.actions),
         groceryMeals: groceryMeals.filter((meal) => meal.ingredients.length > 0),
       });

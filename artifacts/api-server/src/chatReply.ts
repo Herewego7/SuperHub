@@ -14,6 +14,7 @@ import { type ChatAction, type ChatSnapshot, handleToolCall, chatSystemPrompt, t
 import { forecastForPlace } from "./ai/weather";
 import { withModelRetry } from "./ai/modelRetry";
 import { BOTLIFE_MODELS, chatGenerationConfig, geminiClient } from "./geminiClient";
+import { dinnerConfirmText } from "./meals/assignDinner";
 
 export type ChatHistory = { role: "user" | "assistant"; text: string }[];
 
@@ -26,6 +27,17 @@ type ModelCall = { name: string; args: Record<string, unknown> };
 type ModelTurn = { text: string; calls: ModelCall[]; modelParts: unknown[] };
 
 export const MAX_ROUNDS = 5;
+
+function dinnersFrom(output: unknown): { date: string; name: string }[] {
+  const dinners = output && typeof output === "object" && "dinners" in output ? (output as { dinners?: unknown }).dinners : null;
+  if (!Array.isArray(dinners)) return [];
+  return dinners.flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const date = typeof (row as { date?: unknown }).date === "string" ? (row as { date: string }).date : "";
+    const name = typeof (row as { name?: unknown }).name === "string" ? (row as { name: string }).name : "";
+    return /^\d{4}-\d{2}-\d{2}$/.test(date) && name ? [{ date, name }] : [];
+  });
+}
 
 /** Same sentence Bot Life stores when the model call fails. */
 export const CHAT_PROBLEM = "Sorry, I hit a problem answering that. Please try again in a moment.";
@@ -96,6 +108,8 @@ export async function replyWithChat(snap: ChatSnapshot, history: ChatHistory, te
         ? { output: await forecastForPlace(place, typeof call.args.date === "string" ? call.args.date : "", snap.temperatureUnit ?? "fahrenheit"), action: null, handoff: false }
         : handleToolCall(call.name, call.args, snap, saidYes);
       if (handled.handoff) return { fallback: true };
+      const nights = call.name === "plan_dinners" && !handled.action ? dinnersFrom(handled.output) : [];
+      if (nights.length > 0) return { fallback: false, text: dinnerConfirmText(nights), actions };
       if (handled.action) actions.push(handled.action);
       responses.push({ functionResponse: { name: call.name, response: handled.output } });
     }

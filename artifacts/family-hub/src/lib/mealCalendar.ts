@@ -144,6 +144,61 @@ function dayFromWord(word: string, today: Date): Date | null {
   return at;
 }
 
+/**
+ * "Let's do tacos on Wednesday" names a dinner to save now.
+ * A proposed week ("does this sound good?") does not match.
+ */
+export function assignedDinners(text: string, today: Date): { date: string; name: string }[] {
+  const found = new Map<string, { date: string; name: string }>();
+  const re = new RegExp(`\\b(?:let's|lets|let us|add|put)\\s+(.+?)\\s+(?:on|for)\\s+(${DINNER_DAY})\\b`, "gi");
+  for (const match of text.matchAll(re)) {
+    const name = mealName(match[1] ?? "");
+    const day = dayFromWord(match[2] ?? "", today);
+    if (!name || !day) continue;
+    found.set(dayKey(day), { date: dayKey(day), name });
+  }
+  return [...found.values()];
+}
+
+const PROPOSAL_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * A suggested week from chat: "Wednesday: Tacos" or "Wed, Oct 7: Tacos".
+ * A dinner already saved ("On the meal plan.") is not asked again.
+ */
+export function proposedDinners(text: string, today: Date): { date: string; name: string }[] {
+  if (/^On the meal plan\./i.test(text.trim())) return [];
+  const found = new Map<string, { date: string; name: string }>();
+  const current = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  for (const line of text.split("\n")) {
+    const dated = line.match(/^\s*(?:[-*•]\s*)?(Sun|Mon|Tue|Wed|Thu|Fri|Sat),\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}):\s*(.+)$/i);
+    const named = line.match(new RegExp(`^\\s*(?:[-*•]\\s*)?(${DINNER_DAY})\\s*:\\s*(.+)$`, "i"));
+    const raw = dated?.[4] ?? named?.[2] ?? "";
+    const name = mealName(raw.replace(/\s*\(replaces [^)]+\)\s*$/i, ""));
+    if (!name) continue;
+    if (dated) {
+      const month = PROPOSAL_MONTHS.findIndex((item) => item.toLowerCase() === dated[2].toLowerCase());
+      const day = Number(dated[3]);
+      if (month < 0 || !day) continue;
+      let year = current.getFullYear();
+      const stamp = new Date(year, month, day);
+      if (stamp.getTime() < current.getTime() - 2 * 86400000) year += 1;
+      const date = dayKey(new Date(year, month, day));
+      found.set(date, { date, name });
+      continue;
+    }
+    const day = dayFromWord(named?.[1] ?? "", current);
+    if (!day) continue;
+    const date = dayKey(day);
+    found.set(date, { date, name });
+  }
+  const asking = /Reply yes to put these on the meal plan/i.test(text);
+  const suggesting = /\b(meal plan|dinners|menu|dinner ideas)\b/i.test(text);
+  if (asking && found.size > 0) return [...found.values()];
+  if (suggesting && found.size >= 2) return [...found.values()];
+  return [];
+}
+
 /** "Tacos tonight and pasta tomorrow", or "Monday tacos, Wednesday soup". */
 export function statedDinners(text: string, today: Date): { date: string; name: string }[] {
   const found = new Map<string, { date: string; name: string }>();
