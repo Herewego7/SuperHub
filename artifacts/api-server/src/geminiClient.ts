@@ -28,7 +28,8 @@ export function geminiSetup(env: GeminiEnv = process.env): GeminiSetup {
         return {
           kind: "vertex",
           project,
-          location: env.GOOGLE_CLOUD_LOCATION?.trim() || "us-central1",
+          // Gemini 3 is served from global. A regional default 404s the chat model.
+          location: env.GOOGLE_CLOUD_LOCATION?.trim() || "global",
           credentials: { client_email: parsed.client_email, private_key: parsed.private_key },
         };
       }
