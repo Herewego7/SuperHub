@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { chatBriefing, chatSystemPrompt, handleToolCall, toolDeclarations, userSaidYes, type ChatSnapshot } from "../src/chatBrain";
+import { chatBriefing, chatSystemPrompt, eventsForChat, handleToolCall, toolDeclarations, userSaidYes, type ChatSnapshot } from "../src/chatBrain";
 
 const snap: ChatSnapshot = {
   now: new Date("2026-10-02T15:00:00Z"),
@@ -26,6 +26,34 @@ const snap: ChatSnapshot = {
 };
 
 describe("chat brain", () => {
+  it("keeps a Google event chat can already see, and names the sooner one first", () => {
+    const merged = eventsForChat(
+      [{ id: "local", externalId: "google:copied", title: "Copied" }],
+      [{ id: "google-1", externalId: "google:copied", title: "Copied again" }, { id: "google-2", externalId: "google:soccer", title: "Soccer" }],
+    );
+    assert.deepEqual(merged.map((event) => event.title), ["Copied", "Soccer"]);
+    const briefing = chatBriefing({
+      ...snap,
+      now: new Date("2026-10-05T15:00:00Z"),
+      events: [
+        { id: "later", title: "Later game", startTime: "2026-10-09T21:00:00Z", profileIds: ["liam"], source: "google" },
+        { id: "sooner", title: "Piano", startTime: "2026-10-06T20:00:00Z", profileIds: ["liam"], source: "google" },
+      ],
+    });
+    assert.ok(briefing.indexOf("Piano") < briefing.indexOf("Later game"));
+    assert.equal(briefing.includes("Old recital"), false);
+    const withOld = chatBriefing({
+      ...snap,
+      now: new Date("2026-10-05T15:00:00Z"),
+      events: [
+        { id: "old", title: "Old recital", startTime: "2026-09-20T20:00:00Z", profileIds: ["liam"], source: "google" },
+        { id: "sunday", title: "Sunday practice", startTime: "2026-10-04T18:00:00Z", profileIds: ["liam"], source: "google" },
+      ],
+    });
+    assert.equal(withOld.includes("Old recital"), false);
+    assert.equal(withOld.includes("Sunday practice"), true);
+  });
+
   it("answers yes the way a confirmation does", () => {
     assert.equal(userSaidYes("Yes, do it"), true);
     assert.equal(userSaidYes("what's tomorrow"), false);

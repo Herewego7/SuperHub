@@ -4,7 +4,8 @@ import { checkRateLimit } from "../replit_integrations/auth/rateLimit";
 import { authStorage } from "../replit_integrations/auth/storage";
 import { storage } from "../storage";
 import { replyWithChat, type ChatHistory } from "../chatReply";
-import type { ChatAction, ChatSnapshot } from "../chatBrain";
+import { eventsForChat, type ChatAction, type ChatSnapshot } from "../chatBrain";
+import { connectedCalendarEvents } from "../scheduler/eveningPlan";
 import { choresDismissedBySlip, dismissSlip, muteSender } from "../ingest/process";
 import { slipKey } from "../ingest/parse";
 import { draftLine, draftWrite, normalizeDraft, readDraft } from "../ai/draft";
@@ -304,7 +305,7 @@ export function registerChatRoutes(app: Express): void {
         return;
       }
       const isChild = req.body?.isChild === true;
-      const [profiles, events, chores, completions, meals, savedMeals, celebrations, groceries, location, account] = await Promise.all([
+      const [profiles, storedEvents, chores, completions, meals, savedMeals, celebrations, groceries, location, account, outsideEvents] = await Promise.all([
         storage.getProfilesByUser(userId),
         storage.getEventsByUser(userId),
         storage.getChoresByUser(userId),
@@ -315,7 +316,9 @@ export function registerChatRoutes(app: Express): void {
         storage.getGroceryItemsByUser(userId),
         storage.getLocationSettingsByUser(userId),
         authStorage.getUser(req.user?.claims?.sub),
+        connectedCalendarEvents(userId).catch(() => []),
       ]);
+      const events = eventsForChat(storedEvents, outsideEvents);
       const people = profiles.filter((profile: { isAllFamilyProfile?: boolean | null }) => !profile.isAllFamilyProfile);
       const snap: ChatSnapshot = {
         now: new Date(),
