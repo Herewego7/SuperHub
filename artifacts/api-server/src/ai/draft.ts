@@ -2,7 +2,7 @@
  * One typed sentence becomes one plan item. The person reviews it before anything is saved.
  * The model may rewrite the wording. A time or a date the sentence did not contain is rejected.
  */
-import { askJson, geminiClient, READ_MODELS } from "../geminiClient";
+import { askJson, BOTLIFE_MODELS, geminiClient } from "../geminiClient";
 import { schoolEventStart, slipClock, slipDate, slipDayOffset } from "../ingest/process";
 
 export const DRAFT_KINDS = ["task", "event", "keyDate", "backpack", "decision"] as const;
@@ -137,7 +137,7 @@ export async function readDraft(text: string, names: string[], now: Date): Promi
   if (!ai) return local;
   const parsed = await askJson(
     ai,
-    READ_MODELS,
+    [BOTLIFE_MODELS.draft],
     SYSTEM,
     `Family: ${names.join(", ") || "none"}\nNow: ${now.toISOString()}\nSentence: ${text.trim().slice(0, 1000)}`,
   );

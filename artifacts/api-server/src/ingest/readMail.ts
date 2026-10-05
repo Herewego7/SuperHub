@@ -4,7 +4,7 @@
  * sorts, marked so a date inside a letter does not steal the letter.
  */
 import { GoogleGenAI } from "@google/genai";
-import { askJson, READ_MODELS, STRONG_MODELS } from "../geminiClient";
+import { askJson, BOTLIFE_MODELS } from "../geminiClient";
 import { chunkText, familyGrades, forOtherGrades, shouldRead } from "../ai/parity";
 import { slipKey, type InboundMessage } from "./parse";
 import { slipClock, type HouseholdMail, type PlannedEvent, type PlannedTodo } from "./process";
@@ -153,7 +153,7 @@ function looksLikeNewsletter(message: InboundMessage): boolean {
 }
 
 export async function readInboxMessage(ai: GoogleGenAI, message: InboundMessage, people: MailPerson[], examples: string[] = []): Promise<MailRead | null> {
-  const triage = await askJson(ai, READ_MODELS, TRIAGE_SYSTEM, mailReadPrompt(message, people, examples), message.file);
+  const triage = await askJson(ai, [BOTLIFE_MODELS.triage], TRIAGE_SYSTEM, mailReadPrompt(message, people, examples), message.file);
   const decision = triage && typeof triage === "object" ? triage as { familyRelated?: unknown; needsFullRead?: unknown; confidence?: unknown } : null;
   if (decision && typeof decision.confidence === "number" && !shouldRead({
     familyRelated: decision.familyRelated === true,
@@ -163,7 +163,11 @@ export async function readInboxMessage(ai: GoogleGenAI, message: InboundMessage,
     return { familyRelated: false, newsletter: null, items: [], facts: [] };
   }
   const strong = (message.body || "").length > 12_000 || !!message.file;
-  const models = strong || looksLikeNewsletter(message) ? STRONG_MODELS : READ_MODELS;
+  const models = looksLikeNewsletter(message)
+    ? [BOTLIFE_MODELS.newsletter]
+    : strong
+      ? [BOTLIFE_MODELS.extractComplex]
+      : [BOTLIFE_MODELS.extract];
   const parts = looksLikeNewsletter(message) ? chunkText(message.body || message.snippet || "") : [message.body || message.snippet || ""];
   const reads: MailRead[] = [];
   for (const part of parts.length ? parts : [""]) {

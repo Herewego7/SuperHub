@@ -1,6 +1,6 @@
 import { storage } from "../storage";
 import { syncEventCreate } from "../calendarSync";
-import { geminiClient, askJson, READ_MODELS } from "../geminiClient";
+import { geminiClient, askJson, BOTLIFE_MODELS } from "../geminiClient";
 import { duplicateBand, familyGrades, titleSimilarity } from "../ai/parity";
 import { examplesFor, rememberRecord } from "../ai/memory";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
@@ -110,7 +110,7 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
       const near = chores.find((chore) => chore.title !== todo.title && duplicateBand(titleSimilarity(chore.title, todo.title)) !== "new");
       if (near && duplicateBand(titleSimilarity(near.title, todo.title)) === "same") continue;
       if (near) {
-        const verdict = await askJson(ai, READ_MODELS, "Decide if two household items are the same event or task. JSON {\"same\":boolean}", `${near.title}\n${todo.title}`);
+        const verdict = await askJson(ai, [BOTLIFE_MODELS.dedupe], "Decide if two household items are the same event or task. JSON {\"same\":boolean}", `${near.title}\n${todo.title}`);
         if (verdict && typeof verdict === "object" && (verdict as { same?: unknown }).same === true) continue;
       }
       todosToSave.push(todo);

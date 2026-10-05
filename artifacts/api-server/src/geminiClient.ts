@@ -57,9 +57,31 @@ export function geminiClient(env: GeminiEnv = process.env): GoogleGenAI | null {
   return null;
 }
 
-export const CHAT_MODELS = ["gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash"];
-export const READ_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
-export const STRONG_MODELS = ["gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash"];
+/**
+ * Bot Life's job table (functions/src/ai/registry.ts). SuperHub uses these
+ * names. A test fails if chat grows its own token cap again.
+ */
+export const BOTLIFE_MODELS = {
+  triage: "gemini-3.1-flash-lite",
+  extract: "gemini-3.5-flash",
+  extractComplex: "gemini-3.1-pro-preview",
+  newsletter: "gemini-3.1-pro-preview",
+  dedupe: "gemini-3.1-flash-lite",
+  digest: "gemini-3.5-flash",
+  chat: "gemini-3.1-pro-preview",
+  draft: "gemini-3.5-flash",
+  embed: "gemini-embedding-001",
+} as const;
+
+/** Bot Life chat: temperature 0.3, and no output cap of our own. */
+export function chatGenerationConfig(): { temperature: number } {
+  return { temperature: 0.3 };
+}
+
+/** Bot Life structured reads: temperature 0, and no output cap of our own. */
+export function jsonGenerationConfig(): { temperature: number; responseMimeType: string } {
+  return { temperature: 0, responseMimeType: "application/json" };
+}
 
 export async function askJson(ai: GoogleGenAI, models: string[], system: string, prompt: string, image?: { mimeType: string; data: string }): Promise<unknown | null> {
   const parts = [
@@ -71,7 +93,7 @@ export async function askJson(ai: GoogleGenAI, models: string[], system: string,
       const response = await ai.models.generateContent({
         model,
         contents: [{ role: "user", parts }],
-        config: { systemInstruction: system, responseMimeType: "application/json", maxOutputTokens: 4096 },
+        config: { systemInstruction: system, ...jsonGenerationConfig() },
       });
       const cleaned = (response.text || "").replace(/```json|```/g, "").trim();
       if (!cleaned) continue;

@@ -4,7 +4,7 @@
  */
 import { and, desc, eq } from "drizzle-orm";
 import { aiRecords, db } from "@workspace/db";
-import { geminiClient } from "../geminiClient";
+import { BOTLIFE_MODELS, geminiClient } from "../geminiClient";
 import { cosine } from "./parity";
 
 export async function rememberRecord(userId: string, kind: "example" | "chunk", text: string, ref?: string): Promise<void> {
@@ -41,7 +41,7 @@ async function embed(text: string): Promise<number[] | null> {
   if (!ai) return null;
   try {
     const response = await ai.models.embedContent({
-      model: "gemini-embedding-001",
+      model: BOTLIFE_MODELS.embed,
       contents: text.slice(0, 2000),
       config: { outputDimensionality: 768 },
     });

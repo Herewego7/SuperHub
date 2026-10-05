@@ -6,7 +6,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { type ChatAction, type ChatSnapshot, handleToolCall, chatSystemPrompt, toolDeclarations, userSaidYes } from "./chatBrain";
 import { forecastForPlace } from "./ai/weather";
-import { CHAT_MODELS, geminiClient } from "./geminiClient";
+import { BOTLIFE_MODELS, chatGenerationConfig, geminiClient } from "./geminiClient";
 
 export type ChatHistory = { role: "user" | "assistant"; text: string }[];
 
@@ -18,7 +18,6 @@ type ModelCall = { name: string; args: Record<string, unknown> };
 
 type ModelTurn = { text: string; calls: ModelCall[]; modelParts: unknown[] };
 
-const MODELS = CHAT_MODELS;
 const MAX_ROUNDS = 4;
 
 function configured(): GoogleGenAI | null {
@@ -27,17 +26,14 @@ function configured(): GoogleGenAI | null {
 
 async function generate(ai: GoogleGenAI, system: string, contents: unknown[], tools: ReturnType<typeof toolDeclarations>): Promise<ModelTurn | null> {
   let last: unknown;
-  for (const model of MODELS) {
+  for (const model of [BOTLIFE_MODELS.chat]) {
     try {
       const response = await ai.models.generateContent({
         model,
         contents: contents as never,
         config: {
           systemInstruction: system,
-          // Thinking tokens count against this cap. 1024 left a week-long
-          // answer ending mid-sentence. Keep the thinking short so the words fit.
-          maxOutputTokens: 8192,
-          thinkingConfig: { thinkingBudget: 512 },
+          ...chatGenerationConfig(),
           tools: [{ functionDeclarations: tools as never }],
         },
       });
