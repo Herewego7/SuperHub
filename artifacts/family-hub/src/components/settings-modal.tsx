@@ -1827,7 +1827,7 @@ export function CalendarConnectionsSection({
   ): Promise<string | null> => {
     try {
       // No redirect URL is sent any more — `native` is a flag and the server
-      // derives the familyhub:// target itself, so nothing a client sends can
+      // derives the superhub:// target itself, so nothing a client sends can
       // steer where the callback sends the browser.
       const res = await apiRequest("POST", "/api/auth/calendar/state", { profileId, provider, native });
       const { state } = await res.json();
@@ -1853,7 +1853,7 @@ export function CalendarConnectionsSection({
       if (!state) return;
       try {
         const loginUrl = apiUrl(`/api/auth/google?state=${encodeURIComponent(state)}`);
-        const { url: callbackUrl } = await WebAuth.authenticate({ url: loginUrl, callbackScheme: "familyhub", ephemeral: true });
+        const { url: callbackUrl } = await WebAuth.authenticate({ url: loginUrl, callbackScheme: "superhub", ephemeral: true });
         handleOAuthCallback(callbackUrl);
       } catch (err: any) {
         if (err?.message !== "USER_CANCELLED") {
@@ -1874,7 +1874,7 @@ export function CalendarConnectionsSection({
       if (!state) return;
       try {
         const loginUrl = apiUrl(`/api/auth/outlook?state=${encodeURIComponent(state)}`);
-        const { url: callbackUrl } = await WebAuth.authenticate({ url: loginUrl, callbackScheme: "familyhub", ephemeral: true });
+        const { url: callbackUrl } = await WebAuth.authenticate({ url: loginUrl, callbackScheme: "superhub", ephemeral: true });
         handleOAuthCallback(callbackUrl);
       } catch (err: any) {
         if (err?.message !== "USER_CANCELLED") {

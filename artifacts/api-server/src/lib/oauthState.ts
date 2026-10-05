@@ -49,6 +49,14 @@ export function nativeRedirectFor(provider: OAuthProvider): string {
   return NATIVE_REDIRECTS[provider];
 }
 
+/**
+ * The signed-in app is at /app. "/" is the public marketing page, so a
+ * finished calendar connection must not land there.
+ */
+export function webCalendarReturn(query: string): string {
+  return `/app?${query.replace(/^\?/, "")}`;
+}
+
 export function isOAuthProvider(value: unknown): value is OAuthProvider {
   return value === "google" || value === "outlook";
 }

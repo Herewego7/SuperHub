@@ -93,8 +93,24 @@ function whenLabel(value: string | Date, zone: string, allDay: boolean): string 
   return `${day}, ${clock}`;
 }
 
+/** App events plus Google, Outlook, and subscribed calendars, without listing a copied event twice. */
+export function eventsForChat<T extends { id: string; externalId?: string | null }>(local: T[], outside: T[]): T[] {
+  const known = new Set(local.flatMap((event) => [event.id, event.externalId].filter((value): value is string => !!value)));
+  return [...local, ...outside.filter((event) => !known.has(event.id) && (!event.externalId || !known.has(event.externalId)))];
+}
+
 function localKey(date: Date, zone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+}
+
+/** Sunday of the week that contains `now`, as yyyy-MM-dd in the family's zone. */
+function weekStartKey(now: Date, zone: string): string {
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: zone, weekday: "short" }).format(now);
+  const index = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(weekday);
+  const [year, month, day] = localKey(now, zone).split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() - (index < 0 ? 0 : index));
+  return date.toISOString().slice(0, 10);
 }
 
 /** The household the model is allowed to talk about. Mail bodies stay out of a child's copy. */
@@ -109,11 +125,14 @@ export function chatBriefing(snap: ChatSnapshot): string {
     return bits.join(", ");
   });
   const horizon = snap.now.getTime() + 14 * 86400000;
+  const weekStart = weekStartKey(snap.now, zone);
   const events = snap.events
     .filter((event) => {
       const at = new Date(event.startTime).getTime();
-      return !Number.isNaN(at) && at >= snap.now.getTime() - 12 * 3600000 && at <= horizon;
+      if (Number.isNaN(at) || at > horizon) return false;
+      return localKey(new Date(at), zone) >= weekStart;
     })
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
     .slice(0, 40)
     .map((event) => {
       const who = names(snap, event.profileIds);

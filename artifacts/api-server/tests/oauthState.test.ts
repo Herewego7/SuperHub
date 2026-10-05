@@ -5,6 +5,7 @@ process.env.DATABASE_URL ??= "postgres://test:test@localhost:5432/testdb";
 
 import {
   nativeRedirectFor,
+  webCalendarReturn,
   isOAuthProvider,
   stateHashesMatch,
   OAUTH_STATE_TTL_MS,
@@ -27,6 +28,14 @@ test("the deep-link target is derived from the provider, never from a client", (
   for (const p of ["google", "outlook"] as const) {
     assert.ok(nativeRedirectFor(p).startsWith("superhub://"));
   }
+});
+
+test("a finished web connection returns to the app, not the public site", () => {
+  assert.equal(
+    webCalendarReturn("google_calendar_connected=true&profileId=18d362b4"),
+    "/app?google_calendar_connected=true&profileId=18d362b4",
+  );
+  assert.equal(webCalendarReturn("?outlook_calendar_error=true").startsWith("/?"), false);
 });
 
 test("only the two real providers are accepted", () => {

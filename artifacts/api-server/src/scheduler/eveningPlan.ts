@@ -365,6 +365,15 @@ export function googlePlanRows(events: unknown[], profileId: string, assignments
   return rows;
 }
 
+export async function connectedCalendarEvents(userId: string) {
+  const assignments = await storage.getCalendarAssignmentsByUser(userId);
+  return uniqueExternalRows([
+    ...await googleEventsForPlan(userId, assignments),
+    ...await outlookEventsForPlan(userId, assignments),
+    ...await icalEventsForPlan(userId),
+  ]);
+}
+
 async function googleEventsForPlan(userId: string, assignments: { calendarId: string; calendarType?: string | null; profileId?: string | null; audienceProfileIds?: string[] | null; isActive?: boolean | null }[]) {
   const rows = [];
   const googleCalendar = new GoogleCalendarService();
