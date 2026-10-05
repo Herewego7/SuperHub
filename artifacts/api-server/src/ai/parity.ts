@@ -41,13 +41,18 @@ export function familyGrades(people: { facts?: string[] | null; school?: string 
   return grades;
 }
 
-export function chunkText(text: string, max = 8000): string[] {
+export function chunkText(text: string, max = 8000, limit = 8): string[] {
   const clean = text.trim();
   if (!clean) return [];
   if (clean.length <= max) return [clean];
   const chunks: string[] = [];
-  for (let i = 0; i < clean.length && chunks.length < 3; i += max) chunks.push(clean.slice(i, i + max));
+  for (let i = 0; i < clean.length && chunks.length < limit; i += max) chunks.push(clean.slice(i, i + max));
   return chunks;
+}
+
+/** Bot Life keeps eight excerpts of a letter so chat can search the mail itself. */
+export function searchChunks(text: string): string[] {
+  return chunkText(text, 1500, 8);
 }
 
 export function titleSimilarity(a: string, b: string): number {
@@ -100,6 +105,26 @@ export function searchHits(rows: { title: string; text: string; kind: string }[]
 
 export function mapsUrl(place: string): string {
   return `https://maps.apple.com/?q=${encodeURIComponent(place.trim())}`;
+}
+
+/** The closest "not relevant" examples, the way Bot Life picks them from the last 200. */
+export function similarExamples(
+  examples: { text: string; embedding?: number[] | null; ref?: string | null }[],
+  query: number[] | null | undefined,
+  senderAddress?: string,
+  k = 3,
+  minScore = 0.75,
+): string[] {
+  return examples
+    .map((example) => {
+      const similar = query && example.embedding?.length ? Math.max(0, cosine(query, example.embedding)) : 0;
+      const sameSender = senderAddress && example.ref && example.ref.toLowerCase() === senderAddress.toLowerCase() ? 0.2 : 0;
+      return { text: example.text, score: similar + sameSender };
+    })
+    .filter((example) => example.score >= minScore)
+    .sort((a, b) => b.score - a.score || a.text.localeCompare(b.text))
+    .slice(0, k)
+    .map((example) => example.text);
 }
 
 export function cosine(a: number[], b: number[]): number {

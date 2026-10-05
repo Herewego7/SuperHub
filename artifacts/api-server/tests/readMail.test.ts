@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { alreadyRead, parseMailRead, plansFromRead, subjectPlaceholder } from "../src/ingest/readMail.ts";
+import { alreadyRead, mailReadPrompt, parseMailRead, plansFromRead, subjectPlaceholder } from "../src/ingest/readMail.ts";
 
 const people = [{ name: "Liam", isChild: true, school: "Oak Elementary" }];
 const message = { subject: "Oak weekly", fromAddress: "news@school.org", snippet: "This week", accountId: "google" };
@@ -30,6 +30,21 @@ test("a mail read becomes a newsletter, a to-do, a key date, and a timed event",
   assert.equal(alreadyRead(planned.todos[0].description, "Oak weekly"), true);
   assert.equal(subjectPlaceholder("Oak weekly", "From: news@school.org\nThis week", "Oak weekly"), true);
   assert.equal(subjectPlaceholder(planned.todos[0].title, planned.todos[0].description, "Oak weekly"), false);
+});
+
+test("the reader sees a long letter, earlier messages, and the open calendar", () => {
+  const body = "x".repeat(20_000);
+  const prompt = mailReadPrompt(
+    { subject: "Week", snippet: "short", accountId: "a", body, thread: ["From: Coach\nSaturday at 9, Field 3"] },
+    [],
+    [],
+    undefined,
+    ["Calendar: Soccer (Sat 4:00 PM)"],
+  );
+  assert.equal(prompt.includes(body), true);
+  assert.match(prompt, /Calendar: Soccer/);
+  assert.match(prompt, /earlier message 1/);
+  assert.match(prompt, /Saturday at 9/);
 });
 
 test("mail that is not for the family is declined, and a bad reply is ignored", () => {

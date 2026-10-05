@@ -16,7 +16,7 @@ import { loadProfiles } from "../lib/profileRows";
 import { expandRecurringEvents } from "../lib/eventRecurrence";
 import { eventsOnWatchedCalendars } from "../lib/calendarAssignmentScope";
 import { withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
-import { askJson, geminiClient, READ_MODELS } from "../geminiClient";
+import { askJson, BOTLIFE_MODELS, geminiClient } from "../geminiClient";
 import { planLinesStayHonest } from "../ai/parity";
 import { storage } from "../storage";
 import { GoogleCalendarService } from "../googleCalendar";
@@ -661,9 +661,11 @@ export async function polishPlanBody(body: string): Promise<string> {
   if (!ai || lines.length === 0) return body;
   const parsed = await askJson(
     ai,
-    READ_MODELS,
+    [BOTLIFE_MODELS.digest],
     "Rewrite these plan lines so they are shorter and warmer. Keep every time and weekday exactly as written. Never add one that is not there. JSON {\"lines\":string[]}",
     lines.map((line, index) => `${index + 1}. ${line}`).join("\n"),
+    undefined,
+    "digest",
   );
   const next = parsed && typeof parsed === "object" && Array.isArray((parsed as { lines?: unknown }).lines)
     ? (parsed as { lines: unknown[] }).lines.flatMap((line) => typeof line === "string" && line.trim() ? [line.trim()] : [])

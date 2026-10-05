@@ -9,6 +9,7 @@ import { connectedCalendarEvents } from "../scheduler/eveningPlan";
 import { choresDismissedBySlip, dismissSlip, muteSender } from "../ingest/process";
 import { slipKey } from "../ingest/parse";
 import { draftLine, draftWrite, normalizeDraft, readDraft } from "../ai/draft";
+import { conditionText, type TemperatureUnit } from "../ai/weather";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp } from "../meals/dinnerEvent";
 import { syncEventCreate, syncEventDelete, syncEventUpdate } from "../calendarSync";
 
@@ -203,16 +204,17 @@ function changedKeys(actions: ChatAction[]): string[] {
   return [...keys];
 }
 
-async function homeForecast(lat?: number | null, lon?: number | null): Promise<{ date: string; high: number; low: number }[]> {
+async function homeForecast(lat?: number | null, lon?: number | null, unit: TemperatureUnit = "fahrenheit"): Promise<{ date: string; high: number; low: number; condition: string }[]> {
   if (lat == null || lon == null) return [];
   try {
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7`, { signal: AbortSignal.timeout(2500) });
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&temperature_unit=${unit}&forecast_days=7`, { signal: AbortSignal.timeout(2500) });
     if (!res.ok) return [];
-    const data = await res.json() as { daily?: { time?: string[]; temperature_2m_max?: number[]; temperature_2m_min?: number[] } };
+    const data = await res.json() as { daily?: { time?: string[]; temperature_2m_max?: number[]; temperature_2m_min?: number[]; weathercode?: number[] } };
     return (data.daily?.time ?? []).map((date, index) => ({
       date,
       high: Math.round(data.daily?.temperature_2m_max?.[index] ?? 0),
       low: Math.round(data.daily?.temperature_2m_min?.[index] ?? 0),
+      condition: conditionText(data.daily?.weathercode?.[index] ?? -1),
     }));
   } catch {
     return [];
@@ -358,24 +360,55 @@ export function registerChatRoutes(app: Express): void {
         savedMeals: savedMeals.map((meal: { id: string; name: string }) => ({ id: meal.id, name: meal.name })),
         celebrations: celebrations.map((row: { name: string; monthDay: string; type?: string | null; year?: number | null }) => ({ name: row.name, monthDay: row.monthDay, type: row.type, year: row.year })),
         groceries: groceries.filter((item: { alreadyHave?: boolean | null }) => !item.alreadyHave).map((item: { name: string }) => ({ name: item.name })),
-        forecast: await homeForecast(location?.latitude, location?.longitude),
+        forecast: await homeForecast(location?.latitude, location?.longitude, (location?.country ?? "").trim().toLowerCase() === "canada" ? "celsius" : "fahrenheit"),
+        temperatureUnit: (location?.country ?? "").trim().toLowerCase() === "canada" ? "celsius" : "fahrenheit",
         notes: await rememberedNotes(userId),
+        findMail: isChild ? undefined : async (query: string) => {
+          const { searchMemory } = await import("../ai/memory");
+          return searchMemory(userId, query);
+        },
       };
-      const brain = await replyWithChat(snap, historyOf(req.body?.history), text);
+      const stream = req.body?.stream === true;
+      const write = (row: unknown) => {
+        res.write(`${JSON.stringify(row)}\n`);
+      };
+      if (stream) {
+        res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache, no-transform");
+        res.setHeader("X-Accel-Buffering", "no");
+        res.flushHeaders();
+      }
+      const brain = await replyWithChat(snap, historyOf(req.body?.history), text, stream ? (chunk) => write({ type: "delta", text: chunk }) : undefined);
       if (brain.fallback) {
+        if (stream) {
+          write({ type: "fallback" });
+          res.end();
+          return;
+        }
         res.json({ fallback: true });
         return;
       }
       const groceryMeals: PlacedDinner[] = [];
       for (const action of brain.actions) groceryMeals.push(...await applyAction(userId, action));
-      res.json({
+      const body = {
         fallback: false,
         text: brain.text,
         changed: changedKeys(brain.actions),
         groceryMeals: groceryMeals.filter((meal) => meal.ingredients.length > 0),
-      });
+      };
+      if (stream) {
+        write({ type: "done", ...body });
+        res.end();
+        return;
+      }
+      res.json(body);
     } catch (error) {
       req.log?.error?.({ error }, "Chat reply failed");
+      if (res.headersSent) {
+        res.write(`${JSON.stringify({ type: "fallback" })}\n`);
+        res.end();
+        return;
+      }
       res.json({ fallback: true });
     }
   });

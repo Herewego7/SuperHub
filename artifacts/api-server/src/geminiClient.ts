@@ -3,6 +3,7 @@
  * so trial credits are used. Replit's managed proxy remains a fallback.
  */
 import { GoogleGenAI } from "@google/genai";
+import { type ModelJob, withModelRetry } from "./ai/modelRetry";
 
 export type GeminiEnv = {
   GOOGLE_CLOUD_PROJECT?: string;
@@ -57,22 +58,52 @@ export function geminiClient(env: GeminiEnv = process.env): GoogleGenAI | null {
   return null;
 }
 
-export const CHAT_MODELS = ["gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash"];
-export const READ_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
-export const STRONG_MODELS = ["gemini-3.1-pro-preview", "gemini-2.5-flash", "gemini-2.0-flash"];
+/**
+ * Bot Life's job table (functions/src/ai/registry.ts). SuperHub uses these
+ * names. A test fails if chat grows its own token cap again.
+ */
+export const BOTLIFE_MODELS = {
+  triage: "gemini-3.1-flash-lite",
+  extract: "gemini-3.5-flash",
+  extractComplex: "gemini-3.1-pro-preview",
+  newsletter: "gemini-3.1-pro-preview",
+  dedupe: "gemini-3.1-flash-lite",
+  digest: "gemini-3.5-flash",
+  chat: "gemini-3.1-pro-preview",
+  draft: "gemini-3.5-flash",
+  embed: "gemini-embedding-001",
+} as const;
 
-export async function askJson(ai: GoogleGenAI, models: string[], system: string, prompt: string, image?: { mimeType: string; data: string }): Promise<unknown | null> {
+/** Bot Life chat: temperature 0.3, and no output cap of our own. */
+export function chatGenerationConfig(): { temperature: number } {
+  return { temperature: 0.3 };
+}
+
+/** Structured reads stay at 0. The evening-plan rewrite uses 0.3, same as Bot Life. */
+export function jsonGenerationConfig(job?: ModelJob): { temperature: number; responseMimeType: string } {
+  return { temperature: job === "digest" ? 0.3 : 0, responseMimeType: "application/json" };
+}
+
+export async function askJson(
+  ai: GoogleGenAI,
+  models: string[],
+  system: string,
+  prompt: string,
+  image?: { mimeType: string; data: string } | { mimeType: string; data: string }[],
+  job: ModelJob = "extract",
+): Promise<unknown | null> {
+  const files = image ? (Array.isArray(image) ? image : [image]) : [];
   const parts = [
     { text: prompt },
-    ...(image ? [{ inlineData: { mimeType: image.mimeType, data: image.data } }] : []),
+    ...files.map((file) => ({ inlineData: { mimeType: file.mimeType, data: file.data } })),
   ];
   for (const model of models) {
     try {
-      const response = await ai.models.generateContent({
+      const response = await withModelRetry(job, (signal) => ai.models.generateContent({
         model,
         contents: [{ role: "user", parts }],
-        config: { systemInstruction: system, responseMimeType: "application/json", maxOutputTokens: 4096 },
-      });
+        config: { systemInstruction: system, ...jsonGenerationConfig(job), abortSignal: signal },
+      }));
       const cleaned = (response.text || "").replace(/```json|```/g, "").trim();
       if (!cleaned) continue;
       return JSON.parse(cleaned) as unknown;

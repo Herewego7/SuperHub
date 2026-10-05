@@ -1,5 +1,5 @@
 import { google, calendar_v3 } from 'googleapis';
-import { fileParts, gmailInboxQuery, gmailPayload, inboxFetchLimit, INBOX_RECENT_DAYS, toInbound, type InboundMessage } from './ingest/parse';
+import { attachFiles, fileParts, gmailInboxQuery, gmailPayload, header, inboxFetchLimit, INBOX_RECENT_DAYS, messageText, parseAddress, threadLines, toInbound, type InboundMessage } from './ingest/parse';
 import { inboxFailure, inboxListStopped, inboxTokenExpiry } from './ingest/process';
 
 // Calendar plus read-only mail. No userinfo.email/userinfo.profile. Those
@@ -263,7 +263,7 @@ export class GoogleCalendarService {
     }
   }
 
-  async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string, tokenExpiry?: Date | string | null, days = INBOX_RECENT_DAYS): Promise<InboundMessage[]> {
+  async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string, tokenExpiry?: Date | string | null, days = INBOX_RECENT_DAYS, scope?: { query: string; limit: number }): Promise<InboundMessage[]> {
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
@@ -274,14 +274,14 @@ export class GoogleCalendarService {
       expiry_date: inboxTokenExpiry(tokenExpiry, !!refreshToken),
     });
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-    const limit = inboxFetchLimit(days);
+    const limit = scope?.limit ?? inboxFetchLimit(days);
     const ids: string[] = [];
     let pageToken: string | undefined;
     while (ids.length < limit) {
       try {
         const listed = await gmail.users.messages.list({
           userId: "me",
-          q: gmailInboxQuery(days),
+          q: scope?.query ?? gmailInboxQuery(days),
           maxResults: Math.min(50, limit - ids.length),
           pageToken,
         });
@@ -312,8 +312,8 @@ export class GoogleCalendarService {
           snippet: full.data.snippet ?? undefined,
           payload,
         }, accountId);
-        const file = fileParts(payload)[0];
-        if (file) {
+        const files = [];
+        for (const file of fileParts(payload)) {
           let data = file.data;
           if (!data && file.attachmentId) {
             try {
@@ -323,13 +323,27 @@ export class GoogleCalendarService {
               console.warn("Attachment skipped:", err instanceof Error ? err.message : err);
             }
           }
-          if (data && data.length < 2_000_000) inbound.file = { mimeType: file.mimeType, data: data.replace(/-/g, "+").replace(/_/g, "/") };
+          if (data) files.push({ mimeType: file.mimeType, filename: file.filename, data: data.replace(/-/g, "+").replace(/_/g, "/") });
         }
+        attachFiles(inbound, files);
         if (full.data.threadId) {
           try {
-            const thread = await gmail.users.threads.get({ userId: "me", id: full.data.threadId, format: "metadata", metadataHeaders: ["Subject"] });
-            const earlier = (thread.data.messages ?? []).filter((item) => item.id !== id).slice(-2).map((item) => item.snippet).filter((snippet): snippet is string => !!snippet);
-            if (earlier.length) inbound.extra = earlier.join("\n");
+            const thread = await gmail.users.threads.get({ userId: "me", id: full.data.threadId, format: "full" });
+            const rows = (thread.data.messages ?? []).map((item) => {
+              const part = gmailPayload(item.payload);
+              const from = parseAddress(header({ id: item.id ?? "", payload: part }, "From"));
+              return {
+                id: item.id ?? undefined,
+                internalDate: item.internalDate ?? undefined,
+                from: from?.name ?? from?.address ?? "",
+                text: messageText(part),
+              };
+            });
+            const earlier = threadLines(rows, id, Number(full.data.internalDate ?? 0));
+            if (earlier.length) {
+              inbound.thread = earlier;
+              inbound.extra = earlier.join("\n");
+            }
           } catch (err) {
             console.warn("Thread skipped:", err instanceof Error ? err.message : err);
           }

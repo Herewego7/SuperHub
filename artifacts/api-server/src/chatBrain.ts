@@ -50,8 +50,10 @@ export type ChatSnapshot = {
   celebrations: { name: string; monthDay: string; type?: string | null; year?: number | null }[];
   groceries: { name: string }[];
   weather?: { temperature?: number; condition?: string; location?: string } | null;
-  forecast?: { date: string; high: number; low: number }[];
+  forecast?: { date: string; high: number; low: number; condition?: string }[];
   notes?: string[];
+  temperatureUnit?: "fahrenheit" | "celsius";
+  findMail?: (query: string) => Promise<string[]>;
 };
 
 export type ChatAction =
@@ -164,6 +166,9 @@ export function chatBriefing(snap: ChatSnapshot): string {
     `Birthdays and anniversaries:\n${days.join("\n") || "(none saved)"}`,
     `Groceries still on the list:\n${snap.groceries.map((item) => item.name).slice(0, 30).join(", ") || "(none)"}`,
     snap.weather?.condition ? `Weather now: ${snap.weather.temperature ?? ""} ${snap.weather.condition}${snap.weather.location ? ` in ${snap.weather.location}` : ""}.` : "",
+    (snap.forecast ?? []).length
+      ? `Forecast:\n${(snap.forecast ?? []).slice(0, 7).map((day) => `- ${day.date}: ${day.condition ? `${day.condition}, ` : ""}high ${day.high}, low ${day.low}`).join("\n")}`
+      : "",
   ].filter(Boolean).join("\n\n");
 }
 
@@ -179,15 +184,15 @@ export function chatSystemPrompt(snap: ChatSnapshot): string {
     "- You can't send messages, emails, or texts to anyone, and never offer to.",
     "- Answer a direct question in the first sentence.",
     "- For a day or a week, write two or three short paragraphs and no headings: what they need to do, where the family needs to be, then one heads-up.",
-    "- Say who each thing is for. Leave out someone's job unless they asked about work.",
-    "- Mention weather only when it changes the plan.",
+    "- Say who each thing is for. Include every meeting and event on the calendar. Leave one out only when they ask you to.",
+    "- Mention the weather only when it changes something, like a big temperature drop, rain during something outdoors, or heat, and say what to do about it.",
     "- Change the calendar, to-dos, chores, meals, or groceries only when they ask in this conversation.",
     "- To plan dinners, call plan_dinners with a date (YYYY-MM-DD) and a name for each night. Prefer a saved meal name when one fits. Ask first, then call again with confirmed=true after they say yes. That writes the Meals tab.",
     "- Before delete_event, remember_fact, forget_school, mute_sender, mark_not_relevant, or plan_dinners, ask first. Call the tool with confirmed=true only after they say yes.",
     "- Events that live on Google, Outlook, or an iCal feed cannot be deleted or moved here. The tool will say to hand that off.",
     "- Use search, get_plan, get_newsletters, get_profile, and get_weather instead of guessing. For weather somewhere other than home, pass place and say the place name the tool returns. For a place, call maps_link and include its url. create_reminder puts a reminder on the plan. send_feedback sends a note to the makers.",
     "- Tonight means 8:00 PM unless they name a time.",
-    "- Keep replies under about 80 words, or 120 for a week. Bold a few key words with ** at most.",
+    "- Keep replies under about 80 words, or 120 for a week, unless the user asks for more. Bold a few key words with ** at most.",
     snap.isChild
       ? "This person is a child. Do not read, search, quote, or summarize email or newsletters. Do not mute senders or dismiss mail. Talk about their own plan, chores, and dinner."
       : "Mail tools are allowed for this adult. Still confirm before muting a sender or marking something not relevant.",
