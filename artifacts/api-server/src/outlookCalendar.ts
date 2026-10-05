@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { outlookInstancesToDelete } from "./lib/recurrenceRule";
-import { inboxFetchLimit, inboxSinceIso, INBOX_RECENT_DAYS, outlookAttachment, outlookToInbound, type InboundMessage } from "./ingest/parse";
+import { attachFiles, decodeEntities, inboxFetchLimit, inboxSinceIso, INBOX_RECENT_DAYS, outlookAttachments, outlookToInbound, stripQuotedReply, threadLines, type InboundMessage } from "./ingest/parse";
 import { graphNextLink, inboxListStopped } from "./ingest/process";
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
@@ -187,7 +187,7 @@ export class OutlookCalendarService {
     let url: string | null = `${GRAPH_API_BASE}/me/mailFolders/inbox/messages`;
     let params: Record<string, string | number> | undefined = {
       $top: Math.min(50, limit),
-      $select: "id,subject,from,bodyPreview,body,receivedDateTime,hasAttachments",
+      $select: "id,subject,from,bodyPreview,body,receivedDateTime,hasAttachments,conversationId",
       $orderby: "receivedDateTime desc",
     };
     while (url && out.length < limit) {
@@ -217,19 +217,49 @@ export class OutlookCalendarService {
           try {
             const listed = await graph.get(`${GRAPH_API_BASE}/me/messages/${encodeURIComponent(row.id)}/attachments`, {
               headers: { Authorization: `Bearer ${accessToken}` },
-              params: { $top: 10 },
+              params: { $top: 20 },
             });
-            const picked = outlookAttachment(Array.isArray(listed.data?.value) ? listed.data.value : []);
-            let data = picked?.data;
-            if (picked && !data) {
-              const one = await graph.get(`${GRAPH_API_BASE}/me/messages/${encodeURIComponent(row.id)}/attachments/${encodeURIComponent(picked.id)}`, {
-                headers: { Authorization: `Bearer ${accessToken}` },
-              });
-              data = typeof one.data?.contentBytes === "string" ? one.data.contentBytes : undefined;
+            const picked = outlookAttachments(Array.isArray(listed.data?.value) ? listed.data.value : []);
+            const files = [];
+            for (const file of picked) {
+              let data = file.data;
+              if (!data) {
+                const one = await graph.get(`${GRAPH_API_BASE}/me/messages/${encodeURIComponent(row.id)}/attachments/${encodeURIComponent(file.id)}`, {
+                  headers: { Authorization: `Bearer ${accessToken}` },
+                });
+                data = typeof one.data?.contentBytes === "string" ? one.data.contentBytes : undefined;
+              }
+              if (data) files.push({ mimeType: file.mimeType, filename: file.filename, data });
             }
-            if (picked && data && data.length < 2_000_000) inbound.file = { mimeType: picked.mimeType, data };
+            attachFiles(inbound, files);
           } catch (err) {
             console.warn("Outlook attachment skipped:", err instanceof Error ? err.message : err);
+          }
+        }
+        if (typeof row?.conversationId === "string" && typeof row?.id === "string") {
+          try {
+            const conversation = await graph.get(`${GRAPH_API_BASE}/me/messages`, {
+              headers: { Authorization: `Bearer ${accessToken}` },
+              params: {
+                $filter: `conversationId eq '${row.conversationId.replace(/'/g, "''")}'`,
+                $select: "id,from,uniqueBody,body,receivedDateTime",
+                $top: 10,
+              },
+            });
+            const received = typeof row.receivedDateTime === "string" ? Date.parse(row.receivedDateTime) : 0;
+            const rows = (Array.isArray(conversation.data?.value) ? conversation.data.value : []).map((item: { id?: string; receivedDateTime?: string; from?: { emailAddress?: { name?: string; address?: string } }; uniqueBody?: { content?: string }; body?: { content?: string } }) => ({
+              id: item.id,
+              internalDate: item.receivedDateTime ? String(Date.parse(item.receivedDateTime) || 0) : undefined,
+              from: item.from?.emailAddress?.name || item.from?.emailAddress?.address || "",
+              text: stripQuotedReply(decodeEntities((item.uniqueBody?.content || item.body?.content || "").replace(/<[^>]+>/g, " "))),
+            }));
+            const earlier = threadLines(rows, row.id, received || Number.MAX_SAFE_INTEGER);
+            if (earlier.length) {
+              inbound.thread = earlier;
+              inbound.extra = earlier.join("\n");
+            }
+          } catch (err) {
+            console.warn("Outlook thread skipped:", err instanceof Error ? err.message : err);
           }
         }
         out.push(inbound);

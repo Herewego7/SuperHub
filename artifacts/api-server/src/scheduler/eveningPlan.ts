@@ -664,6 +664,8 @@ export async function polishPlanBody(body: string): Promise<string> {
     [BOTLIFE_MODELS.digest],
     "Rewrite these plan lines so they are shorter and warmer. Keep every time and weekday exactly as written. Never add one that is not there. JSON {\"lines\":string[]}",
     lines.map((line, index) => `${index + 1}. ${line}`).join("\n"),
+    undefined,
+    "digest",
   );
   const next = parsed && typeof parsed === "object" && Array.isArray((parsed as { lines?: unknown }).lines)
     ? (parsed as { lines: unknown[] }).lines.flatMap((line) => typeof line === "string" && line.trim() ? [line.trim()] : [])

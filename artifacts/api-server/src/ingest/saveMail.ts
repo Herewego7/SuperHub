@@ -2,11 +2,12 @@ import { storage } from "../storage";
 import { syncEventCreate } from "../calendarSync";
 import { geminiClient, askJson, BOTLIFE_MODELS } from "../geminiClient";
 import { duplicateBand, familyGrades, titleSimilarity } from "../ai/parity";
-import { examplesFor, rememberRecord } from "../ai/memory";
+import { examplesForMessage, rememberMail } from "../ai/memory";
+import { connectedCalendarEvents } from "../scheduler/eveningPlan";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { slipKey, type InboundMessage } from "./parse";
 import { ingestMessages, mailWorthSaving, schoolEventStart, slipClock, type PlannedEvent, type PlannedTodo } from "./process";
-import { alreadyRead, plansFromRead, readInboxMessage, subjectPlaceholder, type MailPerson } from "./readMail";
+import { alreadyRead, openContextLines, plansFromRead, readInboxMessage, subjectPlaceholder, type MailPerson } from "./readMail";
 
 type Saved = { todos: unknown[]; events: unknown[]; scanOff: boolean };
 
@@ -77,8 +78,8 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
     .map((person) => ({ name: person.name, school: person.school, facts: person.facts, isChild: person.isChild || person.role === "child" }));
   const completions = await storage.getChoreCompletionsByUser(userId);
   const done = new Set(completions.map((completion) => completion.choreId));
-  const learned = [...state.dismissedSlipKeys.slice(-8), ...(await examplesFor(userId))];
   const grades = familyGrades(family);
+  const open = await openCalendarLines(userId, chores, done, savedEvents, timeZone);
   const keyword: InboundMessage[] = [];
   const todos = [];
   const events = [];
@@ -88,7 +89,11 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
     if (message.fromAddress && state.mutedSenders.some((address) => address.toLowerCase() === message.fromAddress?.toLowerCase())) continue;
     if (state.dismissedSlipKeys.includes(slipKey(subject))) continue;
     if (chores.some((chore) => alreadyRead(chore.description, subject))) continue;
-    const read = await readInboxMessage(ai, message, family, learned);
+    const learned = [
+      ...state.dismissedSlipKeys.slice(-8),
+      ...(await examplesForMessage(userId, `${subject}\n${message.snippet}`, message.fromAddress)),
+    ];
+    const read = await readInboxMessage(ai, message, family, learned, open);
     if (!read) {
       keyword.push(message);
       continue;
@@ -110,7 +115,7 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
       const near = chores.find((chore) => chore.title !== todo.title && duplicateBand(titleSimilarity(chore.title, todo.title)) !== "new");
       if (near && duplicateBand(titleSimilarity(near.title, todo.title)) === "same") continue;
       if (near) {
-        const verdict = await askJson(ai, [BOTLIFE_MODELS.dedupe], "Decide if two household items are the same event or task. JSON {\"same\":boolean}", `${near.title}\n${todo.title}`);
+        const verdict = await askJson(ai, [BOTLIFE_MODELS.dedupe], "Decide if two household items are the same event or task. JSON {\"same\":boolean}", `${near.title}\n${todo.title}`, undefined, "dedupe");
         if (verdict && typeof verdict === "object" && (verdict as { same?: unknown }).same === true) continue;
       }
       todosToSave.push(todo);
@@ -142,7 +147,13 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
       const start = schoolEventStart(`${change.when} ${change.time ?? ""}`, clock?.hours ?? 9, clock?.minutes ?? 0, new Date(), timeZone);
       await storage.updateEvent(event.id, { startTime: start, endTime: new Date(start.getTime() + 60 * 60 * 1000) }, userId);
     }
-    for (const todo of planned.todos) void rememberRecord(userId, "chunk", `${todo.title}. ${todo.description}`);
+    const source = [
+      message.subject,
+      message.body ?? message.snippet,
+      ...(message.thread ?? []),
+      ...(message.files ?? []).flatMap((file) => file.text ? [file.text] : []),
+    ].filter(Boolean).join("\n\n");
+    void rememberMail(userId, source, message.subject);
   }
   if (keyword.length > 0) {
     const saved = await storePlanned(
@@ -155,6 +166,44 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
     events.push(...saved.events);
   }
   return { todos, events, scanOff: false };
+}
+
+function localDay(value: string | Date, zone: string): string {
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+}
+
+function whenLabel(value: string | Date, zone: string, allDay: boolean): string {
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(allDay ? {} : { hour: "numeric", minute: "2-digit" }),
+  }).format(at);
+}
+
+async function openCalendarLines(
+  userId: string,
+  chores: { id: string; title: string; taskType?: string | null }[],
+  done: Set<string>,
+  savedEvents: { title: string; startTime: string | Date; isAllDay?: boolean | null }[],
+  zone: string,
+): Promise<string[]> {
+  const outside = await connectedCalendarEvents(userId).catch(() => []);
+  const today = localDay(new Date(), zone);
+  const events = [...savedEvents, ...outside]
+    .filter((event) => localDay(event.startTime, zone) >= today)
+    .slice(0, 40)
+    .map((event) => ({ title: event.title, when: whenLabel(event.startTime, zone, event.isAllDay === true) }));
+  const items = chores
+    .filter((chore) => !done.has(chore.id) && chore.taskType !== "chore")
+    .slice(0, 40)
+    .map((chore) => ({ title: chore.title }));
+  return openContextLines(items, events);
 }
 
 async function retirePlaceholder(

@@ -14,6 +14,7 @@ test("chat uses Bot Life's model and does not set its own length cap", () => {
   assert.equal("maxOutputTokens" in chatGenerationConfig(), false);
   assert.equal("maxOutputTokens" in jsonGenerationConfig(), false);
   assert.equal(jsonGenerationConfig().temperature, 0);
+  assert.equal(jsonGenerationConfig("digest").temperature, 0.3);
 });
 
 test("Gemini is off until a Google Cloud project or the Replit proxy is set", () => {

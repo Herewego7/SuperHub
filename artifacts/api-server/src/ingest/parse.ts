@@ -78,6 +78,20 @@ export function decodeEntities(s: string): string {
   });
 }
 
+export const MAX_BODY_CHARS = 60_000;
+export const MAX_THREAD_MESSAGES = 5;
+export const MAX_THREAD_CHARS = 4_000;
+export const MAX_MEDIA_BYTES = 8 * 1024 * 1024;
+export const MAX_ATTACHMENTS = 5;
+export const MEDIA_TYPES = /^(image\/(png|jpe?g|gif|webp|heic|heif)|application\/pdf)$/i;
+
+export interface MailFile {
+  mimeType: string;
+  data: string;
+  filename: string;
+  text?: string;
+}
+
 export interface InboundMessage {
   subject: string;
   fromAddress?: string;
@@ -86,7 +100,11 @@ export interface InboundMessage {
   accountId: string;
   /** Earlier messages in the thread, or text pulled from an attachment. */
   extra?: string;
-  /** One image or PDF from the message, for the model to read. */
+  /** Up to five earlier messages, newest last. */
+  thread?: string[];
+  /** Pictures and PDFs. The model sees the file and any transcribed text. */
+  files?: MailFile[];
+  /** The first file, kept so a one-file caller still works. */
   file?: { mimeType: string; data: string };
 }
 
@@ -106,7 +124,7 @@ export function messageText(payload: GmailPart | undefined): string {
   };
   if (payload) walk(payload);
   const text = plain.join("\n").trim() || (html.length ? htmlToText(html.join("\n")).text : "");
-  return decodeEntities(text).replace(/\s+/g, " ").trim();
+  return decodeEntities(text).replace(/\r\n/g, "\n").replace(/[ \t]+\n/g, "\n").trim();
 }
 
 export function outlookToInbound(
@@ -121,7 +139,7 @@ export function outlookToInbound(
   const address = row.from?.emailAddress?.address?.trim();
   const raw = row.body?.content?.trim() ?? "";
   const text = !raw ? "" : row.body?.contentType === "text" ? raw : htmlToText(raw).text;
-  const body = decodeEntities(text).replace(/\s+/g, " ").trim().slice(0, 4000);
+  const body = stripQuotedReply(decodeEntities(text).replace(/\r\n/g, "\n").trim()).slice(0, MAX_BODY_CHARS);
   const snippet = decodeEntities(row.bodyPreview ?? "").trim() || body.slice(0, 240);
   return {
     accountId,
@@ -137,9 +155,30 @@ export const INBOX_SCAN_LIMIT = 100;
 export const INBOX_RECENT_DAYS = 2;
 export const INBOX_INITIAL_DAYS = 30;
 export const INBOX_INITIAL_LIMIT = 500;
+/** Newsletters only, after the 30-day mail catch-up, same as Bot Life. */
+export const INBOX_NEWSLETTER_DAYS = 60;
+export const INBOX_NEWSLETTER_LIMIT = 200;
 
 export function gmailInboxQuery(days: number): string {
   return `newer_than:${days}d in:inbox`;
+}
+
+/** The month of mail before the catch-up, limited to newsletter-shaped messages. */
+export function gmailNewsletterQuery(): string {
+  return `newer_than:${INBOX_NEWSLETTER_DAYS}d older_than:${INBOX_INITIAL_DAYS}d (unsubscribe OR category:updates OR category:forums) -in:chats -in:spam -in:trash`;
+}
+
+/** Gmail lists newest first, so the first letter from each sender is the latest issue. */
+export function latestPerSender<T extends { fromAddress?: string; subject: string }>(messages: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const message of messages) {
+    const key = (message.fromAddress || message.subject).trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(message);
+  }
+  return out;
 }
 
 export function inboxSinceIso(days: number, now: Date): string {
@@ -154,7 +193,7 @@ export function inboxFetchLimit(days: number): number {
 export function gmailPayload(part: {
   mimeType?: string | null;
   filename?: string | null;
-  body?: { data?: string | null; attachmentId?: string | null } | null;
+  body?: { data?: string | null; attachmentId?: string | null; size?: number | null } | null;
   headers?: { name?: string | null; value?: string | null }[] | null;
   parts?: unknown[] | null;
 } | null | undefined): GmailPart | undefined {
@@ -170,15 +209,15 @@ export function gmailPayload(part: {
     mimeType: part.mimeType ?? "text/plain",
     ...(part.filename ? { filename: part.filename } : {}),
     ...(headers.length ? { headers } : {}),
-    ...((part.body?.data || part.body?.attachmentId) ? { body: { ...(part.body.data ? { data: part.body.data } : {}), ...(part.body.attachmentId ? { attachmentId: part.body.attachmentId } : {}) } } : {}),
+    ...((part.body?.data || part.body?.attachmentId) ? { body: { ...(part.body.data ? { data: part.body.data } : {}), ...(part.body.attachmentId ? { attachmentId: part.body.attachmentId } : {}), ...(typeof part.body.size === "number" ? { size: part.body.size } : {}) } } : {}),
     ...(parts.length ? { parts } : {}),
   };
 }
 
 const OUTLOOK_FILE = "#microsoft.graph.fileAttachment";
 
-/** One picture or PDF from an Outlook message. A real attachment wins over a logo pasted in the body. */
-export function outlookAttachment(rows: unknown[]): { id: string; mimeType: string; data?: string } | null {
+/** Pictures and PDFs from an Outlook message. A real file wins over a logo pasted in the body. */
+export function outlookAttachments(rows: unknown[]): { id: string; mimeType: string; filename: string; data?: string }[] {
   const files = rows.flatMap((row) => {
     if (!row || typeof row !== "object") return [];
     const file = row as { id?: unknown; name?: unknown; contentType?: unknown; contentBytes?: unknown; size?: unknown; isInline?: unknown; "@odata.type"?: unknown };
@@ -186,16 +225,23 @@ export function outlookAttachment(rows: unknown[]): { id: string; mimeType: stri
     const mime = typeof file.contentType === "string" ? file.contentType.toLowerCase() : "";
     const id = typeof file.id === "string" ? file.id : "";
     const size = typeof file.size === "number" ? file.size : 0;
-    if (type !== OUTLOOK_FILE || !id || size > 2_000_000) return [];
-    if (!mime.startsWith("image/") && mime !== "application/pdf") return [];
+    if (type !== OUTLOOK_FILE || !id || !MEDIA_TYPES.test(mime) || size > MAX_MEDIA_BYTES) return [];
+    const bytes = typeof file.contentBytes === "string" ? file.contentBytes : "";
+    const data = bytes && base64Bytes(bytes) <= MAX_MEDIA_BYTES ? bytes : undefined;
     return [{
       id,
       mimeType: mime,
+      filename: typeof file.name === "string" && file.name.trim() ? file.name.trim() : "file",
       inline: file.isInline === true,
-      ...(typeof file.contentBytes === "string" && file.contentBytes.length > 0 && file.contentBytes.length < 2_000_000 ? { data: file.contentBytes } : {}),
+      ...(data ? { data } : {}),
     }];
   }).sort((a, b) => Number(a.inline) - Number(b.inline));
-  const picked = files[0];
+  return files.slice(0, MAX_ATTACHMENTS).map(({ id, mimeType, filename, data }) => ({ id, mimeType, filename, ...(data ? { data } : {}) }));
+}
+
+/** One picture or PDF from an Outlook message. A real attachment wins over a logo pasted in the body. */
+export function outlookAttachment(rows: unknown[]): { id: string; mimeType: string; data?: string } | null {
+  const picked = outlookAttachments(rows)[0];
   if (!picked) return null;
   return { id: picked.id, mimeType: picked.mimeType, ...(picked.data ? { data: picked.data } : {}) };
 }
@@ -203,9 +249,10 @@ export function outlookAttachment(rows: unknown[]): { id: string; mimeType: stri
 export function fileParts(part: GmailPart | undefined): { mimeType: string; filename: string; data?: string; attachmentId?: string }[] {
   const out: { mimeType: string; filename: string; data?: string; attachmentId?: string }[] = [];
   const walk = (node: GmailPart | undefined) => {
-    if (!node || out.length >= 1) return;
-    const mime = node.mimeType || "";
-    if ((mime.startsWith("image/") || mime === "application/pdf") && (node.body?.data || node.body?.attachmentId)) {
+    if (!node || out.length >= MAX_ATTACHMENTS) return;
+    const mime = (node.mimeType || "").toLowerCase();
+    const size = node.body?.size ?? (node.body?.data ? base64Bytes(node.body.data) : 0);
+    if (MEDIA_TYPES.test(mime) && (node.body?.data || node.body?.attachmentId) && size <= MAX_MEDIA_BYTES) {
       out.push({
         mimeType: mime,
         filename: node.filename || "file",
@@ -221,7 +268,7 @@ export function fileParts(part: GmailPart | undefined): { mimeType: string; file
 
 export function toInbound(msg: GmailMessage, accountId: string): InboundMessage {
   const from = parseAddress(header(msg, "From"));
-  const body = messageText(msg.payload).slice(0, 4000);
+  const body = stripQuotedReply(messageText(msg.payload)).slice(0, MAX_BODY_CHARS);
   const snippet = decodeEntities(msg.snippet ?? "").trim() || body.slice(0, 240);
   return {
     accountId,
@@ -236,6 +283,58 @@ function htmlToText(html: string): { text: string; links: string[] } {
   const links = [...html.matchAll(/href="(https?:[^"]+)"/gi)].map((m) => m[1] ?? "");
   const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   return { text, links };
+}
+
+function base64Bytes(data: string): number {
+  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
+  return Math.floor((data.length * 3) / 4) - padding;
+}
+
+const REPLY_HEADER = [
+  /^On .{4,200}(wrote|écrit|schrieb|escribió):\s*$/im,
+  /^-{2,}\s*Original Message\s*-{2,}\s*$/im,
+  /^_{5,}\s*$\n^From: /im,
+  /^From: .+\n(Sent|Date): .+\n(To|Subject): /im,
+];
+
+/** Drops the quoted earlier message from a reply. The thread carries it on its own. */
+export function stripQuotedReply(text: string): string {
+  let cut = text.length;
+  for (const pattern of REPLY_HEADER) {
+    const match = pattern.exec(text);
+    if (match && match.index < cut) cut = match.index;
+  }
+  const lines = text.slice(0, cut).split("\n");
+  while (lines.length && (/^\s*>/.test(lines[lines.length - 1] ?? "") || !(lines[lines.length - 1] ?? "").trim())) lines.pop();
+  return lines.join("\n").trim();
+}
+
+/** Up to five earlier messages, oldest first, each capped so one reply cannot crowd out the letter. */
+export function threadLines(
+  rows: { id?: string; internalDate?: string; from?: string; text?: string }[],
+  currentId: string,
+  currentDate: number,
+): string[] {
+  return rows
+    .filter((row) => row.id !== currentId && Number(row.internalDate ?? 0) < (currentDate || Number.MAX_SAFE_INTEGER))
+    .sort((a, b) => Number(a.internalDate ?? 0) - Number(b.internalDate ?? 0))
+    .slice(-MAX_THREAD_MESSAGES)
+    .map((row) => `From: ${row.from ?? ""}\n${stripQuotedReply(row.text ?? "").slice(0, MAX_THREAD_CHARS)}`)
+    .filter((line) => line.replace(/^From:\s*/, "").trim().length > 0);
+}
+
+export function attachFiles(message: InboundMessage, files: { mimeType: string; data: string; filename?: string }[]): void {
+  const kept = files
+    .filter((file) => file.data && base64Bytes(file.data) <= MAX_MEDIA_BYTES)
+    .slice(0, MAX_ATTACHMENTS)
+    .map((file) => ({
+      mimeType: file.mimeType.toLowerCase(),
+      data: file.data,
+      filename: file.filename?.trim() || "file",
+    }));
+  if (kept.length === 0) return;
+  message.files = kept;
+  message.file = { mimeType: kept[0].mimeType, data: kept[0].data };
 }
 
 export function slipKey(subject: string): string {

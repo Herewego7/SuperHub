@@ -140,6 +140,8 @@ export async function readDraft(text: string, names: string[], now: Date): Promi
     [BOTLIFE_MODELS.draft],
     SYSTEM,
     `Family: ${names.join(", ") || "none"}\nNow: ${now.toISOString()}\nSentence: ${text.trim().slice(0, 1000)}`,
+    undefined,
+    "draft",
   );
   return acceptModelDraft(text, parsed, names, now) ?? local;
 }

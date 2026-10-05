@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { chatBriefing, chatSystemPrompt, eventsForChat, handleToolCall, toolDeclarations, userSaidYes, type ChatSnapshot } from "../src/chatBrain";
+import { MAX_ROUNDS } from "../src/chatReply";
 
 const snap: ChatSnapshot = {
   now: new Date("2026-10-02T15:00:00Z"),
@@ -65,6 +66,10 @@ describe("chat brain", () => {
     assert.equal(child.includes("allergic to peanuts"), false);
     assert.equal(child.includes("Soccer"), true);
     assert.match(chatSystemPrompt({ ...snap, isChild: true }), /child/i);
+    assert.equal(chatSystemPrompt(snap).includes("Leave out someone's job"), false);
+    assert.match(chatSystemPrompt(snap), /Include every meeting and event/);
+    assert.match(chatSystemPrompt(snap), /unless the user asks for more/);
+    assert.equal(MAX_ROUNDS, 5);
     assert.equal(toolDeclarations(true).some((tool) => tool.name === "mute_sender"), false);
     assert.equal(toolDeclarations(false).some((tool) => tool.name === "mute_sender"), true);
   });
@@ -105,6 +110,8 @@ describe("chat brain", () => {
   });
 
   it("searches mail, opens a map, and files a reminder on the plan", () => {
+    const rain = handleToolCall("get_weather", { date: "2026-10-06" }, { ...snap, forecast: [{ date: "2026-10-06", high: 62, low: 48, condition: "Rain" }] }, true);
+    assert.equal((rain.output as { condition?: string }).condition, "Rain");
     const found = handleToolCall("search", { query: "slip lunch" }, snap, true);
     assert.equal((found.output as { results: { title: string }[] }).results[0]?.title, "Sign the slip");
     const map = handleToolCall("maps_link", { place: "Lincoln Elementary" }, snap, true);

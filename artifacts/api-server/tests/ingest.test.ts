@@ -1,13 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, graphNextLink, holdSchoolEvent, inboxFailure, inboxListStopped, inboxMailFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
-import { gmailInboxQuery, gmailPayload, inboxFetchLimit, inboxSinceIso, outlookToInbound, toInbound } from "../src/ingest/parse.ts";
+import { fileParts, gmailInboxQuery, gmailNewsletterQuery, gmailPayload, inboxFetchLimit, inboxSinceIso, latestPerSender, outlookAttachments, outlookToInbound, toInbound } from "../src/ingest/parse.ts";
 
 test("a catch-up scan reads 30 days, and the regular check stays at 2", () => {
   assert.equal(gmailInboxQuery(30), "newer_than:30d in:inbox");
   assert.equal(gmailInboxQuery(2), "newer_than:2d in:inbox");
   assert.equal(inboxFetchLimit(30), 500);
   assert.equal(inboxFetchLimit(2), 100);
+  assert.match(gmailNewsletterQuery(), /newer_than:60d older_than:30d/);
+  assert.match(gmailNewsletterQuery(), /unsubscribe/);
+  const latest = latestPerSender([
+    { fromAddress: "news@school.edu", subject: "This week" },
+    { fromAddress: "news@school.edu", subject: "Last week" },
+    { fromAddress: "coach@school.edu", subject: "Practice" },
+  ]);
+  assert.deepEqual(latest.map((message) => message.subject), ["This week", "Practice"]);
   assert.equal(inboxSinceIso(30, new Date("2026-10-05T12:00:00.000Z")), "2026-09-05T12:00:00.000Z");
 });
 
@@ -64,6 +72,34 @@ test("one bad inbox message is skipped and a refused account reconnects", () => 
   assert.equal(inboxMailFailure({ response: { status: 401 } }), "auth");
   assert.equal(inboxMailFailure({ response: { status: 403, data: { error: { errors: [{ reason: "insufficientPermissions" }] } } } }), "scope");
   assert.equal(inboxMailFailure({ response: { status: 403, data: { error: { errors: [{ reason: "accessNotConfigured" }] } } } }), "unavailable");
+});
+
+test("five pictures are kept and a ninth megabyte is not", () => {
+  const parts = [1, 2, 3, 4, 5, 6].map((n) => ({
+    mimeType: "image/png",
+    filename: `f${n}.png`,
+    body: { attachmentId: String(n), size: 1000 },
+  }));
+  parts.push({ mimeType: "application/pdf", filename: "big.pdf", body: { attachmentId: "big", size: 9 * 1024 * 1024 } });
+  const kept = fileParts({ mimeType: "multipart/mixed", parts });
+  assert.deepEqual(kept.map((file) => file.filename), ["f1.png", "f2.png", "f3.png", "f4.png", "f5.png"]);
+  const outlook = outlookAttachments([
+    ...[1, 2, 3, 4, 5].map((n) => ({ id: `f${n}`, "@odata.type": "#microsoft.graph.fileAttachment", contentType: "image/jpeg", size: 1000, isInline: false, contentBytes: "YQ==" })),
+    { id: "big", "@odata.type": "#microsoft.graph.fileAttachment", contentType: "application/pdf", size: 9 * 1024 * 1024, isInline: false },
+  ]);
+  assert.equal(outlook.length, 5);
+  assert.equal(outlook.some((file) => file.id === "big"), false);
+});
+
+test("a long email body is kept past the old four thousand characters", () => {
+  const body = `${"Bring a jacket. ".repeat(400)}Thursday at 3:30 PM.`;
+  const message = toInbound({
+    id: "long",
+    snippet: "See the note.",
+    payload: { mimeType: "text/plain", body: { data: Buffer.from(body).toString("base64url") } },
+  }, "chad");
+  assert.ok((message.body ?? "").length > 4000);
+  assert.match(message.body ?? "", /Thursday at 3:30 PM/);
 });
 
 test("a gmail payload keeps the body the scan used to drop", () => {

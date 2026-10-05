@@ -3,7 +3,7 @@ import { OutlookCalendarService } from "../outlookCalendar";
 import { getFreshOutlookAccessToken } from "../calendarSync";
 import { storage } from "../storage";
 import { applyIngestedMail } from "./saveMail";
-import { INBOX_INITIAL_DAYS, INBOX_RECENT_DAYS } from "./parse";
+import { gmailNewsletterQuery, INBOX_INITIAL_DAYS, INBOX_NEWSLETTER_LIMIT, INBOX_RECENT_DAYS, latestPerSender } from "./parse";
 import { inboxMailFailure, inboxScanEnabled, shareScan } from "./process";
 
 const inflight = new Map<string, Promise<Awaited<ReturnType<typeof scanOnce>>>>();
@@ -46,6 +46,14 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS) {
       connected += 1;
       try {
         messages.push(...await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry, days));
+        if (days >= INBOX_INITIAL_DAYS) {
+          // Outlook has no newsletter search. Bot Life skips that pass there too.
+          const older = await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry, days, {
+            query: gmailNewsletterQuery(),
+            limit: INBOX_NEWSLETTER_LIMIT,
+          });
+          messages.push(...latestPerSender(older));
+        }
       } catch (err) {
         note(err, "Google");
       }

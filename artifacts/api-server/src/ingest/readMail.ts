@@ -6,7 +6,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { askJson, BOTLIFE_MODELS } from "../geminiClient";
 import { chunkText, familyGrades, forOtherGrades, shouldRead } from "../ai/parity";
-import { slipKey, type InboundMessage } from "./parse";
+import { MAX_BODY_CHARS, MAX_THREAD_CHARS, slipKey, type InboundMessage, type MailFile } from "./parse";
 import { slipClock, type HouseholdMail, type PlannedEvent, type PlannedTodo } from "./process";
 
 export type MailPerson = { name: string; school?: string | null; facts?: string[] | null; isChild?: boolean | null };
@@ -59,22 +59,65 @@ export function familyCard(people: MailPerson[]): string {
   return `Family:\n${lines.join("\n")}`;
 }
 
-function fence(text: string): string {
+function fence(label: string, text: string): string {
   const safe = text.replaceAll("<<<UNTRUSTED_CONTENT", "<<< UNTRUSTED").replaceAll("UNTRUSTED_CONTENT>>>", "UNTRUSTED >>>");
-  return `<<<UNTRUSTED_CONTENT email\n${safe}\nUNTRUSTED_CONTENT>>>`;
+  return `<<<UNTRUSTED_CONTENT ${label}\n${safe}\nUNTRUSTED_CONTENT>>>`;
 }
 
-export function mailReadPrompt(message: InboundMessage, people: MailPerson[], examples: string[] = [], part?: string): string {
-  const body = (part ?? message.body ?? message.snippet ?? "").slice(0, 12_000);
-  const learned = examples.length ? `Not relevant to this family:\n${examples.slice(0, 8).map((line) => `- ${line}`).join("\n")}` : "";
-  const earlier = message.extra?.trim() ? fence(`earlier messages\n${message.extra.slice(0, 4000)}`) : "";
+const RECOGNIZE_SYSTEM = [
+  "You transcribe the text in an image or PDF: a school flyer, a photo of a paper notice, or a screenshot.",
+  "Copy every word exactly as written, top to bottom, keeping line breaks. Keep dates, times, names, and amounts exactly as shown.",
+  "Don't summarize, translate, correct, or add anything. If there's no text, return an empty string.",
+  'Return JSON: {"text":string}',
+].join(" ");
+
+/** Up to 40 open to-dos and 40 upcoming events, so a moved practice can match what is already on the calendar. */
+export function openContextLines(
+  items: { title: string; when?: string | null }[],
+  events: { title: string; when?: string | null }[],
+): string[] {
+  const line = (kind: string, row: { title: string; when?: string | null }) => `${kind}: ${row.title}${row.when ? ` (${row.when})` : ""}`;
+  return [
+    ...items.slice(0, 40).map((item) => line("Item", item)),
+    ...events.slice(0, 40).map((event) => line("Calendar", event)),
+  ];
+}
+
+export function mailReadPrompt(message: InboundMessage, people: MailPerson[], examples: string[] = [], part?: string, open: string[] = []): string {
+  const body = (part ?? message.body ?? message.snippet ?? "").slice(0, MAX_BODY_CHARS);
+  const learned = examples.length ? `Not relevant to this family:\n${examples.slice(0, 12).map((line) => `- ${line.replace(/\s+/g, " ").trim().slice(0, 200)}`).join("\n")}` : "";
+  const earlier = (message.thread?.length ? message.thread : message.extra?.trim() ? [message.extra] : [])
+    .slice(-5)
+    .map((line, index) => fence(`earlier message ${index + 1}`, line.slice(0, MAX_THREAD_CHARS)));
+  const attachmentText = (message.files ?? [])
+    .filter((file) => file.text?.trim())
+    .map((file) => fence(`attachment ${file.filename}`, (file.text ?? "").slice(0, 20_000)));
   return [
     familyCard(people),
+    open.length ? `Open items and upcoming calendar events:\n${open.join("\n")}` : "",
     learned,
-    earlier,
-    fence(`From: ${message.fromAddress ?? "unknown"}\nSubject: ${message.subject}\n\n${body}`),
+    ...earlier,
+    fence("message", `From: ${message.fromAddress ?? "unknown"}\nSubject: ${message.subject}\n\n${body}`),
+    ...attachmentText,
     'Return JSON: {"familyRelated":boolean,"newsletter":null|{"title":string,"highlights":string[]},"items":[{"kind":"todo"|"keydate"|"event"|"change"|"backpack"|"decision","title":string,"detail":string,"date":string|null,"time":string|null,"who":string[],"changeOf":string|null}],"profileFacts":[{"member":string,"value":string}]}',
   ].filter(Boolean).join("\n\n");
+}
+
+async function recognizeFiles(ai: GoogleGenAI, message: InboundMessage): Promise<void> {
+  const files = message.files ?? [];
+  for (const file of files) {
+    if (file.text) continue;
+    const parsed = await askJson(ai, [BOTLIFE_MODELS.extract], RECOGNIZE_SYSTEM, `Transcribe the text in ${file.filename}.`, file, "extract");
+    const text = parsed && typeof parsed === "object" && typeof (parsed as { text?: unknown }).text === "string"
+      ? (parsed as { text: string }).text.trim().slice(0, 20_000)
+      : "";
+    if (text) file.text = text;
+  }
+}
+
+function mailFiles(message: InboundMessage): MailFile[] {
+  if (message.files?.length) return message.files;
+  return message.file ? [{ ...message.file, filename: "file" }] : [];
 }
 
 function clip(value: unknown, max: number): string {
@@ -152,8 +195,15 @@ function looksLikeNewsletter(message: InboundMessage): boolean {
   return /\b(newsletter|weekly|bulletin|week ahead)\b/i.test(message.subject) || (message.body || "").length > 3000;
 }
 
-export async function readInboxMessage(ai: GoogleGenAI, message: InboundMessage, people: MailPerson[], examples: string[] = []): Promise<MailRead | null> {
-  const triage = await askJson(ai, [BOTLIFE_MODELS.triage], TRIAGE_SYSTEM, mailReadPrompt(message, people, examples), message.file);
+export async function readInboxMessage(ai: GoogleGenAI, message: InboundMessage, people: MailPerson[], examples: string[] = [], open: string[] = []): Promise<MailRead | null> {
+  const triage = await askJson(
+    ai,
+    [BOTLIFE_MODELS.triage],
+    TRIAGE_SYSTEM,
+    mailReadPrompt({ ...message, body: undefined, thread: undefined, files: undefined, extra: undefined }, people, examples, (message.snippet || message.body || "").slice(0, 2000)),
+    undefined,
+    "triage",
+  );
   const decision = triage && typeof triage === "object" ? triage as { familyRelated?: unknown; needsFullRead?: unknown; confidence?: unknown } : null;
   if (decision && typeof decision.confidence === "number" && !shouldRead({
     familyRelated: decision.familyRelated === true,
@@ -162,16 +212,22 @@ export async function readInboxMessage(ai: GoogleGenAI, message: InboundMessage,
   }, true)) {
     return { familyRelated: false, newsletter: null, items: [], facts: [] };
   }
-  const strong = (message.body || "").length > 12_000 || !!message.file;
-  const models = looksLikeNewsletter(message)
+  if (!message.files?.length && message.file) message.files = mailFiles(message);
+  await recognizeFiles(ai, message);
+  const files = mailFiles(message);
+  const threadCount = message.thread?.length ?? 0;
+  const strong = (message.body || "").length > 12_000 || files.length > 0 || threadCount > 3;
+  const letter = looksLikeNewsletter(message);
+  const models = letter
     ? [BOTLIFE_MODELS.newsletter]
     : strong
       ? [BOTLIFE_MODELS.extractComplex]
       : [BOTLIFE_MODELS.extract];
-  const parts = looksLikeNewsletter(message) ? chunkText(message.body || message.snippet || "") : [message.body || message.snippet || ""];
+  const job = letter ? "newsletter" as const : strong ? "extractComplex" as const : "extract" as const;
+  const parts = letter ? chunkText(message.body || message.snippet || "") : [message.body || message.snippet || ""];
   const reads: MailRead[] = [];
   for (const part of parts.length ? parts : [""]) {
-    const parsed = await askJson(ai, models, SYSTEM, mailReadPrompt(message, people, examples, part), message.file);
+    const parsed = await askJson(ai, models, SYSTEM, mailReadPrompt(message, people, examples, part, open), files, job);
     const read = parsed ? parseMailRead(JSON.stringify(parsed), people) : null;
     if (read) reads.push(read);
   }

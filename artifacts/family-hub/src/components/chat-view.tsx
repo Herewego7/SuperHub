@@ -257,6 +257,28 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     return written;
   }
 
+  function finishReply(next: ChatBubble[], reply: string, changed: string[], groceryMeals: GroceryPromptMeal[]) {
+    const saved = [...next, { id: `${Date.now()}-b`, role: "assistant" as const, text: reply }];
+    localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(saved));
+    setBubbles(saved);
+    if (changed.includes("chores") || changed.includes("mail")) {
+      void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/chore-completions"] });
+    }
+    if (changed.includes("events") || changed.includes("mail")) void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    if (changed.includes("profiles")) void queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
+    if (changed.includes("groceries")) {
+      void queryClient.invalidateQueries({ queryKey: ["/api/grocery-items"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/grocery-list/aggregate"] });
+    }
+    if (changed.includes("mail")) void queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+    if (changed.includes("meals")) {
+      void queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    }
+    if (groceryMeals.length) queueGroceryPrompts(groceryMeals);
+  }
+
   function send(text: string, alreadyAppended = false) {
     const next = alreadyAppended ? readThread(profileKey) : appendUserMessage(profileKey, text);
     if (!next || thinking) return;
@@ -267,34 +289,71 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     void apiRequest("POST", "/api/chat", {
       text,
       isChild,
+      stream: true,
       history: next.slice(0, -1).slice(-12).map((bubble) => ({ role: bubble.role, text: bubble.text })),
     }).then(async (res) => {
-      const body = await res.json() as { fallback?: boolean; text?: string; changed?: string[]; groceryMeals?: GroceryPromptMeal[] };
-      setThinking(false);
-      if (body.fallback || !body.text) {
-        replyFromRules(text, next);
+      const kind = res.headers.get("content-type") ?? "";
+      if (!kind.includes("ndjson") || !res.body) {
+        const body = await res.json() as { fallback?: boolean; text?: string; changed?: string[]; groceryMeals?: GroceryPromptMeal[] };
+        setThinking(false);
+        if (body.fallback || !body.text) {
+          replyFromRules(text, next);
+          return;
+        }
+        finishReply(next, body.text, body.changed ?? [], body.groceryMeals ?? []);
         return;
       }
-      const saved = [...next, { id: `${Date.now()}-b`, role: "assistant" as const, text: body.text }];
-      localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(saved));
-      setBubbles(saved);
-      const changed = body.changed ?? [];
-      if (changed.includes("chores") || changed.includes("mail")) {
-        void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
-        void queryClient.invalidateQueries({ queryKey: ["/api/chore-completions"] });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let answer = "";
+      const bubbleId = `${Date.now()}-b`;
+      const applyLine = (line: string) => {
+        if (!line.trim()) return "continue" as const;
+        const row = JSON.parse(line) as { type?: string; text?: string; fallback?: boolean; changed?: string[]; groceryMeals?: GroceryPromptMeal[] };
+        if (row.type === "delta" && row.text) {
+          answer += row.text;
+          setThinking(false);
+          setBubbles([...next, { id: bubbleId, role: "assistant", text: answer }]);
+          return "continue" as const;
+        }
+        if (row.type === "fallback" || row.fallback) return "fallback" as const;
+        if (row.type === "done") {
+          const finalText = row.text || answer;
+          setThinking(false);
+          if (!finalText) return "fallback" as const;
+          finishReply(next, finalText, row.changed ?? [], row.groceryMeals ?? []);
+          return "done" as const;
+        }
+        return "continue" as const;
+      };
+      while (true) {
+        const step = await reader.read();
+        if (step.done) break;
+        buffer += decoder.decode(step.value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const outcome = applyLine(line);
+          if (outcome === "fallback") {
+            setThinking(false);
+            replyFromRules(text, next);
+            return;
+          }
+          if (outcome === "done") return;
+        }
       }
-      if (changed.includes("events") || changed.includes("mail")) void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      if (changed.includes("profiles")) void queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
-      if (changed.includes("groceries")) {
-        void queryClient.invalidateQueries({ queryKey: ["/api/grocery-items"] });
-        void queryClient.invalidateQueries({ queryKey: ["/api/grocery-list/aggregate"] });
+      if (buffer.trim()) {
+        const outcome = applyLine(buffer);
+        if (outcome === "fallback") {
+          setThinking(false);
+          replyFromRules(text, next);
+          return;
+        }
+        if (outcome === "done") return;
       }
-      if (changed.includes("mail")) void queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
-      if (changed.includes("meals")) {
-        void queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
-        void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      }
-      if (body.groceryMeals?.length) queueGroceryPrompts(body.groceryMeals);
+      setThinking(false);
+      if (!answer) replyFromRules(text, next);
     }).catch(() => {
       setThinking(false);
       replyFromRules(text, next);

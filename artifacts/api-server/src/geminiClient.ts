@@ -3,6 +3,7 @@
  * so trial credits are used. Replit's managed proxy remains a fallback.
  */
 import { GoogleGenAI } from "@google/genai";
+import { type ModelJob, withModelRetry } from "./ai/modelRetry";
 
 export type GeminiEnv = {
   GOOGLE_CLOUD_PROJECT?: string;
@@ -78,23 +79,31 @@ export function chatGenerationConfig(): { temperature: number } {
   return { temperature: 0.3 };
 }
 
-/** Bot Life structured reads: temperature 0, and no output cap of our own. */
-export function jsonGenerationConfig(): { temperature: number; responseMimeType: string } {
-  return { temperature: 0, responseMimeType: "application/json" };
+/** Structured reads stay at 0. The evening-plan rewrite uses 0.3, same as Bot Life. */
+export function jsonGenerationConfig(job?: ModelJob): { temperature: number; responseMimeType: string } {
+  return { temperature: job === "digest" ? 0.3 : 0, responseMimeType: "application/json" };
 }
 
-export async function askJson(ai: GoogleGenAI, models: string[], system: string, prompt: string, image?: { mimeType: string; data: string }): Promise<unknown | null> {
+export async function askJson(
+  ai: GoogleGenAI,
+  models: string[],
+  system: string,
+  prompt: string,
+  image?: { mimeType: string; data: string } | { mimeType: string; data: string }[],
+  job: ModelJob = "extract",
+): Promise<unknown | null> {
+  const files = image ? (Array.isArray(image) ? image : [image]) : [];
   const parts = [
     { text: prompt },
-    ...(image ? [{ inlineData: { mimeType: image.mimeType, data: image.data } }] : []),
+    ...files.map((file) => ({ inlineData: { mimeType: file.mimeType, data: file.data } })),
   ];
   for (const model of models) {
     try {
-      const response = await ai.models.generateContent({
+      const response = await withModelRetry(job, (signal) => ai.models.generateContent({
         model,
         contents: [{ role: "user", parts }],
-        config: { systemInstruction: system, ...jsonGenerationConfig() },
-      });
+        config: { systemInstruction: system, ...jsonGenerationConfig(job), abortSignal: signal },
+      }));
       const cleaned = (response.text || "").replace(/```json|```/g, "").trim();
       if (!cleaned) continue;
       return JSON.parse(cleaned) as unknown;
