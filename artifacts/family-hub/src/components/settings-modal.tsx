@@ -1526,20 +1526,35 @@ export function CalendarConnectionsSection({
     onMutate: () => {
       setScanNote("Checking that email can be read.");
     },
+    onError: () => {
+      clearInboxScan();
+      const note = "The inbox check didn't finish. Try Scan now again.";
+      setScanNote(note);
+      toast({ title: "Inbox wasn't read", description: note, variant: "destructive" });
+    },
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       if (data.started) {
         noteInboxScan();
-        setScanNote("Reading your mail. You can leave SuperHub. Home updates when the read finishes.");
+        const note = "Reading your mail. You can leave this page. Home fills in when the read finishes.";
+        setScanNote(note);
+        toast({ title: "Reading your inbox", description: note });
       } else {
         clearInboxScan();
-        if (data.scanOff) setScanNote("Scan is off.");
-        else if (data.mailProblem === "scope") setScanNote("This account can see the calendar, but it was never allowed to read email. Reconnect it and allow email.");
-        else if (data.mailProblem === "unavailable") setScanNote("Email reading isn't available for that Google connection yet.");
-        else if (data.needsReconnect) setScanNote("Reconnect the account to read mail.");
-        else if (!data.connected) setScanNote("Connect an account first.");
-        else setScanNote(data.todos.length ? `Added ${data.todos.length}.` : "No new school mail.");
+        const note = data.scanOff
+          ? "Scan is off."
+          : data.mailProblem === "scope"
+            ? "This account can see the calendar, but email was not allowed. Reconnect it and leave email checked."
+            : data.mailProblem === "unavailable"
+              ? "Google connected the calendar, but the Gmail API is turned off for this sign-in. Turn it on in the same Google Cloud project, then reconnect."
+              : data.needsReconnect
+                ? "Reconnect the account to read mail."
+                : !data.connected
+                  ? "Connect an account first."
+                  : data.todos.length ? `Added ${data.todos.length}.` : "No new mail in that inbox.";
+        setScanNote(note);
+        toast({ title: "Inbox wasn't read", description: note, variant: "destructive" });
       }
     },
   });
@@ -1717,13 +1732,16 @@ export function CalendarConnectionsSection({
       queryClient.invalidateQueries({ queryKey: ["/api/calendar-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/google-calendar/accounts"] });
 
-      // Show success toast
-      noteInboxScan(true);
-      scanNow.mutate();
-      toast({
-        title: "Google account connected",
-        description: "Scanning your inbox. New items appear as we find them."
-      });
+      if (urlParams.get("mail") === "denied") {
+        clearInboxScan();
+        toast({
+          title: "Calendar connected",
+          description: "Email was not allowed, so the inbox was not read. Reconnect and leave email checked.",
+          variant: "destructive",
+        });
+      } else {
+        scanNow.mutate();
+      }
       if (connectedProfileId) {
         setAutoExpandProfileId(connectedProfileId);
       }
@@ -1739,12 +1757,7 @@ export function CalendarConnectionsSection({
         queryClient.invalidateQueries({ queryKey: ["/api/outlook-calendar/events", connectedProfileId] });
       }
       queryClient.invalidateQueries({ queryKey: ["/api/calendar-assignments"] });
-      noteInboxScan(true);
       scanNow.mutate();
-      toast({
-        title: "Outlook account connected",
-        description: "Scanning your inbox. New items appear as we find them.",
-      });
       if (connectedProfileId) {
         setAutoExpandProfileId(connectedProfileId);
       }
@@ -1784,7 +1797,17 @@ export function CalendarConnectionsSection({
         }
         queryClient.invalidateQueries({ queryKey: ["/api/calendar-assignments"] });
         queryClient.invalidateQueries({ queryKey: ["/api/google-calendar/accounts"] });
-        toast({ title: "Google Calendar connected successfully!", description: "Choose which calendars to sync below." });
+        if (params.get("mail") === "denied") {
+          clearInboxScan();
+          toast({
+            title: "Calendar connected",
+            description: "Email was not allowed, so the inbox was not read. Reconnect and leave email checked.",
+            variant: "destructive",
+          });
+        } else {
+          toast({ title: "Google account connected", description: "Checking that email can be read." });
+          scanNow.mutate();
+        }
         if (connectedProfileId) setAutoExpandProfileId(connectedProfileId);
       } else if (params.get("outlook_calendar_connected") === "true") {
         queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });

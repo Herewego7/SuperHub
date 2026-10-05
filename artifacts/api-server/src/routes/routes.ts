@@ -27,7 +27,7 @@ import { geocodeCity } from "../lib/geocode";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, holdSchoolEvent, muteSender, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, holdSchoolEvent, muteSender, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
 import { applyIngestedMail } from "../ingest/saveMail";
 import { inboxReadiness, scanAfterConnect, scanConnectedInboxes } from "../ingest/scanHousehold";
 import { householdScanProgress, scanStatusFor } from "../ingest/scanProgress";
@@ -3647,6 +3647,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.saveGoogleCalendarTokens(tokenData);
       console.log('Google Calendar tokens saved for profile:', profileId);
+      const grantedScopes = typeof tokens.scope === "string" ? tokens.scope.split(/\s+/) : null;
+      const mailDenied = gmailScopeGranted(grantedScopes) === false;
 
       // Update profile to mark Google Calendar as connected
       await storage.updateProfile(profileId, { googleCalendarConnected: true });
@@ -3657,19 +3659,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // redirect back to the app.
       retryFailedSyncsForProfile(profileId, "google").catch((e) =>
         console.warn("Retry after Google reconnect failed:", e instanceof Error ? e.message : e));
-      scanAfterConnect(profileId).catch((e) =>
-        console.warn("Inbox scan after Google connect failed:", e instanceof Error ? e.message : e));
+      if (!mailDenied) {
+        scanAfterConnect(profileId).catch((e) =>
+          console.warn("Inbox scan after Google connect failed:", e instanceof Error ? e.message : e));
+      }
 
       // Redirect back to app with success and profileId
+      const mailFlag = mailDenied ? "&mail=denied" : "";
       if (mobileRedirect) {
         const sep = mobileRedirect.includes("?") ? "&" : "?";
-        const deepLink = `${mobileRedirect}${sep}google_calendar_connected=true&profileId=${profileId}`;
+        const deepLink = `${mobileRedirect}${sep}google_calendar_connected=true&profileId=${profileId}${mailFlag}`;
         const safeDeepLink = JSON.stringify(deepLink);
         return res.send(`<!DOCTYPE html><html><head><title>Connecting calendar...</title>
 <script>window.location=${safeDeepLink};</script>
 </head><body><p>Completing calendar connection, returning to app...</p></body></html>`);
       } else {
-        res.redirect(webCalendarReturn(`google_calendar_connected=true&profileId=${profileId}`));
+        res.redirect(webCalendarReturn(`google_calendar_connected=true&profileId=${profileId}${mailFlag}`));
       }
     } catch (error) {
       console.error("Google Calendar auth error:", error);

@@ -74,7 +74,10 @@ function mailStatus(err: object): number | undefined {
 function mailReason(err: object): string {
   const response = "response" in err ? (err as { response?: { data?: { error?: { errors?: { reason?: string }[]; status?: string; message?: string } } } }).response : undefined;
   const error = response?.data?.error;
-  return error?.errors?.[0]?.reason || error?.status || "";
+  const message = typeof error?.message === "string" ? error.message : "";
+  if (/has not been used|is disabled|accessNotConfigured/i.test(message)) return "accessNotConfigured";
+  if (/insufficient authentication scopes|insufficientPermissions/i.test(message)) return "insufficientPermissions";
+  return error?.errors?.[0]?.reason || (error?.status === "PERMISSION_DENIED" ? "" : error?.status) || "";
 }
 
 /** A dead token is auth. Mail scope missing is scope. Gmail switched off for the project is unavailable. */
