@@ -905,6 +905,11 @@ export default function FamilyHub() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (activeTab !== "chat") return;
+    document.getElementById("app-scroll-container")?.scrollTo({ top: 0, behavior: "auto" });
+  }, [activeTab]);
+
+  useEffect(() => {
     const sync = () => {
       if (activeTab === "chat") {
         clearChatUnread(chatProfileKey);
@@ -1480,10 +1485,16 @@ export default function FamilyHub() {
           every phone and tablet width is below it, so those layouts are
           byte-for-byte unchanged. */}
       <main
-        className="w-full max-w-screen-2xl mx-auto px-3 sm:px-6 pt-3 overflow-x-hidden"
+        className={`w-full max-w-screen-2xl mx-auto px-3 sm:px-6 pt-3 overflow-x-hidden ${activeTab === "chat" ? "flex flex-col" : ""}`}
         style={{
-          paddingBottom: "calc(10.5rem + env(safe-area-inset-bottom, 0px))",
-          ...(activeTab === "calendar" ? {} : { minHeight: `calc(100vh - ${stickyHeaderH}px)` }),
+          paddingBottom: activeTab === "chat"
+            ? "calc(5.75rem + env(safe-area-inset-bottom, 0px))"
+            : "calc(10.5rem + env(safe-area-inset-bottom, 0px))",
+          ...(activeTab === "calendar"
+            ? {}
+            : activeTab === "chat"
+              ? { height: `calc(100svh - ${stickyHeaderH}px)`, overflow: "hidden" }
+              : { minHeight: `calc(100vh - ${stickyHeaderH}px)` }),
         }}
       >
         {activeTab === "home" && (

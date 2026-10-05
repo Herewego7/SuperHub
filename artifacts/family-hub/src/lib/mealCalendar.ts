@@ -1,4 +1,5 @@
 import { moveDay } from "./chatTools";
+import { MEAL_IDEAS } from "./mealIdeasDatabase";
 
 function dayKey(day: Date): string {
   return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
@@ -123,7 +124,7 @@ function mealName(raw: string): string | null {
     .replace(/[.!?]+$/g, "")
     .replace(/^(?:please\s+|let's\s+|lets\s+|we should (?:eat|have|do)\s+|i want\s+|eat\s+|have\s+|do\s+|for\s+|the\s+|dinner\s+|meal\s+)+/i, "")
     .trim();
-  if (!name || name.length > 60 || name.split(/\s+/).length > 6) return null;
+  if (!name || name.length > 80 || name.split(/\s+/).length > 8) return null;
   if (/\b(?:what|when|who|where|why|how)\b/i.test(name)) return null;
   if (/^(?:plan|pick|choose|week|the week|dinners?|meals?)$/i.test(name)) return null;
   return name;
@@ -142,6 +143,61 @@ function dayFromWord(word: string, today: Date): Date | null {
   if (index < 0) return null;
   at.setDate(at.getDate() + ((index - at.getDay() + 7) % 7));
   return at;
+}
+
+/**
+ * "Let's do tacos on Wednesday" names a dinner to save now.
+ * A proposed week ("does this sound good?") does not match.
+ */
+export function assignedDinners(text: string, today: Date): { date: string; name: string }[] {
+  const found = new Map<string, { date: string; name: string }>();
+  const re = new RegExp(`\\b(?:let's|lets|let us|add|put)\\s+(.+?)\\s+(?:on|for)\\s+(${DINNER_DAY})\\b`, "gi");
+  for (const match of text.matchAll(re)) {
+    const name = mealName(match[1] ?? "");
+    const day = dayFromWord(match[2] ?? "", today);
+    if (!name || !day) continue;
+    found.set(dayKey(day), { date: dayKey(day), name });
+  }
+  return [...found.values()];
+}
+
+const PROPOSAL_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * A suggested week from chat: "Wednesday: Tacos" or "Wed, Oct 7: Tacos".
+ * A dinner already saved ("On the meal plan.") is not asked again.
+ */
+export function proposedDinners(text: string, today: Date): { date: string; name: string }[] {
+  if (/^On the meal plan\./i.test(text.trim())) return [];
+  const found = new Map<string, { date: string; name: string }>();
+  const current = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  for (const line of text.split("\n")) {
+    const dated = line.match(/^\s*(?:[-*•]\s*)?(Sun|Mon|Tue|Wed|Thu|Fri|Sat),\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}):\s*(.+)$/i);
+    const named = line.match(new RegExp(`^\\s*(?:[-*•]\\s*)?(${DINNER_DAY})\\s*:\\s*(.+)$`, "i"));
+    const raw = dated?.[4] ?? named?.[2] ?? "";
+    const name = mealName(raw.replace(/\s*\(replaces [^)]+\)\s*$/i, ""));
+    if (!name) continue;
+    if (dated) {
+      const month = PROPOSAL_MONTHS.findIndex((item) => item.toLowerCase() === dated[2].toLowerCase());
+      const day = Number(dated[3]);
+      if (month < 0 || !day) continue;
+      let year = current.getFullYear();
+      const stamp = new Date(year, month, day);
+      if (stamp.getTime() < current.getTime() - 2 * 86400000) year += 1;
+      const date = dayKey(new Date(year, month, day));
+      found.set(date, { date, name });
+      continue;
+    }
+    const day = dayFromWord(named?.[1] ?? "", current);
+    if (!day) continue;
+    const date = dayKey(day);
+    found.set(date, { date, name });
+  }
+  const asking = /Reply yes to put these on the meal plan/i.test(text);
+  const suggesting = /\b(meal plan|dinners|menu|dinner ideas)\b/i.test(text);
+  if (asking && found.size > 0) return [...found.values()];
+  if (suggesting && found.size >= 2) return [...found.values()];
+  return [];
 }
 
 /** "Tacos tonight and pasta tomorrow", or "Monday tacos, Wednesday soup". */
@@ -176,6 +232,34 @@ export function dinnersFromSaved(
     open.push(date);
   }
   return open.slice(0, saved.length).map((date, index) => ({ date, name: saved[index].name }));
+}
+
+/** Saved meals fill the open nights first. Browse Meal Ideas dinners fill the rest. */
+export function dinnersForTheWeek(
+  saved: { id: string; name: string }[],
+  existing: { date: string; slot?: string | null }[],
+  today: Date,
+): DinnerPick[] {
+  const fromSaved = dinnersFromSaved(saved, existing, today);
+  const taken = new Set(fromSaved.map((pick) => pick.date));
+  const used = new Set(fromSaved.map((pick) => pick.name.trim().toLowerCase()));
+  const open: string[] = [];
+  for (let i = 0; i < 7; i += 1) {
+    const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
+    const date = dayKey(day);
+    if (taken.has(date)) continue;
+    if (existing.some((meal) => meal.date === date && (meal.slot === "dinner" || !meal.slot))) continue;
+    open.push(date);
+  }
+  const ideas = MEAL_IDEAS.filter((idea) => idea.mealType === "dinner" && !used.has(idea.name.trim().toLowerCase()));
+  const start = ideas.length === 0 ? 0 : today.getDate() % ideas.length;
+  const picks = [...fromSaved];
+  for (let index = 0; index < open.length && ideas.length > 0; index += 1) {
+    const idea = ideas[(start + index) % ideas.length];
+    used.add(idea.name.trim().toLowerCase());
+    picks.push({ date: open[index], name: idea.name });
+  }
+  return picks.sort((left, right) => left.date.localeCompare(right.date));
 }
 
 export function withSavedMeals(

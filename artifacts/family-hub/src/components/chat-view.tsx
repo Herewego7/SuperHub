@@ -6,7 +6,7 @@ import type { Chore } from "@workspace/shared-types";
 import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, feedbackNotesFrom, feedbackStored, FEEDBACK_KEY, forgetFact, forgetSchool, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
-import { dinnerPlanReply, dinnerReply, dinnersFromSaved, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, queueGroceryPrompts, statedDinners, wantsDinnerPlan, withSavedMeals, type GroceryPromptMeal } from "@/lib/mealCalendar";
+import { assignedDinners, dinnerPlanReply, dinnerReply, dinnersForTheWeek, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, proposedDinners, queueGroceryPrompts, statedDinners, wantsDinnerPlan, withSavedMeals, type GroceryPromptMeal } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, noteChatUnread, pendingAfterPlan, readPendingConfirm, readThread, savePendingConfirm, threadWithPlan, type ChatBubble, type PendingConfirm } from "@/lib/chatThread";
 
@@ -52,6 +52,15 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     setPendingMeals(pending?.kind === "meals" ? pending.dinners : null);
   };
   const [bubbles, setBubbles] = useState<ChatBubble[]>(() => readThread(profileKey));
+  const logRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const log = logRef.current;
+    if (!log) return;
+    const pin = () => { log.scrollTop = log.scrollHeight; };
+    pin();
+    const frame = requestAnimationFrame(pin);
+    return () => cancelAnimationFrame(frame);
+  }, [bubbles, thinking]);
   const sentPending = useRef(false);
   useEffect(() => {
     if (!profileReady || typeof sessionStorage === "undefined") return;
@@ -199,62 +208,24 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       say(next, "Left the meal plan as it is.");
       return true;
     }
-    if (pendingMeals && confirmedReply(text)) {
-      const picks = pendingMeals;
-      storePending(null);
-      setBubbles(next);
-      setDraft("");
-      void writeDinners(picks)
-        .then((written) => {
-          const lines = dinnerPlanReply(picks).split("\n").slice(0, -1).join("\n");
-          const grocery = written.some((meal) => meal.ingredients.length > 0);
-          say(next, `On the meal plan.\n${lines}${grocery ? "\nOpen Meals to add the ingredients to the grocery list." : ""}`);
-        })
-        .catch(() => say(next, "I couldn't save those dinners yet."));
-      return true;
-    }
+    if (pendingMeals && confirmedReply(text)) return false;
     if (dinnerReply(text, meals, today)) return false;
+    const assigned = assignedDinners(text, today);
+    if (assigned.length > 0) {
+      if (pendingMeals) storePending(null);
+      return false;
+    }
     const stated = statedDinners(text, today);
     const week = wantsDinnerPlan(text) && stated.length === 0;
     if (stated.length === 0 && !week) return false;
-    const picks = stated.length > 0 ? withSavedMeals(stated, savedMeals, meals) : dinnersFromSaved(savedMeals, meals, today);
+    const picks = stated.length > 0 ? withSavedMeals(stated, savedMeals, meals) : dinnersForTheWeek(savedMeals, meals, today);
     if (picks.length === 0) {
-      say(next, savedMeals.length === 0
-        ? "Save a meal first, or name the nights. For example: tacos tonight and pasta tomorrow."
-        : "This week already has a dinner every night. Name a night to replace one.");
+      say(next, "This week already has a dinner every night. Name a night to replace one.");
       return true;
     }
     storePending({ kind: "meals", dinners: picks.map((pick) => ({ date: pick.date, name: pick.name })) });
     say(next, dinnerPlanReply(picks));
     return true;
-  }
-
-  async function writeDinners(picks: { date: string; name: string }[]): Promise<GroceryPromptMeal[]> {
-    const placed = new Map(meals.filter((meal) => meal.slot === "dinner").map((meal) => [meal.date, meal.id]));
-    const written: GroceryPromptMeal[] = [];
-    for (const pick of picks) {
-      const idea = savedMeals.find((meal) => meal.name.trim().toLowerCase() === pick.name.trim().toLowerCase());
-      const body = {
-        name: idea?.name ?? pick.name,
-        notes: idea?.notes ?? null,
-        recipeUrl: idea?.recipeUrl && /^https?:\/\//i.test(idea.recipeUrl) ? idea.recipeUrl : null,
-        directions: idea?.directions ?? null,
-        sourceName: idea?.sourceName ?? null,
-        importedAt: idea ? new Date().toISOString() : null,
-        ingredients: (idea?.ingredients ?? []).map((row, index) => ({ item: row.item, quantity: row.quantity ?? null, displayOrder: index })),
-      };
-      const existingId = placed.get(pick.date);
-      const res = existingId
-        ? await apiRequest("PATCH", `/api/meals/${existingId}`, body)
-        : await apiRequest("POST", "/api/meals", { date: pick.date, slot: "dinner", ...body });
-      const created = await res.json() as GroceryPromptMeal;
-      placed.set(pick.date, created.id);
-      written.push(created);
-    }
-    queueGroceryPrompts(written);
-    await queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
-    await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-    return written;
   }
 
   function finishReply(next: ChatBubble[], reply: string, changed: string[], groceryMeals: GroceryPromptMeal[]) {
@@ -277,6 +248,9 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
     }
     if (groceryMeals.length) queueGroceryPrompts(groceryMeals);
+    if (/^On the meal plan\./i.test(reply.trim())) storePending(null);
+    const nights = proposedDinners(reply, new Date());
+    if (nights.length > 0) storePending({ kind: "meals", dinners: nights });
   }
 
   function send(text: string, alreadyAppended = false) {
@@ -856,7 +830,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     const createdTitle = createEventTitle(text);
     const cast = createdTitle ? createEventCast(createdTitle, profiles) : null;
     const created = cast ? createEventClock(cast.title) : null;
-    if (created && cast && tools.includes("create_event")) {
+    const namedWhen = created?.hours != null && (created.on != null || /\b(today|tonight|tomorrow)\b/i.test(text));
+    if (created && cast && namedWhen && tools.includes("create_event")) {
       const placed = createEventPlace(created.title);
       const named = cast.profileIds.map((id) => profiles.find((person) => person.id === id)?.name).filter((name): name is string => !!name);
       const drivers = cast.drivingProfileIds.map((id) => profiles.find((person) => person.id === id)?.name).filter((name): name is string => !!name);
@@ -1080,7 +1055,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   }
 
   return (
-    <div data-testid="chat-panel" className="flex flex-col gap-3 pb-4" data-revision={revision}>
+    <div data-testid="chat-panel" className="flex min-h-0 flex-1 flex-col" data-revision={revision}>
+      <div ref={logRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-3">
       <div className="flex items-center justify-end">
         <button type="button" className="text-xs font-medium text-[#6e6e78]" data-testid="chat-clear" disabled={shown.length === 0} onClick={clearThread}>
           Clear conversation
@@ -1112,10 +1088,24 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         </ul>
       )}
       {thinking && (
-        <p data-testid="chat-typing" className="text-sm text-[#6e6e78]">Thinking…</p>
+        <div
+          data-testid="chat-typing"
+          role="status"
+          aria-label="SuperHub is working on a reply"
+          className="flex w-fit items-center gap-[5px] rounded-[20px] bg-white px-4 py-3.5 shadow-[0_2px_10px_rgba(42,24,80,0.07)]"
+        >
+          {[0, 1, 2].map((index) => (
+            <span
+              key={index}
+              className="chat-typing-dot block h-[7px] w-[7px] rounded-full bg-[#A0A0A8]"
+              style={{ animationDelay: `${-(index * 0.172)}s` }}
+            />
+          ))}
+        </div>
       )}
+      </div>
       <form
-        className="flex items-end gap-2"
+        className="flex shrink-0 items-end gap-2 pt-1"
         onSubmit={(event) => {
           event.preventDefault();
           send(draft);
