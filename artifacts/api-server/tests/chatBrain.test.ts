@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { chatBriefing, chatSystemPrompt, eventsForChat, handleToolCall, toolDeclarations, userSaidYes, type ChatSnapshot } from "../src/chatBrain";
-import { MAX_ROUNDS } from "../src/chatReply";
+import { CHAT_PROBLEM, MAX_ROUNDS } from "../src/chatReply";
 
 const snap: ChatSnapshot = {
   now: new Date("2026-10-02T15:00:00Z"),
@@ -70,6 +70,7 @@ describe("chat brain", () => {
     assert.match(chatSystemPrompt(snap), /Include every meeting and event/);
     assert.match(chatSystemPrompt(snap), /unless the user asks for more/);
     assert.equal(MAX_ROUNDS, 5);
+    assert.equal(CHAT_PROBLEM, "Sorry, I hit a problem answering that. Please try again in a moment.");
     assert.equal(toolDeclarations(true).some((tool) => tool.name === "mute_sender"), false);
     assert.equal(toolDeclarations(false).some((tool) => tool.name === "mute_sender"), true);
   });

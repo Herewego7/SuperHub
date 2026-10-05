@@ -289,7 +289,6 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     void apiRequest("POST", "/api/chat", {
       text,
       isChild,
-      stream: true,
       history: next.slice(0, -1).slice(-12).map((bubble) => ({ role: bubble.role, text: bubble.text })),
     }).then(async (res) => {
       const kind = res.headers.get("content-type") ?? "";
@@ -353,11 +352,17 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         if (outcome === "done") return;
       }
       setThinking(false);
-      if (!answer) replyFromRules(text, next);
+      if (!answer) sayProblem(next);
     }).catch(() => {
       setThinking(false);
-      replyFromRules(text, next);
+      sayProblem(next);
     });
+  }
+
+  function sayProblem(next: ChatBubble[]) {
+    const saved = [...next, { id: `${Date.now()}-b`, role: "assistant" as const, text: "Sorry, I hit a problem answering that. Please try again in a moment." }];
+    localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(saved));
+    setBubbles(saved);
   }
 
   function replyFromRules(text: string, next: ChatBubble[]) {
