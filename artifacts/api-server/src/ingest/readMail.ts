@@ -28,6 +28,7 @@ export type MailRead = {
   newsletter: { title: string; highlights: string[] } | null;
   items: MailItem[];
   facts: MailFact[];
+  droppedAtTriage?: boolean;
 };
 
 const SYSTEM = [
@@ -210,7 +211,7 @@ export async function readInboxMessage(ai: GoogleGenAI, message: InboundMessage,
     needsFullRead: decision.needsFullRead === true,
     confidence: decision.confidence,
   }, true)) {
-    return { familyRelated: false, newsletter: null, items: [], facts: [] };
+    return { familyRelated: false, newsletter: null, items: [], facts: [], droppedAtTriage: true };
   }
   if (!message.files?.length && message.file) message.files = mailFiles(message);
   await recognizeFiles(ai, message);

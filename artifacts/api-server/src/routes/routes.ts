@@ -30,7 +30,7 @@ import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
 import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, holdSchoolEvent, muteSender, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
 import { applyIngestedMail } from "../ingest/saveMail";
 import { inboxReadiness, scanAfterConnect, scanConnectedInboxes } from "../ingest/scanHousehold";
-import { householdScanProgress, scanStatusFor } from "../ingest/scanProgress";
+import { householdScanProgress, lastInboxRead, scanStatusFor } from "../ingest/scanProgress";
 import { requestInboxScan } from "../ingest/scanState";
 import { markSchedulerWorkDirty } from "../lib/workGate";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp, dinnersToCopy } from "../meals/dinnerEvent";
@@ -3354,6 +3354,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         requestedAt: settings?.inboxScanRequestedAt ?? null,
         finishedAt: settings?.inboxScanFinishedAt ?? null,
       }),
+      lastRead: lastInboxRead(userId),
     });
   });
 

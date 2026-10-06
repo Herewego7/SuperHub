@@ -53,3 +53,33 @@ export function finishHouseholdScan(userId: string, counts: { todos: number; eve
 export function householdScanProgress(userId: string): ScanProgress {
   return byUser.get(userId) ?? idle;
 }
+
+export type MailboxRead = { address: string; emails: number; problem?: string };
+
+export type MailTally = {
+  reader: string;
+  emails: number;
+  skipped: number;
+  triageSaidNo: number;
+  readSaidNo: number;
+  readFailed: number;
+  nothingNew: number;
+  used: number;
+};
+
+export type InboxReadSummary = MailTally & { at: number; mailboxes: MailboxRead[]; todos: number; events: number };
+
+export function emptyTally(emails = 0, reader = "off"): MailTally {
+  return { reader, emails, skipped: 0, triageSaidNo: 0, readSaidNo: 0, readFailed: 0, nothingNew: 0, used: 0 };
+}
+
+const lastReads = new Map<string, InboxReadSummary>();
+
+/** The latest full read per household, so a read that adds nothing can say why. */
+export function noteLastRead(userId: string, summary: InboxReadSummary): void {
+  lastReads.set(userId, summary);
+}
+
+export function lastInboxRead(userId: string): InboxReadSummary | null {
+  return lastReads.get(userId) ?? null;
+}

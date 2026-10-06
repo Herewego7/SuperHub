@@ -5,10 +5,19 @@ import { storage } from "../storage";
 import { applyIngestedMail } from "./saveMail";
 import { gmailNewsletterQuery, INBOX_INITIAL_DAYS, INBOX_NEWSLETTER_LIMIT, INBOX_RECENT_DAYS, latestPerSender } from "./parse";
 import { inboxBlockReason, inboxMailFailure, inboxScanEnabled, shareScan } from "./process";
-import { beginHouseholdScan, finishHouseholdScan, SCAN_BEAT_MS } from "./scanProgress";
+import { beginHouseholdScan, emptyTally, finishHouseholdScan, noteLastRead, SCAN_BEAT_MS, type MailboxRead, type MailTally } from "./scanProgress";
 import { claimInboxScan, finishInboxScanRecord, noteInboxScanRunning, requestInboxScan } from "./scanState";
 
-type ScanResult = Awaited<ReturnType<typeof scanOnce>>;
+type ScanResult = {
+  todos: unknown[];
+  events: unknown[];
+  scanOff: boolean;
+  connected: number;
+  needsReconnect: boolean;
+  mailProblem?: "scope" | "unavailable" | null;
+  mailboxes?: MailboxRead[];
+  tally?: MailTally;
+};
 
 export type InboxScanDeps = {
   claim: (userId: string) => Promise<boolean>;
@@ -45,8 +54,19 @@ export function scanConnectedInboxes(userId: string, days = INBOX_RECENT_DAYS, d
       async (result) => {
         await release?.();
         finishHouseholdScan(userId, { todos: result.todos.length, events: result.events.length });
-        // Settles even when a mailbox couldn't be opened. Reconnecting it asks for a new read.
-        if (full) await deps.finish(userId);
+        if (full) {
+          const summary = {
+            ...(result.tally ?? emptyTally()),
+            at: Date.now(),
+            mailboxes: result.mailboxes ?? [],
+            todos: result.todos.length,
+            events: result.events.length,
+          };
+          noteLastRead(userId, summary);
+          console.log("Inbox read finished:", JSON.stringify(summary));
+          // Settles even when a mailbox couldn't be opened. Reconnecting it asks for a new read.
+          await deps.finish(userId);
+        }
         return result;
       },
       async (err) => {
@@ -120,7 +140,7 @@ export function scanAfterConnect(profileId: string) {
   });
 }
 
-async function scanOnce(userId: string, days = INBOX_RECENT_DAYS) {
+async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanResult> {
   const settings = await storage.getCalendarSettingsByUser(userId);
   if (!inboxScanEnabled(settings?.scanInbox)) {
     return { todos: [], events: [], scanOff: true, connected: 0, needsReconnect: false };
@@ -131,44 +151,55 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS) {
   const google = new GoogleCalendarService();
   const outlook = new OutlookCalendarService();
   const messages = [];
+  const mailboxes: MailboxRead[] = [];
   let connected = 0;
   let needsReconnect = false;
   let mailProblem: "scope" | "unavailable" | null = null;
-  const note = (err: unknown, label: string) => {
+  const note = (err: unknown, label: string): string => {
     const kind = inboxMailFailure(err);
     if (kind === "auth") needsReconnect = true;
     else if (kind === "scope" || kind === "unavailable") mailProblem = kind;
     else console.warn(`${label} inbox scan failed:`, err instanceof Error ? err.message : err);
+    return kind === "skip" ? (err instanceof Error ? err.message : String(err)).slice(0, 160) : kind;
   };
   for (const owner of owners) {
     const tokens = await storage.getGoogleCalendarTokens(owner.id);
     if (tokens?.accessToken) {
       connected += 1;
+      const box: MailboxRead = { address: tokens.email || owner.id, emails: 0 };
+      mailboxes.push(box);
       try {
-        messages.push(...await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry, days));
+        const recent = await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry, days);
+        box.emails += recent.length;
+        messages.push(...recent);
         if (days >= INBOX_INITIAL_DAYS) {
           // Outlook has no newsletter search. Bot Life skips that pass there too.
-          const older = await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry, days, {
+          const older = latestPerSender(await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry, days, {
             query: gmailNewsletterQuery(),
             limit: INBOX_NEWSLETTER_LIMIT,
-          });
-          messages.push(...latestPerSender(older));
+          }));
+          box.emails += older.length;
+          messages.push(...older);
         }
       } catch (err) {
-        note(err, "Google");
+        box.problem = note(err, "Google");
       }
     }
     const outlookTokens = await storage.getOutlookCalendarTokens(owner.id);
     if (outlookTokens?.accessToken && outlookTokens.isActive !== false) {
       connected += 1;
+      const box: MailboxRead = { address: outlookTokens.email || owner.id, emails: 0 };
+      mailboxes.push(box);
       try {
         const access = (await getFreshOutlookAccessToken(owner.id)) ?? outlookTokens.accessToken;
-        messages.push(...await outlook.listInbox(access, outlookTokens.email || owner.id, days));
+        const recent = await outlook.listInbox(access, outlookTokens.email || owner.id, days);
+        box.emails += recent.length;
+        messages.push(...recent);
       } catch (err) {
-        note(err, "Outlook");
+        box.problem = note(err, "Outlook");
       }
     }
   }
   const saved = await applyIngestedMail(userId, messages, audience);
-  return { ...saved, connected, needsReconnect, mailProblem };
+  return { ...saved, connected, needsReconnect, mailProblem, mailboxes };
 }
