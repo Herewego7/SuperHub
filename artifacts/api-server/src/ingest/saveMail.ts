@@ -49,7 +49,7 @@ async function storePlanned(
   return { todos, events, scanOff: false };
 }
 
-export async function applyIngestedMail(userId: string, messages: InboundMessage[], profileIds: string[], heartbeat?: () => Promise<void>) {
+export async function applyIngestedMail(userId: string, messages: InboundMessage[], profileIds: string[]) {
   const settings = await storage.getCalendarSettingsByUser(userId);
   if (settings?.scanInbox === false) return { todos: [], events: [], scanOff: true };
   const chores = await storage.getChoresByUser(userId);
@@ -84,7 +84,6 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
   const todos = [];
   const events = [];
   for (const message of messages) {
-    await heartbeat?.();
     const subject = message.subject?.trim() ?? "";
     if (!subject) continue;
     if (message.fromAddress && state.mutedSenders.some((address) => address.toLowerCase() === message.fromAddress?.toLowerCase())) continue;
