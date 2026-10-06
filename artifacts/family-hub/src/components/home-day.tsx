@@ -79,7 +79,7 @@ function InboxScanBanner() {
       <span className="mt-1 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#5E8FAD] border-t-transparent" aria-hidden="true" />
       <div>
         <p className="text-[15px] font-semibold">Scanning your inbox</p>
-        <p className="text-sm text-[#6e6e78]">You can leave the app. Today's to-dos, key dates, and newsletters show up when the read finishes.</p>
+        <p className="text-sm text-[#6e6e78]">Takes up to 24 hours. You can close the app. Home fills in when it's done.</p>
       </div>
     </section>
   );

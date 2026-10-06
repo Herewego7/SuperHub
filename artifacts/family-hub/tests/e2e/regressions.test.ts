@@ -11,9 +11,11 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
+import { existsSync } from "node:fs";
 import { chromium, type Browser, type Page } from "playwright";
 
 const PORT = 5299;
+const SANDBOX_CHROMIUM = "/opt/pw-browsers/chromium";
 const BASE_URL = `http://localhost:${PORT}/tests/e2e/harness.html`;
 
 let serverProcess: ChildProcess;
@@ -40,7 +42,7 @@ before(async () => {
     stdio: "ignore",
   });
   await waitForServer(`http://localhost:${PORT}/tests/e2e/harness.html`);
-  browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+  browser = await chromium.launch(existsSync(SANDBOX_CHROMIUM) ? { executablePath: SANDBOX_CHROMIUM } : {});
 });
 
 after(async () => {
@@ -1193,6 +1195,37 @@ test("Home: 'connect a calendar' CTA replaces the generic empty state, and spotl
         (el) => getComputedStyle(el).boxShadow.includes("9999px"),
       );
     }, { timeout: 3000 });
+  } finally {
+    await page.close();
+  }
+});
+
+test("Calendar: coming back from Google on the web opens Settings at that person's calendar", async () => {
+  // 2026-10-06: the return landed on Home, and the result sat unread in the
+  // URL until someone happened to open Settings. The confirmation now shows
+  // while the inbox check is still running, so it can't wait on the check.
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  try {
+    await page.goto(`${BASE_URL}?scenario=calendarReturn&google_calendar_connected=true&profileId=dad`);
+    await page.getByTestId("settings-modal").waitFor({ state: "visible", timeout: 8000 });
+    await page.locator("#calendar-profile-row-dad").waitFor({ state: "visible", timeout: 4000 });
+    await page.getByText("Google account connected", { exact: true }).waitFor({ state: "visible", timeout: 4000 });
+    await page.waitForFunction("!window.location.search.includes('google_calendar_connected')", null, { timeout: 4000 });
+  } finally {
+    await page.close();
+  }
+});
+
+test("the Calendar tab's sync warning names whose Google calendar failed", async () => {
+  // 2026-10-06: right after Dad reconnected, the warning said only "Google
+  // Calendar couldn't sync", and the failing one was Mom's older connection.
+  const page = await openScenario("calendarSyncErrorNamed");
+  try {
+    const banner = page.getByTestId("google-sync-error-banner");
+    await banner.waitFor({ state: "visible", timeout: 8000 });
+    const text = (await banner.textContent()) ?? "";
+    assert.match(text, /couldn't sync for Mom\./);
+    assert.doesNotMatch(text, /Dad/);
   } finally {
     await page.close();
   }
@@ -5762,6 +5795,40 @@ test("the month agenda sheet hides its grabber when there is nothing to pull up"
     assert.equal(quiet.visible, quiet.total, `only ${quiet.visible} of ${quiet.total} shown on a quiet day`);
     assert.equal(quiet.canExpand, "false", "a day that already fits still offers to expand");
     assert.equal(quiet.handleHidden, true, "the grabber is still there with nothing to reveal");
+  } finally {
+    await ctx.close();
+  }
+});
+
+// 2026-10-06: in Safari on a phone, the toolbars leave the card too short for
+// the grid, and the day's list sat entirely below it.
+test("on a short phone screen the month list still shows the day's first events under the grid", async () => {
+  const ctx = await browser.newContext({
+    viewport: { width: 390, height: 664 }, hasTouch: true, isMobile: true,
+  });
+  const page = await ctx.newPage();
+  try {
+    await page.goto(`${BASE_URL}?scenario=monthDots`);
+    await page.waitForTimeout(2200);
+    const read = await page.evaluate(() => {
+      const sheet = document.querySelector('[data-testid="month-agenda-sheet"]')!;
+      const area = sheet.parentElement!.getBoundingClientRect();
+      const card = sheet.closest('[class*="100svh"]')!.getBoundingClientRect();
+      const cells = [...document.querySelectorAll('[data-testid^="month-dots-cell-"]')];
+      const rows = [...sheet.querySelectorAll('[data-testid^="month-agenda-event-"]')].slice(0, 2);
+      const openDay = sheet.querySelector('[data-testid="month-agenda-open-day"]')!.getBoundingClientRect();
+      return {
+        grew: card.height - (innerHeight - 172),
+        sheetTop: sheet.getBoundingClientRect().top,
+        gridBottom: Math.max(...cells.map(c => c.getBoundingClientRect().bottom)),
+        openDayShown: openDay.bottom <= area.bottom,
+        rowsShown: rows.filter(r => r.getBoundingClientRect().bottom <= area.bottom).length,
+      };
+    });
+    assert.equal(read.openDayShown, true, "the day's heading is cut off under the grid");
+    assert.equal(read.rowsShown, 2, `only ${read.rowsShown} of the day's first two events show`);
+    assert.ok(read.sheetTop >= read.gridBottom - 1, "the list covers part of the grid");
+    assert.ok(read.grew > 0, "this screen already fits the list, so the test proves nothing");
   } finally {
     await ctx.close();
   }
