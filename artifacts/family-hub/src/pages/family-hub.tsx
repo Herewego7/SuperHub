@@ -99,6 +99,13 @@ const ALL_NAV_TAB_CONFIGS: NavTabConfig[] = [
   { id: 'chat',      icon: MessageCircle,   label: 'Chat',     testId: 'chat-tab',     alwaysVisible: true },
 ];
 
+const CALENDAR_RETURN_PARAMS = [
+  "google_calendar_connected",
+  "outlook_calendar_connected",
+  "google_calendar_error",
+  "outlook_calendar_error",
+];
+
 export default function FamilyHub() {
   // Links any subscription this Apple ID already owns to the signed-in
   // account, once per launch — the App Store page, a reinstall and a second
@@ -387,6 +394,20 @@ export default function FamilyHub() {
     openSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Connecting a calendar on the web leaves for Google or Microsoft and comes
+  // back to /app with the outcome in the URL. Settings' Calendar section reads
+  // and clears those params, so they stay in place until it opens.
+  const calendarReturnCheckedRef = useRef(false);
+  useEffect(() => {
+    if (calendarReturnCheckedRef.current || !user) return;
+    calendarReturnCheckedRef.current = true;
+    if (!user.onboardingCompletedAt) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!CALENDAR_RETURN_PARAMS.some((key) => params.has(key))) return;
+    openSettings("calendar", params.get("profileId") ?? undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // Tapping a push notification whose content is squarely about one tab
   // (bedtime reminder, chore-assigned, reward-redeemed, cashout-requested,

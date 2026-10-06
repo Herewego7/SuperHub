@@ -25,9 +25,10 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { chromium, type Browser } from "playwright";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const PORT = 5301; // distinct from regressions.test.ts (5299) so both can run
+const SANDBOX_CHROMIUM = "/opt/pw-browsers/chromium";
 const BASE_URL = `http://localhost:${PORT}/tests/e2e/harness.html`;
 
 /** Every scenario registered in harness.tsx. */
@@ -69,7 +70,7 @@ before(async () => {
     stdio: "ignore",
   });
   await waitForServer(BASE_URL);
-  browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+  browser = await chromium.launch(existsSync(SANDBOX_CHROMIUM) ? { executablePath: SANDBOX_CHROMIUM } : {});
 });
 
 after(async () => {

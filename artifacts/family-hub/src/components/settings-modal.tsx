@@ -1740,6 +1740,7 @@ export function CalendarConnectionsSection({
           variant: "destructive",
         });
       } else {
+        toast({ title: "Google account connected", description: "Checking that email can be read." });
         scanNow.mutate();
       }
       if (connectedProfileId) {
@@ -1757,6 +1758,7 @@ export function CalendarConnectionsSection({
         queryClient.invalidateQueries({ queryKey: ["/api/outlook-calendar/events", connectedProfileId] });
       }
       queryClient.invalidateQueries({ queryKey: ["/api/calendar-assignments"] });
+      toast({ title: "Outlook account connected", description: "Checking that email can be read." });
       scanNow.mutate();
       if (connectedProfileId) {
         setAutoExpandProfileId(connectedProfileId);

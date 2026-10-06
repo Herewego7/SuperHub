@@ -933,6 +933,9 @@ function MonthDotsCell({
  */
 const SHEET_FLICK_VELOCITY = 0.35; // px/ms — above this, direction wins over position
 const SHEET_TAP_SLOP_PX = 4;       // below this, it was a tap, not a drag
+// The grabber, the day's heading and its first two events. A screen too short
+// for that under the grid (Safari's toolbars) grows the card instead.
+const SHEET_MIN_PEEK_PX = 140;
 
 function MonthAgendaSheet({
   collapsedTop, children,
@@ -1175,6 +1178,13 @@ function MonthDayAgenda({
   );
 }
 
+/** " for Mom", " for Mom and Ava", " for Mom, Ava and Noah", or "" for nobody. */
+function forNames(names: string[]): string {
+  if (names.length === 0) return "";
+  const pretty = names.length <= 2 ? names.join(" and ") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return ` for ${pretty}`;
+}
+
 // ── Main Calendar 3 View ──────────────────────────────────────────────────────
 export interface Calendar3ViewHandle {
   goPrev: () => void;
@@ -1253,6 +1263,22 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
     ro.observe(monthGridEl);
     return () => ro.disconnect();
   }, [monthGridEl]);
+  /** Everything in the card that isn't the month area: banners, toolbar, borders. */
+  const [calendarCardEl, setCalendarCardEl] = useState<HTMLDivElement | null>(null);
+  const [monthAreaEl, setMonthAreaEl] = useState<HTMLDivElement | null>(null);
+  const [monthChromeHeight, setMonthChromeHeight] = useState(0);
+  useEffect(() => {
+    if (!calendarCardEl || !monthAreaEl) return;
+    const measure = () => setMonthChromeHeight(calendarCardEl.offsetHeight - monthAreaEl.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(calendarCardEl);
+    ro.observe(monthAreaEl);
+    return () => ro.disconnect();
+  }, [calendarCardEl, monthAreaEl]);
+  const calendarCardMinHeight = monthAreaEl && monthGridHeight > 0
+    ? monthChromeHeight + monthGridHeight + SHEET_MIN_PEEK_PX
+    : undefined;
   const [isTablet, setIsTablet] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768 && window.innerWidth < 1024);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "week";
@@ -1451,6 +1477,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
   // deep-link straight to that person's row in Settings instead of just the
   // Calendar section in general.
   const googleErrorProfileId = googleConnectedProfiles[googleQueries.findIndex(q => q.isError)]?.id;
+  const googleErrorNames = googleConnectedProfiles.filter((_, i) => googleQueries[i]?.isError).map(p => p.name);
 
   const outlookConnectedProfiles = useMemo(() => regularProfiles.filter(p => p.outlookCalendarConnected), [regularProfiles]);
   const outlookQueries = useQueries({
@@ -1466,6 +1493,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
   // account with nothing scheduled. Google gets this exact banner already.
   const outlookSyncError = outlookQueries.some(q => q.isError);
   const outlookErrorProfileId = outlookConnectedProfiles[outlookQueries.findIndex(q => q.isError)]?.id;
+  const outlookErrorNames = outlookConnectedProfiles.filter((_, i) => outlookQueries[i]?.isError).map(p => p.name);
 
   const icalConnectedProfiles = useMemo(() => regularProfiles.filter(p => p.icalConnected), [regularProfiles]);
   const icalQueries = useQueries({
@@ -2350,7 +2378,11 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col h-[calc(100svh-172px)] bg-[#dce8f2] dark:bg-[#1e2633] rounded-xl border border-[#2a2a2a] dark:border-border shadow-sm overflow-hidden">
+      <div
+        ref={setCalendarCardEl}
+        className="flex flex-col h-[calc(100svh-172px)] bg-[#dce8f2] dark:bg-[#1e2633] rounded-xl border border-[#2a2a2a] dark:border-border shadow-sm overflow-hidden"
+        style={{ minHeight: calendarCardMinHeight }}
+      >
 
         {/* ── External-calendar sync-error banners ── */}
         {/* Tappable: takes you straight to Settings' Calendar section (and,
@@ -2365,7 +2397,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
             data-testid="google-sync-error-banner"
           >
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-            <span className="flex-1">Google Calendar couldn't sync. Tap to reconnect it in Settings.</span>
+            <span className="flex-1">Google Calendar couldn't sync{forNames(googleErrorNames)}. Tap to reconnect it in Settings.</span>
             <ChevronRight className="w-4 h-4 flex-shrink-0" />
           </button>
         )}
@@ -2377,7 +2409,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
             data-testid="outlook-sync-error-banner"
           >
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-            <span className="flex-1">Outlook Calendar couldn't sync. Tap to reconnect it in Settings.</span>
+            <span className="flex-1">Outlook Calendar couldn't sync{forNames(outlookErrorNames)}. Tap to reconnect it in Settings.</span>
             <ChevronRight className="w-4 h-4 flex-shrink-0" />
           </button>
         )}
@@ -2817,7 +2849,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
             {viewMode === "month" && isMobile && monthStyle === "dots" && (
               // The grid and the sheet overlap, so they can't be flex siblings:
               // the sheet is absolutely positioned and slides up OVER the grid.
-              <div className="flex-1 relative overflow-hidden min-h-0 bg-white dark:bg-card">
+              <div ref={setMonthAreaEl} className="flex-1 relative overflow-hidden min-h-0 bg-white dark:bg-card">
                <div ref={setMonthGridEl} className="absolute inset-x-0 top-0">
                 {/* Said once for the whole grid rather than captioned into
                     thirty cells: the dots and the total count different things
