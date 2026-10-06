@@ -4,8 +4,8 @@ import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip
 import { fileParts, gmailInboxQuery, gmailNewsletterQuery, gmailPayload, inboxFetchLimit, inboxSinceIso, latestPerSender, outlookAttachments, outlookToInbound, toInbound } from "../src/ingest/parse.ts";
 
 test("a catch-up scan reads 30 days, and the regular check stays at 2", () => {
-  assert.equal(gmailInboxQuery(30), "newer_than:30d in:inbox");
-  assert.equal(gmailInboxQuery(2), "newer_than:2d in:inbox");
+  assert.match(gmailInboxQuery(30), /^newer_than:30d /);
+  assert.match(gmailInboxQuery(2), /^newer_than:2d /);
   assert.equal(inboxFetchLimit(30), 500);
   assert.equal(inboxFetchLimit(2), 100);
   assert.match(gmailNewsletterQuery(), /newer_than:60d older_than:30d/);
@@ -17,6 +17,12 @@ test("a catch-up scan reads 30 days, and the regular check stays at 2", () => {
   ]);
   assert.deepEqual(latest.map((message) => message.subject), ["This week", "Practice"]);
   assert.equal(inboxSinceIso(30, new Date("2026-10-05T12:00:00.000Z")), "2026-09-05T12:00:00.000Z");
+});
+
+test("the mail read reaches archived and filtered mail, and leaves out what the family sent", () => {
+  const query = gmailInboxQuery(30);
+  assert.doesNotMatch(query, /in:inbox/, "archived and filtered school mail was never downloaded");
+  for (const skip of ["-in:chats", "-in:spam", "-in:trash", "-in:sent", "-in:drafts"]) assert.ok(query.includes(skip), `${skip} missing`);
 });
 
 test("a stored Google token is refreshed once it has expired", () => {

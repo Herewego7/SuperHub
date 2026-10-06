@@ -159,8 +159,9 @@ export const INBOX_INITIAL_LIMIT = 500;
 export const INBOX_NEWSLETTER_DAYS = 60;
 export const INBOX_NEWSLETTER_LIMIT = 200;
 
+/** All Mail, same as Bot Life, so school mail a filter or an archive moved out of the inbox is still read. */
 export function gmailInboxQuery(days: number): string {
-  return `newer_than:${days}d in:inbox`;
+  return `newer_than:${days}d -in:chats -in:spam -in:trash -in:sent -in:drafts`;
 }
 
 /** The month of mail before the catch-up, limited to newsletter-shaped messages. */

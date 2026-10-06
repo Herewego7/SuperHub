@@ -1,6 +1,6 @@
 import { storage } from "../storage";
 import { syncEventCreate } from "../calendarSync";
-import { geminiClient, askJson, BOTLIFE_MODELS } from "../geminiClient";
+import { geminiClient, geminiSetup, askJson, BOTLIFE_MODELS } from "../geminiClient";
 import { duplicateBand, familyGrades, titleSimilarity } from "../ai/parity";
 import { examplesForMessage, rememberMail } from "../ai/memory";
 import { connectedCalendarEvents } from "../scheduler/eveningPlan";
@@ -8,6 +8,7 @@ import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { slipKey, type InboundMessage } from "./parse";
 import { ingestMessages, schoolEventStart, slipClock, type PlannedEvent, type PlannedTodo } from "./process";
 import { alreadyRead, openContextLines, plansFromRead, readInboxMessage, subjectPlaceholder, type MailPerson } from "./readMail";
+import { emptyTally } from "./scanProgress";
 
 type Saved = { todos: unknown[]; events: unknown[]; scanOff: boolean };
 
@@ -51,7 +52,7 @@ async function storePlanned(
 
 export async function applyIngestedMail(userId: string, messages: InboundMessage[], profileIds: string[]) {
   const settings = await storage.getCalendarSettingsByUser(userId);
-  if (settings?.scanInbox === false) return { todos: [], events: [], scanOff: true };
+  if (settings?.scanInbox === false) return { todos: [], events: [], scanOff: true, tally: emptyTally(messages.length) };
   const chores = await storage.getChoresByUser(userId);
   const existingKeys = chores.filter((chore) => chore.category === "school_email").map((chore) => slipKey(chore.title));
   const savedEvents = await storage.getEventsByUser(userId);
@@ -64,12 +65,13 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
   const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
   const ai = geminiClient();
   if (!ai) {
-    return storePlanned(
+    const saved = await storePlanned(
       userId,
       ingestMessages(messages, state, existingKeys, profileIds, existingEventKeys),
       timeZone,
       calendarId,
     );
+    return { ...saved, tally: emptyTally(messages.length) };
   }
 
   const people = await storage.getProfilesByUser(userId);
@@ -83,22 +85,31 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
   const keyword: InboundMessage[] = [];
   const todos = [];
   const events = [];
+  const tally = emptyTally(messages.length, geminiSetup().kind);
   for (const message of messages) {
     const subject = message.subject?.trim() ?? "";
-    if (!subject) continue;
-    if (message.fromAddress && state.mutedSenders.some((address) => address.toLowerCase() === message.fromAddress?.toLowerCase())) continue;
-    if (state.dismissedSlipKeys.includes(slipKey(subject))) continue;
-    if (chores.some((chore) => alreadyRead(chore.description, subject))) continue;
+    if (
+      !subject
+      || (message.fromAddress && state.mutedSenders.some((address) => address.toLowerCase() === message.fromAddress?.toLowerCase()))
+      || state.dismissedSlipKeys.includes(slipKey(subject))
+      || chores.some((chore) => alreadyRead(chore.description, subject))
+    ) {
+      tally.skipped += 1;
+      continue;
+    }
     const learned = [
       ...state.dismissedSlipKeys.slice(-8),
       ...(await examplesForMessage(userId, `${subject}\n${message.snippet}`, message.fromAddress)),
     ];
     const read = await readInboxMessage(ai, message, family, learned, open);
     if (!read) {
+      tally.readFailed += 1;
       keyword.push(message);
       continue;
     }
     if (!read.familyRelated) {
+      if (read.droppedAtTriage) tally.triageSaidNo += 1;
+      else tally.readSaidNo += 1;
       await retirePlaceholder(userId, chores, done, subject);
       continue;
     }
@@ -122,9 +133,11 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
     }
     planned.todos = todosToSave;
     if (planned.todos.length === 0 && planned.events.length === 0 && planned.changes.length === 0 && !read.newsletter) {
+      tally.nothingNew += 1;
       keyword.push(message);
       continue;
     }
+    tally.used += 1;
     await retirePlaceholder(userId, chores, done, subject);
     for (const todo of planned.todos) existingKeys.push(todo.slipKey);
     for (const event of planned.events) if (event.externalId) existingEventKeys.push(event.externalId);
@@ -165,7 +178,7 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
     todos.push(...saved.todos);
     events.push(...saved.events);
   }
-  return { todos, events, scanOff: false };
+  return { todos, events, scanOff: false, tally };
 }
 
 function localDay(value: string | Date, zone: string): string {
