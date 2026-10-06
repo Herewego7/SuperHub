@@ -32,25 +32,17 @@ export async function claimInboxScan(userId: string, now = new Date()): Promise<
       ),
     ),
   )).returning({ userId: calendarSettings.userId });
-  if (updated.length === 0) return false;
-  lastBeat.set(userId, now.getTime());
-  return true;
+  return updated.length > 0;
 }
 
-const lastBeat = new Map<string, number>();
-
 export async function noteInboxScanRunning(userId: string, now = Date.now()): Promise<void> {
-  const prev = lastBeat.get(userId) ?? 0;
-  if (now - prev < 60_000) return;
-  lastBeat.set(userId, now);
   try {
     await touch(userId, { inboxScanStartedAt: new Date(now) });
   } catch {
-    lastBeat.delete(userId);
+    /* The next beat tries again. */
   }
 }
 
 export function finishInboxScanRecord(userId: string, now = new Date()): Promise<void> {
-  lastBeat.delete(userId);
   return touch(userId, { inboxScanFinishedAt: now });
 }

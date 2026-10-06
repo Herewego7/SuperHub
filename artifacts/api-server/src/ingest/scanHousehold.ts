@@ -5,17 +5,34 @@ import { storage } from "../storage";
 import { applyIngestedMail } from "./saveMail";
 import { gmailNewsletterQuery, INBOX_INITIAL_DAYS, INBOX_NEWSLETTER_LIMIT, INBOX_RECENT_DAYS, latestPerSender } from "./parse";
 import { inboxBlockReason, inboxMailFailure, inboxScanEnabled, shareScan } from "./process";
-import { beginHouseholdScan, finishHouseholdScan } from "./scanProgress";
+import { beginHouseholdScan, finishHouseholdScan, SCAN_BEAT_MS } from "./scanProgress";
 import { claimInboxScan, finishInboxScanRecord, noteInboxScanRunning, requestInboxScan } from "./scanState";
 
-const inflight = new Map<string, Promise<Awaited<ReturnType<typeof scanOnce>>>>();
+type ScanResult = Awaited<ReturnType<typeof scanOnce>>;
 
-export function scanConnectedInboxes(userId: string, days = INBOX_RECENT_DAYS) {
+export type InboxScanDeps = {
+  claim: (userId: string) => Promise<boolean>;
+  beat: (userId: string) => Promise<void>;
+  finish: (userId: string) => Promise<void>;
+  read: (userId: string, days: number) => Promise<ScanResult>;
+};
+
+const liveDeps: InboxScanDeps = {
+  claim: (userId) => claimInboxScan(userId),
+  beat: (userId) => noteInboxScanRunning(userId),
+  finish: (userId) => finishInboxScanRecord(userId),
+  read: (userId, days) => scanOnce(userId, days),
+};
+
+const inflight = new Map<string, Promise<ScanResult>>();
+
+export function scanConnectedInboxes(userId: string, days = INBOX_RECENT_DAYS, deps = liveDeps) {
   return shareScan(inflight, userId, async () => {
     beginHouseholdScan(userId);
-    if (days >= INBOX_INITIAL_DAYS) {
+    const full = days >= INBOX_INITIAL_DAYS;
+    if (full) {
       try {
-        if (!(await claimInboxScan(userId))) {
+        if (!(await deps.claim(userId))) {
           finishHouseholdScan(userId, { todos: 0, events: 0 });
           return { todos: [], events: [], scanOff: false, connected: 0, needsReconnect: false };
         }
@@ -23,18 +40,34 @@ export function scanConnectedInboxes(userId: string, days = INBOX_RECENT_DAYS) {
         console.warn("Inbox scan lock skipped:", err instanceof Error ? err.message : err);
       }
     }
-    return scanOnce(userId, days).then(
+    const release = full ? holdLock(() => deps.beat(userId)) : null;
+    return deps.read(userId, days).then(
       async (result) => {
+        await release?.();
         finishHouseholdScan(userId, { todos: result.todos.length, events: result.events.length });
-        if (days >= INBOX_INITIAL_DAYS && !result.mailProblem && !result.needsReconnect) await finishInboxScanRecord(userId);
+        // Settles even when a mailbox couldn't be opened. Reconnecting it asks for a new read.
+        if (full) await deps.finish(userId);
         return result;
       },
-      (err) => {
+      async (err) => {
+        await release?.();
         finishHouseholdScan(userId, { todos: 0, events: 0 });
         throw err;
       },
     );
   });
+}
+
+/** Refreshes the lock on a clock, so a long download or a slow model call never looks abandoned. */
+function holdLock(beat: () => Promise<void>): () => Promise<void> {
+  let last = Promise.resolve();
+  const timer = setInterval(() => {
+    last = beat();
+  }, SCAN_BEAT_MS);
+  return async () => {
+    clearInterval(timer);
+    await last;
+  };
 }
 
 /** A calendar connection is not a mail connection. Check before the long read so Scan now can say so. */
@@ -136,8 +169,6 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS) {
       }
     }
   }
-  const beat = days >= INBOX_INITIAL_DAYS ? () => noteInboxScanRunning(userId) : undefined;
-  await beat?.();
-  const saved = await applyIngestedMail(userId, messages, audience, beat);
+  const saved = await applyIngestedMail(userId, messages, audience);
   return { ...saved, connected, needsReconnect, mailProblem };
 }

@@ -19,6 +19,9 @@ export function catchUpPending(requestedAt: Date | null, finishedAt: Date | null
 /** Ten minutes. The read refreshes this while it is working, so a dead run can be picked up. */
 export const SCAN_LOCK_MS = 10 * 60_000;
 
+/** Well inside SCAN_LOCK_MS, so a read that is still working never looks abandoned. */
+export const SCAN_BEAT_MS = 60_000;
+
 export function scanLockFresh(startedAt: Date | null, now: Date, finishedAt: Date | null = null, freshMs = SCAN_LOCK_MS): boolean {
   if (!startedAt) return false;
   // A finished read releases the lock even if its heartbeat is recent.
