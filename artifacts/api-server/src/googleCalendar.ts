@@ -13,6 +13,12 @@ const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
 ];
 
+// A pasted secret often keeps a leading space. Google then looks up
+// " 8611…" and reports that the OAuth client was not found.
+function googleCredential(name: "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET"): string | undefined {
+  return process.env[name]?.trim();
+}
+
 export class GoogleCalendarService {
   private getRedirectUri(requestHost?: string): string {
     // If request host is provided, use it directly (for dynamic redirect based on request origin)
@@ -35,8 +41,8 @@ export class GoogleCalendarService {
     const redirectUri = this.getRedirectUri(requestHost);
     console.log('Creating OAuth2 client with redirect URI:', redirectUri);
     return new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
+      googleCredential("GOOGLE_CLIENT_ID"),
+      googleCredential("GOOGLE_CLIENT_SECRET"),
       redirectUri
     );
   }
@@ -78,8 +84,8 @@ export class GoogleCalendarService {
       // "primary" calendar, Google's Calendar API always returns the
       // connected account's email address as its id.
       const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
+        googleCredential("GOOGLE_CLIENT_ID"),
+        googleCredential("GOOGLE_CLIENT_SECRET"),
       );
       oauth2Client.setCredentials({ access_token: accessToken });
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
@@ -94,8 +100,8 @@ export class GoogleCalendarService {
   async revokeToken(accessToken: string): Promise<void> {
     try {
       const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
+        googleCredential("GOOGLE_CLIENT_ID"),
+        googleCredential("GOOGLE_CLIENT_SECRET"),
       );
       
       oauth2Client.setCredentials({
@@ -122,8 +128,8 @@ export class GoogleCalendarService {
     try {
       // Set up OAuth2 client properly
       const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
+        googleCredential("GOOGLE_CLIENT_ID"),
+        googleCredential("GOOGLE_CLIENT_SECRET"),
       );
 
       oauth2Client.setCredentials({
@@ -228,8 +234,8 @@ export class GoogleCalendarService {
     try {
       // Set up OAuth2 client properly
       const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
+        googleCredential("GOOGLE_CLIENT_ID"),
+        googleCredential("GOOGLE_CLIENT_SECRET"),
       );
       
       oauth2Client.setCredentials({
@@ -265,8 +271,8 @@ export class GoogleCalendarService {
 
   private gmailAuth(accessToken: string, refreshToken: string | undefined, tokenExpiry?: Date | string | null) {
     const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
+      googleCredential("GOOGLE_CLIENT_ID"),
+      googleCredential("GOOGLE_CLIENT_SECRET"),
     );
     oauth2Client.setCredentials({
       access_token: accessToken,
@@ -394,8 +400,8 @@ export class GoogleCalendarService {
     try {
       // Set up OAuth2 client properly  
       const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
+        googleCredential("GOOGLE_CLIENT_ID"),
+        googleCredential("GOOGLE_CLIENT_SECRET"),
       );
       
       oauth2Client.setCredentials({
@@ -444,8 +450,8 @@ export class GoogleCalendarService {
   ): Promise<calendar_v3.Schema$Event> {
     try {
       const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
+        googleCredential("GOOGLE_CLIENT_ID"),
+        googleCredential("GOOGLE_CLIENT_SECRET"),
       );
 
       oauth2Client.setCredentials({
@@ -526,8 +532,8 @@ export class GoogleCalendarService {
   ): Promise<calendar_v3.Schema$Event> {
     try {
       const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
+        googleCredential("GOOGLE_CLIENT_ID"),
+        googleCredential("GOOGLE_CLIENT_SECRET"),
       );
       
       oauth2Client.setCredentials({
@@ -620,8 +626,8 @@ export class GoogleCalendarService {
   ): Promise<void> {
     try {
       const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
+        googleCredential("GOOGLE_CLIENT_ID"),
+        googleCredential("GOOGLE_CLIENT_SECRET"),
       );
       
       oauth2Client.setCredentials({
