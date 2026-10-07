@@ -24,7 +24,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
-import { chromium, type Browser } from "playwright";
+import { chromium, type Browser, type Page } from "playwright";
 import { existsSync, readFileSync } from "node:fs";
 
 const PORT = 5301; // distinct from regressions.test.ts (5299) so both can run
@@ -38,11 +38,12 @@ const SCENARIOS = [
   "celebrationsDialog", "celebrationDetail", "notificationsNative", "notificationsWeb",
   "choreSwipeRemove", "choresLongSubtitle", "rewardsCashoutOnly", "todosDragReorder", "todosAddMulti", "todosAlphaSort", "createTaskSubTodos",
   "historyEntrySpotlight", "eventAllDayFlow", "upgradeDialog",
-  "onboardingRenameProfile", "onboardingYouStepPersist", "parentPinChecklist", "parentPinSet", "parentGateNoPin",
-  "onboardingTour", "onboardingDone", "announcementsFinishSetupRace", "homeCalendarSyncError",
+  "parentPinChecklist", "parentPinSet", "parentGateNoPin",
+  "onboardingTour", "announcementsFinishSetupRace", "homeCalendarSyncError",
   "activityBonusFilter", "eventModalRecurrenceIso", "eventMultiDriver",
   "trophyStripOverflow", "createTaskAssignees", "todosHistoryDrawer",
   "mealModal", "settingsGroupsPin", "monthDots", "screensaver",
+  "setupChatFresh", "setupChatJoiner", "setupChatReplay", "setupChatResume", "setupChatCalendar",
 ];
 
 /** iPhone-ish. Everything the user has reported was visible at this width. */
@@ -121,6 +122,47 @@ for (const scenario of SCENARIOS) {
         const lines = faults.slice(0, 12).map((f) => `  [${f.kind}] ${f.where} — ${f.detail}`);
         const more = faults.length > 12 ? `\n  …and ${faults.length - 12} more` : "";
         assert.fail(`${faults.length} layout fault(s) in "${scenario}":\n${lines.join("\n")}${more}`);
+      }
+    } finally {
+      await page.close();
+    }
+  });
+}
+
+/** States the walk above never reaches, because each needs a tap first. */
+const OPENED: Array<{ name: string; scenario: string; open: (page: Page) => Promise<void> }> = [
+  {
+    name: "Home's Completed Actions with praise and a note",
+    scenario: "homePraise",
+    open: async (page) => {
+      await page.getByTestId("home-earlier-toggle").click();
+      await page.getByTestId("home-earlier-note").waitFor();
+    },
+  },
+  {
+    name: "the health reminders sheet with a reminder",
+    scenario: "healthPushSpotlight",
+    open: async (page) => {
+      await page.getByTestId("button-manage-health-reminders").waitFor({ timeout: 15_000 });
+      await page.waitForFunction(`!document.querySelector('[data-testid="spotlight-hole"]')`, undefined, { timeout: 15_000 });
+      await page.getByTestId("button-manage-health-reminders").click();
+      await page.getByTestId("health-reminder-hr1").waitFor();
+    },
+  },
+];
+
+for (const state of OPENED) {
+  test(`layout @${VIEWPORT.width}px — ${state.name}`, async () => {
+    const page = await browser.newPage({ viewport: VIEWPORT });
+    try {
+      await page.goto(`${BASE_URL}?scenario=${state.scenario}`, { waitUntil: "commit" });
+      await page.waitForTimeout(1800);
+      await state.open(page);
+      await page.waitForTimeout(600);
+      const faults = filterAccepted(await page.evaluate(SWEEP_SRC) as Array<{kind:string;where:string;detail:string}>);
+      if (faults.length) {
+        const lines = faults.slice(0, 12).map((f) => `  [${f.kind}] ${f.where} — ${f.detail}`);
+        assert.fail(`${faults.length} layout fault(s) in ${state.name}:\n${lines.join("\n")}`);
       }
     } finally {
       await page.close();

@@ -34,7 +34,7 @@ import { EventModal } from "@/components/event-modal";
 import type { EventFormData } from "@/components/event-modal";
 
 import { TodayPageSettings, getCardSettings, CardConfig } from "@/components/today-page-settings";
-import type { SkippableStep } from "@/components/onboarding-wizard";
+import type { SkippableStep } from "@/lib/onboardingSteps";
 import { HealthReminderInbox } from "@/components/health-reminder-inbox";
 import { useCelebrationSuggestion } from "@/hooks/use-celebration-suggestion";
 import { HomeDay } from "@/components/home-day";
@@ -61,9 +61,11 @@ interface HomeViewProps {
   onNavigateToParentControls?: () => void;
   onNavigateToRewardSuggestions?: () => void;
   onReplayOnboarding?: (step: SkippableStep) => void;
-  /** Opens the app's Settings modal directly to "Calendar" —
-   * used by the Events card's empty state when no calendar is connected. */
+  /** Opens the app's Settings modal directly to "Calendar" — used by Today's
+   * Schedule when no calendar is connected, or one has stopped syncing. */
   onOpenCalendarSettings?: () => void;
+  /** Opens everyone's health reminders, with this person first. */
+  onManageHealthReminders?: (profileId: string | null) => void;
   /** Counters bumped by a push-notification tap deep-link (family-hub.tsx),
    * each spotlighting the matching card/section on Home. Fired whenever
    * nonzero (mount included, not a "changed since last render" compare —
@@ -76,12 +78,6 @@ interface HomeViewProps {
   onPraiseSpotlightHandled?: () => void;
   notesSpotlightTrigger?: number;
   onNotesSpotlightHandled?: () => void;
-  /** A celebration-reminder push notification's target id, owned by
-   * family-hub.tsx (not this component) so it's captured regardless of
-   * which tab the app happens to be on when the tap arrives — see the long
-   * comment on the equivalent state in family-hub.tsx for why that matters.
-   * Passed straight through to AnnouncementsBanner. */
-  celebrationDeepLinkId?: string | null;
   /** Opens the unified Create/Edit task modal for this chore (used by
    * PersonCard's inspiration-item detail popup) and deletes it (PIN-gated
    * by kind), respectively. */
@@ -133,7 +129,7 @@ const CONTENT_TYPE_COLORS = {
  */
 const completionFirstSeen = new Map<string, number>();
 
-export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectProfile, selectedDate, onNavigateToRewards, onNavigateToBonusChores, onOpenHistory, onOpenActivityEntry, addEventTrigger, onNavigateToEvent, onNavigateToParentControls, onNavigateToRewardSuggestions, onReplayOnboarding, onOpenCalendarSettings, healthReminderSpotlightTrigger, onHealthReminderSpotlightHandled, praiseSpotlightTrigger, onPraiseSpotlightHandled, notesSpotlightTrigger, onNotesSpotlightHandled, celebrationDeepLinkId, onEditChore, onDeleteChore, onAddTodo, onShiftDay }: HomeViewProps) {
+export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectProfile, selectedDate, onNavigateToRewards, onNavigateToBonusChores, onOpenHistory, onOpenActivityEntry, addEventTrigger, onNavigateToEvent, onNavigateToParentControls, onNavigateToRewardSuggestions, onReplayOnboarding, onOpenCalendarSettings, healthReminderSpotlightTrigger, onHealthReminderSpotlightHandled, praiseSpotlightTrigger, onPraiseSpotlightHandled, notesSpotlightTrigger, onNotesSpotlightHandled, onManageHealthReminders, onEditChore, onDeleteChore, onAddTodo, onShiftDay }: HomeViewProps) {
   const { spotlight, spotlightOverlay } = useSpotlight();
 
   const [showAllEvents, setShowAllEvents] = useState(false);
@@ -771,26 +767,32 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
         // server's scheduler — and the device now fires these reminders while
         // that server is asleep. The app reports the dose so the card can
         // appear, but if it is offline, or the report has not landed yet, the
-        // reminder still exists further down the page and landing on it beats
-        // landing nowhere (2026-09-29).
-        const selected = selectedProfiles[0];
-        const fallbackId = selected ? `health-reminders-${selected}` : null;
-        if (!fallbackId || !document.getElementById(fallbackId)) return;
-        robustScrollIntoView(fallbackId, stickyHeaderOffset(), "auto");
-        spotlight(fallbackId);
+        // reminder itself still exists, and landing on it beats landing
+        // nowhere (2026-09-29).
+        onManageHealthReminders?.(selectedProfiles[0] ?? null);
       });
       onHealthReminderSpotlightHandled?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [healthReminderSpotlightTrigger]);
 
+  // Praise and notes live in Completed Actions, which starts closed. Open it,
+  // then light the newest row of that kind once its query has loaded, or the
+  // whole section when there is no such row to find.
+  const [openEarlierKey, setOpenEarlierKey] = useState(0);
+  const revealEarlier = (rowId: string) => {
+    setOpenEarlierKey((k) => k + 1);
+    waitForElement(rowId, 4000).then((found) => {
+      const target = found ? rowId : "home-earlier";
+      if (!document.getElementById(target)) return;
+      robustScrollIntoView(target, stickyHeaderOffset(), "auto");
+      spotlight(target);
+    });
+  };
+
   useEffect(() => {
     if (praiseSpotlightTrigger) {
-      // Same cold-launch wait as the health reminder above: the Announcements
-      // sections render null until their own queries resolve.
-      waitForElement("announcements-praise-section").then((found) => {
-        if (found) spotlight("announcements-praise-section");
-      });
+      revealEarlier("home-earlier-praise");
       onPraiseSpotlightHandled?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -798,11 +800,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
 
   useEffect(() => {
     if (notesSpotlightTrigger) {
-      // Same cold-launch wait as the health reminder above: the Announcements
-      // sections render null until their own queries resolve.
-      waitForElement("announcements-notes-section").then((found) => {
-        if (found) spotlight("announcements-notes-section");
-      });
+      revealEarlier("home-earlier-note");
       onNotesSpotlightHandled?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2314,49 +2312,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
       <HealthReminderInbox
         profiles={profiles}
         selectedProfiles={selectedProfiles}
-        onManage={(profileId) => {
-          // HealthRemindersSection only ever renders inside PersonCard,
-          // which is part of THIS tab's own Tasks card (once a single
-          // profile is selected) — not the Chores tab, which has no such
-          // section at all. The previous `setActiveTab("chores")` here was
-          // a real bug: it sent people to the one screen guaranteed not to
-          // show reminder management, the exact "I don't see any of the
-          // medication reminder stuff" report. Selecting the profile is
-          // enough to reveal it right here; just scroll down to it.
-          onSelectProfile?.(profileId);
-          // Selecting a profile can change the Tasks card's own layout —
-          // from a generic "all family" summary to the full per-person
-          // breakdown — and that re-render doesn't always land within the
-          // very next frame. Measuring/scrolling immediately (the first
-          // time a profile gets newly selected here) could snapshot the
-          // card's stale, pre-selection position, undershooting the real
-          // scroll target and leaving the card's top tucked behind the
-          // header. A double rAF waits for that re-render (and its layout)
-          // to actually settle before anything gets measured. Once the
-          // same profile is already selected, this is a same-position
-          // no-op and the timing doesn't matter either way.
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              // "auto" (instant) rather than "smooth" — a smooth scroll's
-              // duration isn't predictable (it scales with distance), so a
-              // fixed delay before firing the spotlight could easily fire
-              // mid-scroll on a long jump. Instant scroll removes that race
-              // outright instead of tuning the delay against it.
-              // Aim at the health reminders section itself, not the whole
-              // Tasks card. The card holds chores, to-dos, bonus, goals and
-              // inspiration stacked ABOVE this section, so on a phone
-              // spotlighting the card dimmed most of the screen and still
-              // left the reminders half off the bottom — reported
-              // 2026-09-29 as "it spotlights a huge section and only half
-              // the medication reminder was on screen". The card is the
-              // right target only when the section is not there to aim at.
-              const sectionId = `health-reminders-${profileId}`;
-              const target = document.getElementById(sectionId) ? sectionId : "progress-card";
-              robustScrollIntoView(target, stickyHeaderOffset(), "auto");
-              window.setTimeout(() => spotlight(target), 80);
-            });
-          });
-        }}
+        onManage={onManageHealthReminders}
       />
       <HomeDay
         chores={chores}
@@ -2397,6 +2353,17 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           void queryClient.invalidateQueries({ queryKey: ["/api/outlook-calendar/events"] });
           void queryClient.invalidateQueries({ queryKey: ["/api/ical-calendar/events"] });
         }}
+        calendarStatus={{
+          connected: profiles.some((p) => p.googleCalendarConnected || p.outlookCalendarConnected || (p as any).icalConnected),
+          failing: [
+            googleSyncError && "Google",
+            outlookSyncError && "Outlook",
+            icalSyncError && "a subscribed calendar",
+          ].filter((name): name is string => !!name),
+        }}
+        onOpenCalendarSettings={onOpenCalendarSettings}
+        familyProfileId={profiles.find((p) => p.isAllFamilyProfile)?.id ?? null}
+        openEarlierKey={openEarlierKey}
       />
 
       <CustomizePageCard

@@ -27,8 +27,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { ReminderEditor } from "@/components/health-reminders-section";
-import { RecentShoutoutsCard } from "@/components/recent-shoutouts-card";
+import { HealthRemindersSheet } from "@/components/health-reminders-section";
+import { RecentShoutoutsCard, recentShoutoutsQuery, type Shoutout } from "@/components/recent-shoutouts-card";
+import { CelebrationByIdDialog } from "@/components/celebrations-view";
+import { praiseForHome } from "@/lib/homeDay";
 import { Settings, Home, Calendar, ListTodo, Gift, Trophy, ChevronLeft, ChevronRight, LogOut, UtensilsCrossed, Sparkles, ArrowLeft, Star, Plus, ListChecks, StickyNote, Camera, CalendarPlus, EyeOff, ScrollText, Maximize2, Minimize2, CheckSquare, Smile, MessageCircle } from "lucide-react";
 import { format, addDays, subDays, isToday, differenceInWeeks, addWeeks, subWeeks, startOfWeek, isSameDay } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
@@ -40,7 +42,7 @@ import { AddRemoveStarsModal } from "@/components/add-remove-stars-modal";
 import { objectUrl } from "@/lib/apiBase";
 import { robustScrollIntoView, robustScrollToTop, stickyHeaderOffset } from "@/lib/scroll";
 import { useSpotlight } from "@/lib/spotlight";
-import type { SkippableStep } from "@/components/onboarding-wizard";
+import type { SkippableStep } from "@/lib/onboardingSteps";
 import { BehaviourTimerWidget } from "@/components/behaviour-timer-widget";
 import { EventReminderWatcher } from "@/components/event-reminder-watcher";
 import { ConfirmDialogHost } from "@/lib/confirmDialog";
@@ -66,9 +68,9 @@ const TrophyCaseView = lazyScreen("trophies", () => import("@/components/trophy-
 const BonusChoresView = lazyScreen("bonus-chores", () => import("@/components/bonus-chores-view").then((m) => m.BonusChoresView));
 const BehaviourBoardView = lazyScreen("behaviour", () => import("@/components/behaviour-board-view").then((m) => m.BehaviourBoardView));
 const HistoryView = lazyScreen("history", () => import("@/components/history-view").then((m) => m.HistoryView));
-const OnboardingWizard = lazyScreen("onboarding", () => import("@/components/onboarding-wizard").then((m) => m.OnboardingWizard));
+const SetupChat = lazyScreen("onboarding", () => import("@/components/setup-chat/setup-chat").then((m) => m.SetupChat));
 // Preloaded in this order, most often opened first.
-const SCREENS = [Calendar3View, ChoresView, TodosView, MealsView, ChatView, SettingsModal, RewardsView, TrophyCaseView, BonusChoresView, BehaviourBoardView, HistoryView, OnboardingWizard];
+const SCREENS = [Calendar3View, ChoresView, TodosView, MealsView, ChatView, SettingsModal, RewardsView, TrophyCaseView, BonusChoresView, BehaviourBoardView, HistoryView, SetupChat];
 // Holds a screen's place while its code loads, so the page doesn't collapse.
 const screenLoading = <div className="min-h-[60vh]" aria-busy="true" data-testid="screen-loading" />;
 const cardLoading = <div className="min-h-[8rem]" aria-busy="true" data-testid="screen-loading" />;
@@ -479,21 +481,17 @@ export default function FamilyHub() {
   }, []);
 
   // Celebration-reminder push notifications — the target celebration id is
-  // owned HERE (the top-level page), not inside HomeView, and specifically
-  // routes to the Home tab before setting it. This used to live entirely
-  // inside HomeView: its own state + its own `onCelebrationDeepLink`
-  // subscription, both of which only exist while HomeView is actually
-  // mounted. Tapping the notification while the app was foregrounded on any
-  // OTHER tab (or backgrounded and last left on another tab) meant nothing
-  // was listening for the event at all — it fired into the void and the
-  // celebration silently never opened, with no error to notice. Lifting
-  // this to family-hub.tsx (always mounted regardless of active tab, same
-  // reasoning as handleTabDeepLink just above) and explicitly navigating to
-  // Home closes that gap — this is now correct no matter which tab the app
-  // happened to be showing when the notification was tapped.
+  // owned HERE (the top-level page), and its dialog renders here too, over
+  // whatever tab is showing. This used to live entirely inside HomeView: its
+  // own state + its own `onCelebrationDeepLink` subscription, both of which
+  // only exist while HomeView is actually mounted. Tapping the notification
+  // while the app was foregrounded on any OTHER tab (or backgrounded and last
+  // left on another tab) meant nothing was listening for the event at all —
+  // it fired into the void and the celebration silently never opened, with
+  // no error to notice. family-hub.tsx is always mounted regardless of active
+  // tab, same reasoning as handleTabDeepLink just above.
   const [pendingCelebrationId, setPendingCelebrationId] = useState<string | null>(null);
   const handleCelebrationDeepLink = (celebrationId: string) => {
-    navigateTo("home");
     setPendingCelebrationId(celebrationId);
   };
   useEffect(() => {
@@ -758,8 +756,7 @@ export default function FamilyHub() {
   const { toast } = useToast();
   const [noteTrigger, setNoteTrigger] = useState(0);
   const [shoutoutTrigger, setShoutoutTrigger] = useState(0);
-  const [healthReminderPickerOpen, setHealthReminderPickerOpen] = useState(false);
-  const [healthReminderProfileId, setHealthReminderProfileId] = useState<string | null>(null);
+  const [remindersFor, setRemindersFor] = useState<{ firstId: string | null } | null>(null);
   const [showSnapFlyer, setShowSnapFlyer] = useState(false);
   const [showAddRemoveStars, setShowAddRemoveStars] = useState(false);
 
@@ -830,11 +827,14 @@ export default function FamilyHub() {
   const { data: rewardSettingsCfg } = useQuery<RewardSettings>({ queryKey: ["/api/reward-settings"] });
   const showRewardCatalog = (rewardSettingsCfg?.redemptionMode ?? "both") !== "cashout_only";
 
-  const { data: unseenShoutouts } = useQuery<{ count: number }>({
-    queryKey: ["/api/shoutouts/unseen-count"],
-    refetchInterval: LIVE_REFRESH_MS,
-  });
-  const unseenShoutoutCount = unseenShoutouts?.count ?? 0;
+  // Counted from the list Home's Completed Actions shows, by the same rule, so
+  // the badge only ever points at praise that following it will reveal.
+  const { data: recentPraise = [] } = useQuery<Shoutout[]>(recentShoutoutsQuery);
+  const familyIds = profiles.filter((p) => !p.isAllFamilyProfile).map((p) => p.id);
+  const everyoneOnScreen = selectedProfiles.length === 0 ||
+    (familyIds.length > 0 && familyIds.every((id) => selectedProfiles.includes(id)));
+  const unseenShoutoutCount = praiseForHome(recentPraise, selectedProfiles, everyoneOnScreen, new Date())
+    .filter((praise) => praise.unseen).length;
 
   const { data: customGroups = [] } = useQuery<CustomProfileGroup[]>({
     queryKey: ["/api/custom-profile-groups"],
@@ -1071,22 +1071,12 @@ export default function FamilyHub() {
       </Dialog>
     );
     // ConfirmDialogHost is mounted here too, not just in the main render
-    // below — onboarding's "no photo yet?" confirmation (YouStep) uses the
-    // shared confirmDialog() helper, which needs a mounted host to show its
-    // styled dialog instead of falling back to a native window.confirm.
+    // below, so anything setup opens through the shared confirmDialog()
+    // helper gets the styled dialog instead of a native window.confirm.
     const onboardingLoading = <div className="hearth-theme opaque-vars min-h-screen bg-background" />;
-    if (startedWithNoProfilesRef.current) {
-      return <>
-        <Suspense fallback={onboardingLoading}>
-          <OnboardingWizard onSignOut={() => setSignOutStep(1)} />
-        </Suspense>
-        {onboardingSignOutDialog}
-        <ConfirmDialogHost />
-      </>;
-    }
     return <>
       <Suspense fallback={onboardingLoading}>
-        <OnboardingWizard onSignOut={() => setSignOutStep(1)} forJoiner />
+        <SetupChat onSignOut={() => setSignOutStep(1)} forJoiner={!startedWithNoProfilesRef.current} />
       </Suspense>
       {onboardingSignOutDialog}
       <ConfirmDialogHost />
@@ -1511,16 +1501,16 @@ export default function FamilyHub() {
           weather bar without the header's height being counted twice as dead
           space at the bottom. Calendar opts out: its card sets its own fixed
           `h-[calc(100svh-172px)]` and manages its own internal scroll. */}
-      {/* pb-24 reserves room for the floating "+" button, which is
-          fixed-position and was landing on top of whatever card control sat in
-          that corner — including tappable ones, so a tap on the Stars card's
-          "Redeem" or the Trophies count opened the + menu instead. 96px is the
-          measured minimum that clears it: the button sits 24px off the bottom
-          (`calc(1.5rem + safe-area)`) and is 56px tall (`h-14`), so its top
-          edge is 80px up, leaving 16px of breathing room. This is the ONLY
-          bottom padding on a tab's content — Home's own wrapper and two of
-          this file's tab wrappers each carried a further `pb-20`, stacking to
-          176px of blank space below the last card. */}
+      {/* The bottom padding reserves room for the floating "+" button, which
+          is fixed-position and was landing on top of whatever card control sat
+          in that corner — including tappable ones, so a tap on the Stars card's
+          "Redeem" or the Trophies count opened the + menu instead. The button
+          sits 100px off the bottom, above the tab bar (`calc(6.25rem +
+          safe-area)`), and is 56px tall (`h-14`), so its top edge is 156px up;
+          10.5rem (168px) leaves 12px of breathing room. This is the ONLY bottom
+          padding on a tab's content — Home's own wrapper and two of this file's
+          tab wrappers each once carried a further `pb-20`, stacking blank space
+          below the last card. */}
       {/* max-w-screen-2xl + mx-auto: `max-w-full` meant no cap at all, so at
           desktop width every card stretched edge to edge and related controls
           ended up ~1000px apart (Snooze/Done a full screen from the reminder
@@ -1576,7 +1566,7 @@ export default function FamilyHub() {
             onPraiseSpotlightHandled={() => setPraiseSpotlightTrigger(0)}
             notesSpotlightTrigger={notesSpotlightTrigger}
             onNotesSpotlightHandled={() => setNotesSpotlightTrigger(0)}
-            celebrationDeepLinkId={pendingCelebrationId}
+            onManageHealthReminders={(profileId) => setRemindersFor({ firstId: profileId })}
             onAddTodo={() => openCreateTask("todo")}
             onShiftDay={(by) => setSelectedDate(addDays(selectedDate, by))}
           />
@@ -1974,17 +1964,17 @@ export default function FamilyHub() {
         </Suspense>
       )}
 
-      {/* Replaying the onboarding walkthrough on top of the app */}
+      {/* Replaying setup on top of the app. SetupChat is its own z-50 full-screen
+          layer; wrapping it in a higher one would bury the photo cropper and
+          toasts it opens. */}
       {replayOnboardingStep && (
-        <div className="fixed inset-0 z-[2000] overflow-y-auto bg-background">
-          <Suspense fallback={null}>
-            <OnboardingWizard
-              onSignOut={() => setSignOutStep(1)}
-              initialStep={replayOnboardingStep}
-              onClose={() => setReplayOnboardingStep(null)}
-            />
-          </Suspense>
-        </div>
+        <Suspense fallback={null}>
+          <SetupChat
+            onSignOut={() => setSignOutStep(1)}
+            initialStep={replayOnboardingStep}
+            onClose={() => setReplayOnboardingStep(null)}
+          />
+        </Suspense>
       )}
 
       {/* Privacy Screen */}
@@ -2032,7 +2022,12 @@ export default function FamilyHub() {
             <button
               key={tab.id}
               type="button"
-              onClick={() => navigateTo(tab.id as TabType)}
+              onClick={() => {
+                if (tab.id === "home" && unseenShoutoutCount > 0 && activeTab !== "home") {
+                  setPraiseSpotlightTrigger((n) => n + 1);
+                }
+                navigateTo(tab.id as TabType);
+              }}
               data-active={selected}
               data-testid={tab.testId}
               aria-current={selected ? "page" : undefined}
@@ -2042,7 +2037,7 @@ export default function FamilyHub() {
               <span className="relative">
                 <TabIcon className="shrink-0" style={{ width: 22, height: 22 }} />
                 {tab.id === "home" && unseenShoutoutCount > 0 && activeTab !== "home" && (
-                  <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold leading-none text-destructive-foreground">
+                  <span data-testid="home-tab-unread" className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold leading-none text-destructive-foreground">
                     {unseenShoutoutCount > 9 ? "9+" : unseenShoutoutCount}
                   </span>
                 )}
@@ -2099,7 +2094,7 @@ export default function FamilyHub() {
               <Camera className="w-4 h-4 mr-2 text-muted-foreground" />
               Snap a flyer
             </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer" onClick={() => setHealthReminderPickerOpen(true)} data-testid="menu-add-health-reminder">
+            <DropdownMenuItem className="cursor-pointer" onClick={() => setRemindersFor({ firstId: selectedProfiles.length === 1 ? selectedProfiles[0] : null })} data-testid="menu-add-health-reminder">
               <span className="mr-2">💊</span>
               Health reminder
             </DropdownMenuItem>
@@ -2190,57 +2185,20 @@ export default function FamilyHub() {
 
       <AddAnythingDialog open={addAnythingOpen} onOpenChange={setAddAnythingOpen} />
 
-      {/* ── Health reminder: profile picker ── */}
-      <Dialog open={healthReminderPickerOpen} onOpenChange={(o) => { if (!o) setHealthReminderPickerOpen(false); }}>
-        <DialogContent
-          className="max-w-xs"
-          // Radix focuses the first button on open, which drew a focus ring
-          // around the first profile and read as "already selected". Same
-          // guard the task-kind picker and both PIN dialogs already carry.
-          onOpenAutoFocus={(e) => e.preventDefault()}
-        >
-          <DialogHeader>
-            <DialogTitle>Who is this reminder for?</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2 py-1">
-            {profiles.filter(p => !p.isAllFamilyProfile).length === 0 && (
-              <p className="text-sm text-muted-foreground py-2">
-                Add someone in Settings → People first, then you can set a reminder for them.
-              </p>
-            )}
-            {profiles.filter(p => !p.isAllFamilyProfile).map(p => (
-              <button
-                key={p.id}
-                type="button"
-                // hover scoped to devices that actually hover: a plain
-                // hover:bg-accent leaves the last-tapped row looking selected
-                // on touch. Same guard the task-kind cards already use.
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border [@media(hover:hover)]:hover:bg-accent transition-colors text-left"
-                onClick={() => { setHealthReminderProfileId(p.id); setHealthReminderPickerOpen(false); }}
-              >
-                <span className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold shrink-0" style={{ backgroundColor: p.color }}>
-                  {p.photoUrl ? <img src={objectUrl(p.photoUrl)} alt={p.name} className="w-full h-full rounded-full object-cover" /> : p.initials}
-                </span>
-                <span className="font-medium text-sm">{p.name}</span>
-              </button>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <HealthRemindersSheet
+        open={!!remindersFor}
+        onOpenChange={(open) => { if (!open) setRemindersFor(null); }}
+        profiles={profiles}
+        firstId={remindersFor?.firstId}
+      />
 
-      {/* ── Health reminder: editor ── */}
-      {healthReminderProfileId && (() => {
-        const profile = profiles.find(p => p.id === healthReminderProfileId);
-        if (!profile) return null;
-        return (
-          <ReminderEditor
-            profile={profile}
-            allProfiles={profiles}
-            existing={null}
-            onClose={() => setHealthReminderProfileId(null)}
-          />
-        );
-      })()}
+      {pendingCelebrationId && (
+        <CelebrationByIdDialog
+          key={pendingCelebrationId}
+          id={pendingCelebrationId}
+          onClose={() => setPendingCelebrationId(null)}
+        />
+      )}
 
       {/* ── Snap a Flyer (global — works from any tab) ── */}
       <FlyerSnapSheet

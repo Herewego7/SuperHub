@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, LIVE_REFRESH_MS } from "@/lib/queryClient";
 import type { Profile, CustomProfileGroup } from "@workspace/shared-types";
 
-interface Shoutout {
+export interface Shoutout {
   id: string;
   fromProfileId: string;
   toProfileId: string;
@@ -26,7 +26,14 @@ interface Shoutout {
   seenAt?: string | null;
 }
 
-interface DailyContentItem {
+/** The praise list this card, Home and the Home tab's badge all read. */
+export const recentShoutoutsQuery = {
+  queryKey: ["/api/shoutouts", { limit: 10 }],
+  queryFn: async (): Promise<Shoutout[]> => (await apiRequest("GET", "/api/shoutouts?limit=10")).json(),
+  refetchInterval: LIVE_REFRESH_MS,
+};
+
+export interface DailyContentItem {
   id: string;
   type: string;
   title: string;
@@ -36,7 +43,7 @@ interface DailyContentItem {
   createdAt: string | null;
 }
 
-interface DailyContentAssignment {
+export interface DailyContentAssignment {
   id: string;
   contentId: string;
   profileId: string;
@@ -232,14 +239,7 @@ export function RecentShoutoutsCard({ profiles, triggerNote = 0, triggerShoutout
   };
 
   // ── Queries ───────────────────────────────────────────────────────────────────
-  const { data: shoutouts = [], isLoading: shoutoutsLoading } = useQuery<Shoutout[]>({
-    queryKey: ["/api/shoutouts", { limit: 10 }],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/shoutouts?limit=10");
-      return res.json();
-    },
-    refetchInterval: LIVE_REFRESH_MS,
-  });
+  const { data: shoutouts = [], isLoading: shoutoutsLoading } = useQuery<Shoutout[]>(recentShoutoutsQuery);
 
   const { data: allDailyContent = [], isLoading: contentLoading } = useQuery<DailyContentItem[]>({
     queryKey: ["/api/daily-content"],
@@ -309,6 +309,9 @@ export function RecentShoutoutsCard({ profiles, triggerNote = 0, triggerShoutout
   const markedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    // Hidden, the card has shown nobody anything. Home's Completed Actions
+    // marks praise seen once it is on screen.
+    if (dialogsOnly) return;
     const shoutoutsInFeed = feedItems
       .filter((f): f is ShoutItem => f.kind === "shoutout")
       .map(f => f.shoutout);
@@ -321,9 +324,9 @@ export function RecentShoutoutsCard({ profiles, triggerNote = 0, triggerShoutout
         apiRequest("POST", `/api/shoutouts/${s.id}/seen`, {}).catch(() => null),
       ),
     ).then(() => {
-      queryClient.invalidateQueries({ queryKey: ["/api/shoutouts/unseen-count"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shoutouts"] });
     });
-  }, [feedItems]);
+  }, [feedItems, dialogsOnly]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
   const sendShoutoutMutation = useMutation({
@@ -347,7 +350,6 @@ export function RecentShoutoutsCard({ profiles, triggerNote = 0, triggerShoutout
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/shoutouts"], exact: false });
-      queryClient.invalidateQueries({ queryKey: ["/api/shoutouts/unseen-count"] });
       queryClient.invalidateQueries({ queryKey: ["/api/activity-log"] });
       toast({ title: "Praise sent!", description: `${emoji} on its way.` });
       setShoutoutMsg("");

@@ -1,7 +1,7 @@
 # App tour — full visual walkthrough
 
 `app-tour.mjs` drives the **real app** with Playwright: signs up a brand-new
-account, walks the entire onboarding wizard, then visits every nav tab, every
+account, walks the whole setup chat, then visits every nav tab, every
 Settings section, the global "+" quick-create menu and its dialogs, and a few
 edge-case states (an empty-field validation error, empty-list states, a long
 text input). It is not a mock — it exercises the actual signup/session flow,

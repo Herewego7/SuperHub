@@ -1,5 +1,5 @@
-// Full-app visual tour: signs up a brand-new account, walks the entire
-// onboarding wizard, then visits every nav tab, the Settings modal (every
+// Full-app visual tour: signs up a brand-new account, walks the whole
+// setup chat, then visits every nav tab, the Settings modal (every
 // section), the global "+" quick-create menu and its dialogs, and a few
 // edge-case states (empty lists, a validation error, a long text input).
 // Screenshots go to e2e/screenshots/ (gitignored) and a plain-text inventory
@@ -68,56 +68,39 @@ try {
   await page.getByTestId("input-password").fill("TourPass123!");
   await page.getByTestId("button-submit-auth").click();
   await page.waitForTimeout(1200);
-  await shot("onboarding_welcome", "Onboarding step 1 — Welcome");
+  // ── Setup chat: each answer is a tap on a scripted option ──
+  const chatIdle = () => page.locator('[data-testid="setup-chat"]:not([data-busy])').waitFor();
+  const chatTap = async (id) => {
+    await page.getByTestId(`setup-option-${id}`).first().click();
+    await chatIdle();
+  };
+  await page.getByTestId("setup-chat").waitFor();
+  await shot("setup_welcome", "Setup chat — Welcome");
 
-  // ── Onboarding: Create my family -> Add family members ──
-  await page.getByText("Create my family").click();
-  await shot("onboarding_add_members", "Step 2 — Add family members (name prefilled from signup)");
+  await chatTap("new");
+  await shot("setup_you", "You — the name from signup is offered");
+  await chatTap("yes");
+  await shot("setup_you_photo", "You — photo (tap-only picker)");
+  await chatTap("skip");
+  await shot("setup_you_email", "You — the sign-in email is offered");
+  await chatTap("account");
+  await shot("setup_family", "Family — names in one message");
+  await chatTap("solo");
+  await shot("setup_location", "Location");
+  await chatTap("skip");
+  await shot("setup_calendars", "Calendars — Settings' own Calendar Connections list");
+  await chatTap("skip");
+  await shot("setup_rewards", "Rewards");
+  await chatTap("skip");
+  await shot("setup_invite", "Invite");
+  await chatTap("skip");
+  await shot("setup_done", "Done — summary with Change links");
 
-  await page.getByText("Add Person").click();
-  await page.waitForTimeout(600);
-  await shot("onboarding_add_members_after_add", "after adding the first person");
-
-  await page.getByText("Continue with 1 member").click();
-  await page.waitForTimeout(500);
-  await shot("onboarding_which_one_is_you", "Step 3 — Which one is you?");
-
-  // The only profile is pre-selected; Continue with no email/photo entered.
-  // NOTE: this reproducibly 500s server-side ("No values to set" — an empty
-  // PATCH body) and surfaces a "Couldn't save profile" error toast, but the
-  // wizard proceeds anyway. See e2e/README.md's Findings section.
-  await page.getByRole("button", { name: "Continue →", exact: true }).click();
-  await page.waitForTimeout(700);
-  await shot("onboarding_you_continue_result", "after Continue (see README: known 'Couldn't save profile' toast)");
-
-  // Each "Skip" click leaves the step it was clicked ON, landing on the next
-  // one — so this first click leaves "which one is you" and lands on
-  // Location (its own onboarding-status PATCH names the step you just left,
-  // e.g. {"step":"profile","action":"skip"} lands you on Location).
-  await page.getByRole("button", { name: "Skip", exact: true }).click();
-  await page.waitForTimeout(800);
-  await shot("onboarding_location", "Step 4 — Your location");
-
-  await page.getByRole("button", { name: "Skip", exact: true }).click(); // leaves Location, lands on Rewards
-  await page.waitForTimeout(800);
-  await shot("onboarding_rewards", "Step 5 — Rewards & Approvals");
-
-  await page.getByRole("button", { name: "Skip", exact: true }).click(); // leaves Rewards, lands on Invite
-  await page.waitForTimeout(800);
-
-  // Wait for the heading rather than a fixed delay, since a slow request can
-  // otherwise still be in-flight when the next click fires.
-  await page.getByRole("heading", { name: "Invite the rest of your family" }).waitFor({ timeout: 5000 });
-  await page.getByRole("button", { name: "I'll do this later", exact: true }).click();
-  await page.waitForTimeout(700);
-  await shot("onboarding_invite", "Step 6 — Invite the rest of your family");
-
-  await shot("onboarding_tour", "Step 7 — Quick Tour");
+  await chatTap("tour");
+  await shot("setup_tour", "Quick Tour inside the chat");
   await page.getByRole("button", { name: "Skip tour", exact: true }).click();
-  await page.waitForTimeout(500);
-  await shot("onboarding_done", "Final step — You're all set");
-
-  await page.getByRole("button", { name: "Get Started", exact: true }).click();
+  await chatIdle();
+  await chatTap("open");
   await page.waitForTimeout(1200);
   await shot("main_app_home", "Landed in the main app — Home tab");
 

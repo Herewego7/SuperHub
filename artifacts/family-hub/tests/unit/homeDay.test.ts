@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, forecastFor, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonEvents, horizonMail, horizonWithoutChecked, mailDate, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, newsletterIssues, openTodos, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, forecastFor, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonEvents, horizonMail, horizonWithoutChecked, mailDate, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, notesForHome, praiseForHome, newsletterIssues, openTodos, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -380,4 +380,50 @@ test("snooze tonight is 8 PM, and the completed list covers seven days", () => {
   ], today);
   assert.deepEqual(done.map((row) => row.id), ["new"]);
   assert.deepEqual(forecastFor([{ date: "2026-10-02", high: 68, low: 54, condition: "clear" }], today), { high: 68, low: 54, condition: "clear" });
+});
+
+test("praise on Home is the week's praise to or from the person, and only what they received is new", () => {
+  const praise = [
+    { id: "to-ava", fromProfileId: "dad", toProfileId: "ava", emoji: "👏", message: "Great job", createdAt: today, seenAt: null },
+    { id: "from-ava", fromProfileId: "ava", toProfileId: "liam", emoji: "⭐", message: "Nice catch", createdAt: new Date(2026, 9, 1), seenAt: null },
+    { id: "seen", fromProfileId: "dad", toProfileId: "ava", emoji: "🎉", message: "Again", createdAt: new Date(2026, 8, 30), seenAt: today },
+    { id: "old", fromProfileId: "dad", toProfileId: "ava", emoji: "👏", message: "Last month", createdAt: new Date(2026, 8, 1), seenAt: null },
+    { id: "others", fromProfileId: "dad", toProfileId: "liam", emoji: "👏", message: "Not Ava's", createdAt: today, seenAt: null },
+  ];
+  const ava = praiseForHome(praise, ["ava"], false, today);
+  assert.deepEqual(ava.map((p) => p.id), ["to-ava", "from-ava", "seen"]);
+  assert.deepEqual(ava.filter((p) => p.unseen).map((p) => p.id), ["to-ava"]);
+  const everyone = praiseForHome(praise, [], true, today);
+  assert.deepEqual(everyone.filter((p) => p.unseen).map((p) => p.id), ["to-ava", "others", "from-ava"]);
+});
+
+test("notes on Home are the week's notes for or by the person, and a family note is for everyone", () => {
+  const note = (id: string, reference: string | null, createdAt: Date, extra: Partial<{ type: string; isActive: boolean }> = {}) => ({
+    id, type: "note", title: "Note", content: id, reference, isActive: true, createdAt, ...extra,
+  });
+  const notes = [
+    note("for-dad", "mom", today),
+    note("by-dad", "dad", today),
+    note("family", "mom", today),
+    note("unassigned", "mom", today),
+    note("for-ava", "mom", today),
+    note("old", "mom", new Date(2026, 8, 1)),
+    note("verse", "mom", today, { type: "bible_verse" }),
+    note("retired", "mom", today, { isActive: false }),
+  ];
+  const assignments = [
+    { contentId: "for-dad", profileId: "dad" },
+    { contentId: "by-dad", profileId: "ava" },
+    { contentId: "family", profileId: "all" },
+    { contentId: "for-ava", profileId: "ava" },
+    { contentId: "old", profileId: "dad" },
+  ];
+  assert.deepEqual(
+    notesForHome(notes, assignments, ["dad"], false, "all", today).map((n) => n.id).sort(),
+    ["by-dad", "family", "for-dad", "unassigned"],
+  );
+  assert.deepEqual(
+    notesForHome(notes, assignments, [], true, "all", today).map((n) => n.id).sort(),
+    ["by-dad", "family", "for-ava", "for-dad", "unassigned"],
+  );
 });

@@ -73,6 +73,16 @@ async function openScenarioTouch(
   return page;
 }
 
+/** Like openScenario, but the app opens on `tab`, the way it does on a device
+ *  whose saved default tab is that one, with no tab switch involved. */
+async function openScenarioOnTab(scenario: string, tab: string): Promise<Page> {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(`localStorage.setItem("familyHub_defaultTab", ${JSON.stringify(tab)})`);
+  await page.goto(`${BASE_URL}?scenario=${scenario}`);
+  await page.waitForTimeout(1200);
+  return page;
+}
+
 // ---------------------------------------------------------------------------
 // Regression: celebration push notifications silently did nothing when
 // tapped while the app was on any tab other than Home (2026-08-22).
@@ -89,14 +99,17 @@ test("celebration push deep link opens the exact celebration from any tab", asyn
       const mod = await import("/src/lib/pushDeepLink.ts");
       mod.setPendingCelebrationDeepLink("cel-1");
     });
-    await page.waitForTimeout(800);
+
+    // The celebration's own card opens over whatever tab is showing; Home no
+    // longer has a celebrations list to open it from.
+    const dialog = page.getByRole("dialog");
+    await dialog.waitFor({ state: "visible", timeout: 5000 });
+    const dialogText = (await dialog.textContent()) ?? "";
+    assert.ok(dialogText.includes("Ava"), `celebration dialog should show the profile's name, got: ${dialogText}`);
+    assert.ok(dialogText.includes("Turns 11"), `celebration dialog should show the correct milestone, got: ${dialogText}`);
 
     const tabAfter = await page.evaluate(() => document.querySelector('[data-active="true"]')?.textContent);
-    assert.equal(tabAfter, "Home");
-
-    const bodyText = await page.evaluate(() => document.body.innerText);
-    assert.ok(bodyText.includes("Ava"), "celebration dialog should show the profile's name");
-    assert.ok(bodyText.includes("Turns 11"), "celebration dialog should show the correct milestone");
+    assert.equal(tabAfter, "Chores", "the push should not move the app off the tab it was on");
   } finally {
     await page.close();
   }
@@ -720,7 +733,9 @@ test("native Devices row is collapsed by default and expands on click", async ()
 // correct (2026-08-24).
 // ---------------------------------------------------------------------------
 test("date-nav Today button is correctly centered on its very first appearance, with no tab switch", async () => {
-  const page = await openScenario("familyHub");
+  // Home has no header date arrows since SuperHub's plan brought its own
+  // (2026-10-02), so this opens on Chores, a tab that has them.
+  const page = await openScenarioOnTab("familyHub", "chores");
   try {
     // On today's date the button doesn't render at all (see the next test)
     // — navigate away once to make it appear, WITHOUT ever touching a tab.
@@ -972,122 +987,239 @@ test("Rewards: Cash Out Stars spans the full row width, matching Cash-Out Approv
   }
 });
 
-test("Onboarding: a family member's name can be edited right on the 'Add family members' step", async () => {
-  // Real bug (2026-08-27): once added, a profile's name in onboarding's
-  // "Add family members" step was plain read-only text — no way to fix a
-  // typo/placeholder name until the entire walkthrough finished and
-  // Settings → People was reached. Fixed with an inline pencil-edit that
-  // PATCHes the real, already-created profile row directly.
-  const page = await openScenario("onboardingRenameProfile");
+// ---------------------------------------------------------------------------
+// Setup chat (2026-10): first-run setup is a scripted chat. These replace the
+// old wizard's tests, and drive it the way a person does: tapping answers and
+// typing short replies. The setupChat* scenarios share a fake backend that
+// records every write on window.__setupChat.sent.
+// ---------------------------------------------------------------------------
+type SentRequest = [method: string, path: string, body: unknown];
+
+async function chatIdle(page: Page): Promise<void> {
+  await page.locator('[data-testid="setup-chat"]:not([data-busy])').waitFor({ timeout: 8000 });
+}
+
+async function chatTap(page: Page, id: string): Promise<void> {
+  await page.getByTestId(`setup-option-${id}`).first().click();
+  await chatIdle(page);
+}
+
+async function chatSay(page: Page, text: string): Promise<void> {
+  const input = page.getByTestId("setup-chat-input");
+  await input.fill(text);
+  await input.press("Enter");
+  await chatIdle(page);
+}
+
+async function chatQuestion(page: Page, question: string): Promise<void> {
+  await page.locator(`[data-testid="setup-chat"][data-question="${question}"]`).waitFor({ timeout: 8000 });
+}
+
+async function chatSent(page: Page): Promise<SentRequest[]> {
+  return (await page.evaluate("window.__setupChat.sent")) as SentRequest[];
+}
+
+/** New family, up to the question that takes everyone's names. */
+async function chatToFamilyNames(page: Page): Promise<void> {
+  await chatSay(page, "1"); // Start a new family
+  await chatTap(page, "yes"); // the name on the account
+  await chatTap(page, "skip"); // no photo yet
+  await chatTap(page, "account"); // the sign-in email
+  await chatQuestion(page, "family-names");
+}
+
+test("Setup chat: a family member's name can be fixed right after adding them", async () => {
+  // Carries over the 2026-08-27 wizard fix: a typo in a new person's name is
+  // fixed during setup, not only later in Settings. "Fix a name" PATCHes the
+  // profile that was already created, with initials to match.
+  const page = await openScenario("setupChatFresh");
   try {
-    // Welcome -> "Create my family" -> the "setup" (Add family members) step.
-    await page.getByText("Create my family").click();
-    await page.getByPlaceholder("e.g. Mom, Dad, Alex…").fill("Ava");
-    await page.getByRole("button", { name: /add person/i }).click();
+    await chatToFamilyNames(page);
+    await chatSay(page, "Ava");
+    await chatTap(page, "child");
+    await chatQuestion(page, "family-review");
 
-    const editBtn = page.locator('[data-testid="onboarding-edit-profile-new-profile-1"]');
-    await editBtn.waitFor({ state: "visible" });
-    await editBtn.click();
+    await chatTap(page, "fix");
+    await chatTap(page, "p:p2");
+    await chatSay(page, "Avery");
+    await chatQuestion(page, "family-review");
 
-    const input = page.locator('[data-testid="onboarding-rename-input-new-profile-1"]');
-    await input.waitFor({ state: "visible" });
-    await input.fill("Avery");
-    await page.locator('[data-testid="onboarding-rename-save-new-profile-1"]').click();
-
-    // The saved name should now show read-only again, edit form gone.
-    await page.getByText("Avery", { exact: true }).waitFor({ state: "visible" });
-    await input.waitFor({ state: "detached" }).catch(() => {});
-
-    const state = await page.evaluate(() => (window as any).__onboardingRenameState());
-    assert.equal(state.created?.name, "Ava", "the profile should have been created with the originally-typed name");
-    assert.equal(state.patchedName, "Avery", "the rename should PATCH the real profile with the new name");
+    const roster = (await page.getByTestId("setup-card-roster").last().textContent()) ?? "";
+    assert.match(roster, /Avery/, "the roster should show the fixed name");
+    const sent = await chatSent(page);
+    assert.deepEqual(
+      sent.filter(([, path]) => path.startsWith("/api/profiles")),
+      [
+        ["POST", "/api/profiles", { name: "Chad", color: "#5E8FAD", initials: "C", role: "adult" }],
+        ["PATCH", "/api/profiles/p1", { email: "chad@example.com" }],
+        ["POST", "/api/profiles", { name: "Ava", color: "#E07B6A", initials: "A", role: "child" }],
+        ["PATCH", "/api/profiles/p2", { name: "Avery", initials: "A" }],
+      ],
+    );
   } finally {
     await page.close();
   }
 });
 
-test("Onboarding 'Which one is you?': email is prefilled after Continue then Back", async () => {
-  // Real bug (2026-08-27): this step's email/photo local state started blank
-  // on every mount — since it conditionally unmounts on every step change,
-  // pressing Back after Continue showed an empty form even though the
-  // earlier PATCH had already saved it. Fixed by fetching the real profile
-  // fresh and prefilling from it.
-  const page = await openScenario("onboardingYouStepPersist");
+test("Setup chat: the sign-in email is offered, so the profile email takes one tap", async () => {
+  // Replaces the wizard's "email is prefilled after Continue then Back"
+  // (2026-08-27): nobody should have to retype an email the app already has.
+  const page = await openScenario("setupChatFresh");
   try {
-    await page.getByText("Create my family").click();
-    await page.getByPlaceholder("e.g. Mom, Dad, Alex…").fill("Mike");
-    await page.getByRole("button", { name: /add person/i }).click();
-    await page.getByRole("button", { name: /Continue with 1 member/ }).click();
+    await chatSay(page, "1");
+    await chatTap(page, "yes");
+    await chatTap(page, "skip");
+    await chatQuestion(page, "you-email");
 
-    await page.locator("#onboarding-email").fill("mike@example.com");
-    await page.getByRole("button", { name: /Continue →/ }).click();
-    // No photo was added, so the new confirmation dialog should appear.
-    await page.getByText("Add a photo?").waitFor({ state: "visible" });
-    await page.getByRole("button", { name: /Continue without a photo/ }).click();
-
-    // Now on the Location step — go back to "Which one is you?".
-    await page.getByText("Your location").waitFor({ state: "visible" });
-    await page.locator("button:has-text('Back')").first().click();
-    await page.getByText("Which one is you?").first().waitFor({ state: "visible" });
-
-    const emailValue = await page.locator("#onboarding-email").inputValue();
-    assert.equal(emailValue, "mike@example.com", "email should still be there after Continue then Back");
+    const offered = page.getByTestId("setup-option-account");
+    assert.match((await offered.textContent()) ?? "", /chad@example\.com/);
+    await chatTap(page, "account");
+    await chatQuestion(page, "family-names");
+    const sent = await chatSent(page);
+    assert.deepEqual(sent.find(([method]) => method === "PATCH"), ["PATCH", "/api/profiles/p1", { email: "chad@example.com" }]);
   } finally {
     await page.close();
   }
 });
 
-test("Onboarding 'Which one is you?': continuing without a photo asks for confirmation", async () => {
-  // Part of the same 2026-08-27 fix: pressing Continue with no photo set
-  // should show a confirmation (mentioning it can be added later) rather
-  // than silently proceeding — makes the missing-photo affordance obvious.
-  const page = await openScenario("onboardingYouStepPersist");
+test("Setup chat: the photo question opens the picker only on a tap, and says initials show without one", async () => {
+  // Replaces the wizard's "continuing without a photo asks for confirmation"
+  // (2026-08-27). iOS opens the camera or photo library only from a real tap,
+  // so typing "take a photo" points at the button instead of moving on.
+  const page = await openScenario("setupChatFresh");
   try {
-    await page.getByText("Create my family").click();
-    await page.getByPlaceholder("e.g. Mom, Dad, Alex…").fill("Mike");
-    await page.getByRole("button", { name: /add person/i }).click();
-    await page.getByRole("button", { name: /Continue with 1 member/ }).click();
+    await chatSay(page, "1");
+    await chatTap(page, "yes");
+    await chatQuestion(page, "you-photo");
 
-    await page.getByRole("button", { name: /Continue →/ }).click();
-    await page.getByText("Add a photo?").waitFor({ state: "visible" });
-    // Backing out of the confirmation should leave the user on this step.
-    await page.getByRole("button", { name: /^Add a photo$/ }).click();
-    await page.getByText("Which one is you?").first().waitFor({ state: "visible" });
-    const stillHere = await page.locator("#onboarding-email").isVisible();
-    assert.equal(stillHere, true, "declining the confirmation should keep the user on the You step");
+    assert.match((await page.getByTestId("setup-option-skip").textContent()) ?? "", /Your initials show instead/);
+    assert.equal(await page.locator('input[type="file"][capture="user"]').count(), 1, "Take a photo should open the front camera");
+
+    await chatSay(page, "take a photo");
+    await chatQuestion(page, "you-photo");
+    await page.getByText("to open your camera.").last().waitFor();
+    assert.equal((await chatSent(page)).filter(([method]) => method === "PATCH").length, 0, "nothing is saved until a photo is picked");
   } finally {
     await page.close();
   }
 });
 
-test("Onboarding 'Add family members': a photo picked while adding a person is saved and shown", async () => {
-  // New capability (2026-08-27): a photo can now be added for each family
-  // member right while adding them, not only for yourself later on the
-  // "you" step. ObjectUploader's real upload dialog can't be driven in this
-  // headless harness, so this simulates a completed upload by calling the
-  // component's own onComplete handler directly via the uploader's hidden
-  // file input change event isn't feasible either — instead this verifies
-  // the wiring at the point that matters: once a photo URL is set, it's
-  // included in the create POST body and rendered via <img>, not initials.
-  const page = await openScenario("onboardingYouStepPersist");
+test("Setup chat: a photo picked on the family roster is saved and shown", async () => {
+  // Replaces the wizard's "a photo picked while adding a person is saved and
+  // shown" (2026-08-27), this time driving a real upload: a file goes into the
+  // roster's picker, through the cropper, and onto the profile. The cropper is
+  // a dialog opened from inside the full-screen chat, and has to paint above
+  // it. A click can't show that: an open Radix dialog turns pointer events off
+  // everywhere else, so a click lands on the cropper even when the chat hides
+  // it. Hit-testing with the chat's pointer events back on asks which is on top.
+  // The hit is checked against the cropper dialog, not the button: the button
+  // ignores pointer events while it's disabled, until the crop settles.
+  const page = await openScenario("setupChatFresh");
   try {
-    await page.getByText("Create my family").click();
-    await page.getByPlaceholder("e.g. Mom, Dad, Alex…").fill("Ava");
-    // Simulate ObjectUploader having completed an upload by dispatching what
-    // the real component does internally: React state set via its exposed
-    // onComplete prop isn't reachable from outside, so instead confirm the
-    // picker/affordance itself is present and wired to the right handler by
-    // checking the caption text and that the avatar reflects "no photo yet"
-    // (initials) by default — the round-trip of an actual selected file is
-    // covered by ObjectUploader's own existing tests elsewhere in this app.
-    const caption = await page.getByText("Optional — tap to add a photo.").isVisible();
-    assert.equal(caption, true, "the photo picker's caption should be visible on the Add family members form");
+    await chatToFamilyNames(page);
+    await chatSay(page, "Ava");
+    await chatTap(page, "child");
+    await chatQuestion(page, "family-review");
 
-    await page.getByRole("button", { name: /add person/i }).click();
-    await page.getByText("Ava", { exact: true }).waitFor({ state: "visible" });
-    // Without a photo, the row should fall back to initials (no <img>).
-    const hasImg = await page.locator('[data-testid="onboarding-edit-profile-p1"]').locator("xpath=..").locator("img").count();
-    assert.equal(hasImg, 0, "a profile with no photo should render initials, not an <img>");
+    const ava = page.getByTestId("setup-roster-person").filter({ hasText: "Ava" }).last();
+    assert.equal(await ava.locator("img").count(), 0, "no photo yet, so Ava shows initials");
+    const png = Buffer.from(
+      (await page.evaluate(
+        `(() => { const c = document.createElement("canvas"); c.width = 240; c.height = 240; const x = c.getContext("2d"); x.fillStyle = "#6DB98A"; x.fillRect(0, 0, 240, 240); return c.toDataURL("image/png").split(",")[1]; })()`,
+      )) as string,
+      "base64",
+    );
+    await ava.locator('input[type="file"]').setInputFiles({ name: "ava.png", mimeType: "image/png", buffer: png });
+    const cropButton = page.getByRole("button", { name: "Crop & Upload" });
+    await cropButton.waitFor({ state: "visible" });
+    const cropperOnTop = await page.evaluate(`(() => {
+      const chat = document.querySelector('[data-testid="setup-chat"]');
+      const button = Array.from(document.querySelectorAll("button")).find((b) => b.textContent.includes("Crop & Upload"));
+      const cropper = button.closest('[role="dialog"]');
+      const r = button.getBoundingClientRect();
+      chat.style.pointerEvents = "auto";
+      const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      chat.style.pointerEvents = "";
+      return !!hit && cropper !== chat && cropper.contains(hit);
+    })()`);
+    assert.equal(cropperOnTop, true, "the photo cropper must show above the setup chat");
+    await cropButton.click({ timeout: 8000 });
+
+    await ava.locator("img").waitFor({ timeout: 8000 });
+    await chatIdle(page);
+    await chatQuestion(page, "family-review");
+    const sent = await chatSent(page);
+    assert.ok(sent.some(([method, path]) => method === "POST" && path === "/api/objects/upload"), "the photo should be uploaded");
+    assert.deepEqual(
+      sent.filter(([, path]) => path === "/api/profiles/p2"),
+      [["PATCH", "/api/profiles/p2", { photoUrl: "/objects/uploads/photo-1" }]],
+    );
+  } finally {
+    await page.close();
+  }
+});
+
+test("Setup chat (joined with a code): pick yourself, keep the saved location, and finishing completes setup", async () => {
+  // Someone who joins an existing family gets the short path: You, Location,
+  // Calendars, Done. They pick themselves rather than being created again, the
+  // family's saved location carries over, and the chapters a joiner never
+  // sees are never marked.
+  const page = await openScenario("setupChatJoiner");
+  try {
+    await chatQuestion(page, "you-pick");
+    assert.equal(await page.getByTestId("setup-chat-progress").locator("div").count(), 4, "You, Location, Calendars and Done");
+
+    await chatSay(page, "2"); // Sarah
+    await chatTap(page, "skip");
+    await chatTap(page, "account");
+    await chatQuestion(page, "calendar");
+    await page.getByText("Your family's location is already saved.").waitFor();
+    await chatTap(page, "skip");
+    await chatQuestion(page, "done");
+    await chatTap(page, "open");
+
+    assert.deepEqual(await chatSent(page), [
+      ["PATCH", "/api/profiles/sarah", { email: "sarah@example.com" }],
+      ["PATCH", "/api/onboarding-status", { step: "profile", action: "done" }],
+      ["PATCH", "/api/onboarding-status", { step: "location", action: "done" }],
+      ["PATCH", "/api/onboarding-status", { step: "calendar", action: "skip" }],
+      ["POST", "/api/auth/complete-onboarding", undefined],
+    ]);
+  } finally {
+    await page.close();
+  }
+});
+
+test("Setup chat: closing partway comes back to the same question, and the PIN is never stored", async () => {
+  // Progress is kept on the device so a closed app or a calendar sign-in
+  // picks up where it left off. The one thing never written there is the
+  // PIN: halfway through confirming it, a reload asks for it again.
+  const page = await openScenario("setupChatResume");
+  try {
+    await chatQuestion(page, "pin-ask");
+    await page.getByText("Stars for each chore", { exact: true }).waitFor();
+    await chatTap(page, "yes");
+
+    const pin = page.getByTestId("setup-chat-pin");
+    assert.equal(await pin.getAttribute("inputmode"), "numeric", "the PIN gets the number pad");
+    await pin.fill("1234");
+    await chatQuestion(page, "pin-confirm");
+    const stored = (await page.evaluate(`localStorage.getItem("superhub_setup_chat_u1")`)) as string;
+    assert.ok(stored.includes('"q":"pin-confirm"'), "progress should be saved after each answer");
+    assert.ok(!stored.includes("1234"), "the PIN must never be written to the device");
+
+    await page.reload();
+    await chatQuestion(page, "pin-enter");
+    await page.getByText("Let's set that PIN again. Type a 4-digit PIN.").waitFor();
+    await page.getByText("Stars for each chore", { exact: true }).waitFor();
+    await page.getByTestId("setup-chat-pin").fill("4321");
+    await chatQuestion(page, "pin-confirm");
+    await page.getByTestId("setup-chat-pin").fill("4321");
+    await chatQuestion(page, "pin-locks");
+
+    assert.deepEqual(await chatSent(page), [
+      ["PUT", "/api/reward-settings", { pinGatedFeatures: ["createChore", "createBonusChore", "createReward", "calendarSettings"], parentPin: "4321" }],
+    ]);
   } finally {
     await page.close();
   }
@@ -1146,17 +1278,22 @@ test("Quick Tour: demo frames show the real tab bar, and no stale 'To-Dos is off
   }
 });
 
-test("A brand-new device shows the To-Dos tab by default", async () => {
-  // 2026-08-27: To-Dos previously shipped hidden-by-default via a one-time
-  // localStorage init that ran on first load. Removed so a genuinely fresh
-  // device (no saved tab visibility at all) shows all 5 tabs immediately —
-  // existing devices that already ran the old init are unaffected, since
-  // their hiddenTabs list already has 'todos' persisted from before.
-  const page = await openScenario("familyHub");
+test("The bottom bar is Home, Calendar, Chores, Meals and Chat, whatever a device saved before", async () => {
+  // SuperHub's bar is fixed (2026-10-01) and To-Dos is not on it. Family Hub
+  // let each device hide and reorder tabs, and those choices are still in
+  // localStorage on every device that ran it. This one hid Calendar and Chat
+  // and put To-Dos first; none of that may reach the bar.
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   try {
-    await page.getByRole("button", { name: /Chores/ }).first().waitFor({ state: "visible" });
-    const todosTab = page.getByRole("button", { name: /To-Dos/ });
-    assert.equal(await todosTab.count(), 1, "the To-Dos tab should render for a fresh device with no saved tab preferences");
+    await page.addInitScript(`(() => {
+      localStorage.setItem("familyHub_hiddenTabs", JSON.stringify(["calendar", "chat"]));
+      localStorage.setItem("familyHub_tabOrder", JSON.stringify(["todos", "meals", "chores", "calendar", "home", "chat"]));
+    })()`);
+    await page.goto(`${BASE_URL}?scenario=familyHub`);
+    const bar = page.getByTestId("bottom-tab-bar");
+    await bar.waitFor({ timeout: 15_000 });
+    const tabs = await bar.locator("button").evaluateAll((buttons) => buttons.map((b) => b.getAttribute("data-testid")));
+    assert.deepEqual(tabs, ["home-tab", "calendar-tab", "chores-tab", "meals-tab", "chat-tab"]);
   } finally {
     await page.close();
   }
@@ -1172,14 +1309,12 @@ test("Home: 'connect a calendar' CTA replaces the generic empty state, and spotl
   // same source of truth Settings itself uses), and the CTA now opens
   // Settings with the WHOLE per-person Calendar Connections list spotlighted
   // (not one specific row, since there's no single person to point at).
+  // Since SuperHub's Home, the prompt lives in Today's Schedule.
   const page = await openScenario("familyHub");
   try {
-    const cta = page.locator('[data-testid="connect-calendar-cta"]');
+    const cta = page.locator('[data-testid="home-today-events"] [data-testid="connect-calendar-cta"]');
     await cta.waitFor({ state: "visible" });
-    assert.match(
-      (await cta.textContent()) ?? "",
-      /No calendars selected.*connect/i,
-    );
+    assert.match((await cta.textContent()) ?? "", /Connect a calendar/i);
     await cta.click();
     // Anchor on the list's own id, not on a "Calendar Connections" heading —
     // that sub-header was deliberately removed (it just repeated the section
@@ -1231,40 +1366,26 @@ test("the Calendar tab's sync warning names whose Google calendar failed", async
   }
 });
 
-test("Onboarding: the new 'Connect your calendars' step renders the real Calendar Connections UI", async () => {
-  // 2026-08-27: added a full onboarding step reusing the exact same
-  // CalendarConnectionsSection component Settings uses, so a family can
-  // connect + assign calendars during onboarding instead of only
-  // discovering it's possible afterward. Walks Setup -> You -> Location ->
-  // Calendar and confirms the real per-person Connect row (with working
-  // Google/Outlook/iCal options) appears, then that Continue advances to
-  // Rewards as expected.
-  const page = await openScenario("onboardingYouStepPersist");
+test("Setup chat: the Calendars chapter renders the real Calendar Connections list", async () => {
+  // The chat embeds the same CalendarConnectionsSection Settings uses, so a
+  // family connects and assigns calendars during setup (2026-08-27, carried
+  // over from the wizard). Skipping moves on to Rewards, and a replay never
+  // marks a chapter skipped.
+  const page = await openScenario("setupChatCalendar");
   try {
-    await page.getByText("Create my family").click();
-    await page.getByPlaceholder("e.g. Mom, Dad, Alex…").fill("Mike");
-    await page.getByRole("button", { name: /add person/i }).click();
-    await page.getByRole("button", { name: /Continue with 1 member/ }).click();
-    await page.getByRole("button", { name: /Continue →/ }).click();
-    await page.getByText("Add a photo?").waitFor({ state: "visible" });
-    await page.getByRole("button", { name: /Continue without a photo/ }).click();
-    await page.getByText("Your location").waitFor({ state: "visible" });
-    await page.getByRole("button", { name: /Skip/ }).first().click();
-
-    await page.getByText("Connect your calendars").waitFor({ state: "visible" });
-    // Anchor on the list's own id, not on a "Calendar Connections" heading —
-    // that sub-header was deliberately removed (it just repeated the section
-    // title one level down), which is what broke this selector.
+    await chatQuestion(page, "calendar");
     await page.locator("#calendar-connections-list").waitFor({ state: "visible" });
-    await page.getByText("Mike", { exact: true }).waitFor({ state: "visible" });
+    await page.locator("#calendar-connections-list").getByText("Mike", { exact: true }).waitFor({ state: "visible" });
 
-    await page.getByRole("button", { name: /Connect/ }).click();
+    await page.getByRole("button", { name: /Connect/ }).first().click();
     await page.getByRole("menuitem", { name: "Google Calendar" }).waitFor({ state: "visible" });
     await page.getByRole("menuitem", { name: "Outlook" }).waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
 
-    await page.getByTestId("onboarding-calendar-continue").click();
-    await page.getByText("Rewards & Approvals").waitFor({ state: "visible" });
+    await chatTap(page, "skip");
+    await chatQuestion(page, "rewards-keep");
+    assert.equal(await page.getByTestId("setup-chat-chapter").textContent(), "Rewards");
+    assert.ok(!(await chatSent(page)).some(([, , body]) => (body as { action?: string } | undefined)?.action === "skip"), "a replay never marks a chapter skipped");
   } finally {
     await page.close();
   }
@@ -1275,8 +1396,8 @@ test("Calendar Connect dropdown: dismissing by clicking away (not Escape) doesn'
   // (Google Calendar / Outlook / iCal) and dismissing it by clicking
   // elsewhere on the page — not pressing Escape, not picking an option —
   // left document.body/<html> permanently `pointer-events: none`, silently
-  // freezing every click on the ENTIRE app (Settings AND the new onboarding
-  // calendar step both affected) until a full reload. Root cause: Radix's
+  // freezing every click on the ENTIRE app (Settings AND setup's calendar
+  // chapter both affected) until a full reload. Root cause: Radix's
   // default `modal` DropdownMenu applies its own scroll-lock/pointer-block
   // on open, which conflicts with the surrounding page's own overlay/lock
   // state; `modal={false}` on this DropdownMenu (ical-subscriptions.tsx)
@@ -1284,26 +1405,16 @@ test("Calendar Connect dropdown: dismissing by clicking away (not Escape) doesn'
   // fails with Playwright's own "<html> intercepts pointer events" when
   // this regresses — a forced click or a plain visibility check would not
   // have caught this.
-  const page = await openScenario("onboardingYouStepPersist");
+  const page = await openScenario("setupChatCalendar");
   try {
-    await page.getByText("Create my family").click();
-    await page.getByPlaceholder("e.g. Mom, Dad, Alex…").fill("Mike");
-    await page.getByRole("button", { name: /add person/i }).click();
-    await page.getByRole("button", { name: /Continue with 1 member/ }).click();
-    await page.getByRole("button", { name: /Continue →/ }).click();
-    await page.getByText("Add a photo?").waitFor({ state: "visible" });
-    await page.getByRole("button", { name: /Continue without a photo/ }).click();
-    await page.getByText("Your location").waitFor({ state: "visible" });
-    await page.getByRole("button", { name: /Skip/ }).first().click();
-    await page.getByText("Connect your calendars").waitFor({ state: "visible" });
-
+    await page.locator("#calendar-connections-list").waitFor({ state: "visible" });
     const connectBtn = page.getByRole("button", { name: /Connect/ }).first();
     await connectBtn.click();
     await page.getByRole("menuitem", { name: "Google Calendar" }).waitFor({ state: "visible" });
 
     // Dismiss by clicking elsewhere on the page — the exact gesture that
     // triggered the freeze — not Escape and not a menu item.
-    await page.getByText("Connect your calendars").click({ timeout: 10000 });
+    await page.getByText("next to anyone who has one.").last().click({ timeout: 10000 });
     // Let Radix's own dismiss/close transition actually settle before the
     // next interaction — firing the next click in the same tick can race
     // the outside-click's own async cleanup.
@@ -1314,10 +1425,10 @@ test("Calendar Connect dropdown: dismissing by clicking away (not Escape) doesn'
     await connectBtn.click({ timeout: 5000 });
     await page.getByRole("menuitem", { name: "Google Calendar" }).waitFor({ state: "visible", timeout: 8000 });
 
-    // The rest of the page should still be usable too.
+    // The rest of the chat should still be usable too.
     await page.keyboard.press("Escape");
-    await page.getByTestId("onboarding-calendar-continue").click({ timeout: 5000 });
-    await page.getByText("Rewards & Approvals").waitFor({ state: "visible", timeout: 5000 });
+    await page.getByTestId("setup-option-skip").click({ timeout: 5000 });
+    await chatQuestion(page, "rewards-keep");
   } finally {
     await page.close();
   }
@@ -1465,17 +1576,17 @@ test("Home: a calendar that's connected but failing to sync shows a reconnect CT
   const page = await openScenario("homeCalendarSyncError");
   try {
     // The header banner (above the event list) should call out Google by name.
-    const headerCta = page.locator('[data-testid="calendar-sync-error-cta"]');
+    const headerCta = page.locator('[data-testid="home-today-events"] [data-testid="calendar-sync-error-cta"]');
     await headerCta.waitFor({ state: "visible" });
     assert.match((await headerCta.textContent()) ?? "", /Google couldn't sync/i);
 
-    // The empty-state CTA (in place of "No remaining events today") should
+    // The empty-state CTA (in place of "Nothing on the calendar.") should
     // say a calendar needs reconnecting, not just show nothing.
-    const emptyCta = page.locator('[data-testid="calendar-needs-reconnect-cta"]');
+    const emptyCta = page.locator('[data-testid="home-today-events"] [data-testid="calendar-needs-reconnect-cta"]');
     await emptyCta.scrollIntoViewIfNeeded();
     assert.match((await emptyCta.textContent()) ?? "", /reconnect/i);
-    // The old, uninformative empty state must be gone.
-    assert.equal(await page.getByText("No remaining events today").count(), 0);
+    // The uninformative empty state must be gone.
+    assert.equal(await page.getByText("Nothing on the calendar.").count(), 0);
 
     // Clicking either one opens Settings with the whole Calendar Connections
     // list spotlighted (mirrors the "no calendars connected at all" CTA).
@@ -2046,8 +2157,8 @@ test("Settings: the nav bar preview replaces the two sentences describing it", a
     const preview = page.getByTestId("nav-preview");
     await preview.waitFor({ timeout: 8000 });
 
-    // Every visible tab is drawn, with its label (icons-only is off here).
-    for (const id of ["home", "calendar", "chores", "todos", "meals"]) {
+    // Every tab on the bar is drawn, with its label (icons-only is off here).
+    for (const id of ["home", "calendar", "chores", "meals", "chat"]) {
       assert.ok(await page.getByTestId(`nav-preview-${id}`).isVisible(), `${id} missing from the preview`);
     }
     assert.match(await preview.innerText(), /Home/, "the preview shows labels when icons-only is off");
@@ -2147,24 +2258,33 @@ test("Announcements: a phone glyph replaces the per-device caption", async () =>
   }
 });
 
-test("Onboarding's last step doesn't re-tell what the Quick Tour just showed", async () => {
-  // Replay mode enters at Invite; two skips lands on "You're all set!".
-  // (Pointing this at the tour scenario alone made it vacuous — those
-  // strings live on the wizard's done step, which that scenario never
-  // renders, so it passed with the change reverted.)
-  const page = await openScenario("onboardingDone");
+test("Setup chat: the tour plays inside the chat, and the summary doesn't re-tell it", async () => {
+  // Replay from the Invite chapter: Not now lands on the summary, the Quick
+  // Tour plays in a card, and coming back offers only the way out. The tips
+  // the tour already animates are never written out as well (2026-09, from
+  // the wizard's last step). A replay closes; it never re-completes setup.
+  const page = await openScenario("setupChatReplay");
   try {
-    await page.getByRole("button", { name: /later|Continue/i }).first().click();
+    await chatQuestion(page, "invite-how");
+    await chatTap(page, "skip");
+    await chatQuestion(page, "done");
+    await page.getByTestId("setup-card-summary").waitFor();
+
+    await chatTap(page, "tour");
     await page.getByRole("button", { name: /Skip tour/i }).click();
-    await page.getByRole("button", { name: /Get Started/i }).waitFor({ timeout: 8000 });
+    await chatQuestion(page, "done");
+    await page.getByText("That's the tour. You're ready to go.").waitFor();
+    assert.equal(await page.getByTestId("setup-option-tour").count(), 0, "the tour is offered once");
     const body = (await page.locator("body").textContent()) ?? "";
-    for (const gone of [
-      "Tap a family member's photo up top",
-      "Check off chores to earn stars",
-      "Look for the ⚙️ gear icon",
-    ]) {
+    for (const gone of ["Tap a family member's photo up top", "Check off chores to earn stars", "Look for the ⚙️ gear icon"]) {
       assert.ok(!body.includes(gone), `"${gone}" is demonstrated by the tour and shouldn't also be written out`);
     }
+
+    await chatTap(page, "open");
+    assert.equal(await page.evaluate("window.__closed === true"), true, "Back to SuperHub should close the replay");
+    const sent = await chatSent(page);
+    assert.ok(!sent.some(([, path]) => path === "/api/auth/complete-onboarding"), "a replay doesn't complete setup again");
+    assert.ok(!sent.some(([, , body]) => (body as { action?: string } | undefined)?.action === "skip"), "a replay never marks a chapter skipped");
   } finally {
     await page.close();
   }
@@ -2224,6 +2344,9 @@ test("Chores: Fun Mode is hidden when it can't do anything, and isn't a party po
   try {
     await page.getByTestId("chores-tab").click();
     await page.waitForTimeout(900);
+    // A device starts on one person (2026-10-01), so pick everyone first.
+    await page.getByTestId("profile-all family").click();
+    await page.waitForTimeout(600);
 
     // All Family (every profile selected) renders a per-person summary with
     // no chore rows, so there's nothing for Fun Mode to restyle.
@@ -2376,7 +2499,8 @@ test("Announcements: an unchecked circle is empty, not pre-ticked", async () => 
 });
 
 test("Header: the day-of-week label fits its box instead of truncating", async () => {
-  const page = await openScenario("familyHub");
+  // On Chores: Home's header has no date arrows in SuperHub.
+  const page = await openScenarioOnTab("familyHub", "chores");
   try {
     const next = page.getByTestId("next-date-button");
     await next.waitFor({ timeout: 8000 });
@@ -2889,19 +3013,17 @@ test("the spotlight never cuts its hole up into the sticky header", async () => 
 // Regression (2026-09-05, same review item): "when I scroll to the bottom of
 // the Home, Chores, To-Dos and Meals tabs, there's a bunch of blank space."
 // Measured at exactly 112px — <main>'s pb-28, which was arbitrary. The
-// floating "+" button sits 24px off the bottom and is 56px tall, so 80px is
-// the real clearance it needs; pb-24 (96px) leaves 16px over that.
+// padding only has to clear the floating "+" button. SuperHub moved that
+// button up above its tab bar (2026-10-02), so the clearance is read from the
+// button itself rather than assumed.
 test("scrolled to the bottom, dead space below the last card clears the + button without wasting a screenful", async () => {
   const page = await openScenario("familyHub");
   try {
-    for (const tab of ["home", "chores", "todos", "meals"]) {
-      const btn = page.locator(`[data-testid="tab-${tab}"]`).first();
-      if (await btn.count()) {
-        await btn.click();
-        await page.waitForTimeout(700);
-      }
+    for (const tab of ["home", "chores", "meals"]) {
+      await page.getByTestId(`${tab}-tab`).click();
+      await page.waitForTimeout(700);
       // String body for the same `__name` reason as above.
-      const gap = (await page.evaluate(`(function () {
+      const { gap, clearance } = (await page.evaluate(`(function () {
         var sc = document.getElementById("app-scroll-container");
         sc.scrollTop = sc.scrollHeight;
         var main = document.querySelector("main");
@@ -2914,14 +3036,14 @@ test("scrolled to the bottom, dead space below the last card clears the + button
             walk(c);
           }
         })(main);
-        return Math.round(sc.clientHeight - lowest);
-      })()`)) as number;
+        var plus = document.querySelector('[data-testid="home-main-add-button"]').getBoundingClientRect();
+        return { gap: Math.round(sc.clientHeight - lowest), clearance: Math.round(sc.clientHeight - plus.top) };
+      })()`)) as { gap: number; clearance: number };
 
-      // 80px is the + button's own footprint (24px offset + 56px tall); below
-      // that it starts covering the last card's controls again, which is the
-      // bug this padding was originally added to fix.
-      assert.ok(gap >= 80, `${tab}: ${gap}px leaves the + button overlapping content`);
-      assert.ok(gap <= 100, `${tab}: ${gap}px of dead space below the last card`);
+      // Below the + button's own footprint it starts covering the last card's
+      // controls again, which is the bug this padding was originally added to fix.
+      assert.ok(gap >= clearance, `${tab}: ${gap}px leaves the + button (${clearance}px up) overlapping content`);
+      assert.ok(gap <= clearance + 20, `${tab}: ${gap}px of dead space below the last card, the + button needs ${clearance}px`);
     }
   } finally {
     await page.close();
@@ -3027,15 +3149,15 @@ test("Every scrollable tab ends with exactly the + button's clearance, no more",
   // both measured at 390x844 rather than guessed: `<main>`'s `min-h-screen`
   // double-counted the sticky header's height (it genuinely BOUND on To-Dos
   // and Meals, contrary to the comment that used to justify it), and three
-  // content wrappers carried their own `pb-20` on top of main's `pb-24`.
-  // 96px is the floating + button's measured clearance and the only bottom
-  // padding that should remain.
+  // content wrappers carried their own `pb-20` on top of main's padding.
+  // The floating + button's clearance is the only bottom padding that should
+  // remain, read from the button itself since SuperHub moved it above the tab bar.
   const page = await openScenario("familyHub");
   try {
-    for (const tab of ["Home", "Chores", "To-Dos", "Meals"]) {
+    for (const tab of ["Home", "Chores", "Meals"]) {
       await page.getByRole("button", { name: tab, exact: true }).first().click();
       await page.waitForTimeout(900);
-      const dead = await page.evaluate(`(() => {
+      const { dead, clearance } = (await page.evaluate(`(() => {
         const sc = document.getElementById('app-scroll-container');
         sc.scrollTop = sc.scrollHeight;
         const main = document.querySelector('main');
@@ -3047,11 +3169,12 @@ test("Every scrollable tab ends with exactly the + button's clearance, no more",
           if (r.height < 20 || r.width < 100 || r.height > 1200) continue;
           if (r.bottom > maxB) maxB = r.bottom;
         }
-        return Math.round(window.innerHeight - maxB);
-      })()`);
+        const plus = document.querySelector('[data-testid="home-main-add-button"]').getBoundingClientRect();
+        return { dead: Math.round(window.innerHeight - maxB), clearance: Math.round(window.innerHeight - plus.top) };
+      })()`)) as { dead: number; clearance: number };
       assert.ok(
-        (dead as number) <= 100,
-        `${tab}: ${dead}px of blank space below the last card (expected ~96, the + button's clearance)`,
+        dead <= clearance + 20,
+        `${tab}: ${dead}px of blank space below the last card (expected about ${clearance}, the + button's clearance)`,
       );
     }
   } finally {
@@ -4309,7 +4432,8 @@ test("Event modal: the repeat interval can be cleared and retyped, and Until can
 
     const interval = page.locator('[data-testid="e2e-event-repeat-interval-input"]');
     await interval.click();
-    await page.keyboard.press("Control+a");
+    // Not Control+A: on a Mac that moves the caret to the start of the field.
+    await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.press("Backspace");
     assert.equal(await interval.inputValue(), "", "the field must be emptiable while typing");
 
@@ -4318,13 +4442,13 @@ test("Event modal: the repeat interval can be cleared and retyped, and Until can
 
     // Two digits stay two digits rather than snapping to the cap.
     await interval.click();
-    await page.keyboard.press("Control+a");
+    await page.keyboard.press("ControlOrMeta+a");
     await interval.type("14");
     assert.equal(await interval.inputValue(), "14", "14 should be 14, not 99");
 
     // Blur settles an empty field back to something valid.
     await interval.click();
-    await page.keyboard.press("Control+a");
+    await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.press("Backspace");
     await page.locator('[data-testid="e2e-event-repeat-until-input"]').click();
     await page.waitForTimeout(200);
@@ -5183,8 +5307,22 @@ test("Calendar month view on a tablet keeps the car icon, but never the name", a
 test("Calendar day view still names the driver", async () => {
   const page = await openScenario("calendarDragAndChips", { width: 390, height: 844 });
   try {
-    await page.getByRole("button", { name: "Day", exact: true }).first().click();
+    // A phone's switcher is Upcoming, Week and Month (2026-10-01); day view
+    // opens from a tap on a day's column in Week.
+    await page.getByRole("button", { name: "Week", exact: true }).first().click();
+    await page.waitForTimeout(800);
+    const weekday = new Date().toLocaleDateString("en-US", { weekday: "short" });
+    await page.getByText(weekday, { exact: true }).first().click();
     await page.waitForTimeout(1500);
+    // Day is not one of the phone's switcher buttons, so none of them is
+    // pressed once day view is open.
+    for (const name of ["Upcoming", "Week", "Month"]) {
+      assert.equal(
+        await page.getByRole("button", { name, exact: true }).first().getAttribute("aria-pressed"),
+        "false",
+        `${name} is still selected, so the tap on today's column did not open day view`,
+      );
+    }
 
     const chip = page.locator('[data-testid="driver-indicator-e1"]').first();
     await chip.waitFor({ state: "visible", timeout: 10_000 });
@@ -5408,6 +5546,10 @@ test("the month agenda sheet drags up to show the whole day, and back down", asy
   });
   const page = await ctx.newPage();
   try {
+    // The fixture fills the current month, so whether the grid's last row has
+    // a busy day depends on the weekday the month ends on: October 2026 ends
+    // on a two-event Saturday. September 2026 ends on a six-event Wednesday.
+    await page.clock.install({ time: new Date(2026, 8, 15, 9, 0) });
     await page.goto(`${BASE_URL}?scenario=monthDots`);
     await page.waitForTimeout(2000);
 
@@ -5921,22 +6063,18 @@ test("a day with more events than fit still scrolls to the last one", async () =
 });
 
 // ---------------------------------------------------------------------------
-test("Manage on the health inbox spotlights the reminders, not the whole Tasks card", async () => {
+test("Manage on the health inbox opens the reminders themselves, on screen", async () => {
   // 2026-09-29, reported from a phone: "when I press the settings button on
   // the 'health reminders to acknowledge' it goes lower onto the screen and
   // spotlights a huge section of the app and only half of the medication
   // reminder portion was even on the screen."
   //
-  // The handler aimed at progress-card — the whole Tasks card — which stacks
-  // chores, to-dos, bonus, goals and inspiration ABOVE the health reminders
-  // section. At phone height that card is taller than the viewport, so the
-  // spotlight dimmed almost everything and the part it was meant to call out
-  // sat below the fold.
+  // SuperHub's Home has no reminders list to scroll to, so Manage opens one:
+  // everyone's reminders in a sheet, ready to edit.
   const page = await openScenario("healthPushSpotlight", { width: 390, height: 844 });
   try {
-    // The scenario's own deep link fires a spotlight on load. Let it finish —
-    // spotlight() is globally one-at-a-time, so clicking Manage underneath it
-    // would be a no-op and the test would measure the wrong thing.
+    // The scenario's own deep link fires a spotlight on load. Let it finish,
+    // or its dim would sit over the button this clicks.
     await page.waitForSelector('[data-testid="button-manage-health-reminders"]', { timeout: 15_000 });
     await page.waitForFunction(
       `!document.querySelector('[data-testid="spotlight-hole"]')`,
@@ -5945,48 +6083,147 @@ test("Manage on the health inbox spotlights the reminders, not the whole Tasks c
     );
 
     await page.getByTestId("button-manage-health-reminders").click();
-    await page.waitForSelector('[data-testid="spotlight-hole"]', { timeout: 10_000 });
-    await page.waitForTimeout(500); // let the hole settle on its final rect
+    const sheet = page.getByTestId("health-reminders-sheet");
+    await sheet.waitFor({ state: "visible", timeout: 5000 });
+    await sheet.getByTestId("health-reminder-hr1").waitFor({ state: "visible", timeout: 5000 });
 
     const geom = await page.evaluate(`(() => {
-      const hole = document.querySelector('[data-testid="spotlight-hole"]');
-      const section = document.getElementById("health-reminders-dad");
-      const card = document.getElementById("progress-card");
-      const h = hole.getBoundingClientRect();
+      const r = document.querySelector('[data-testid="health-reminders-sheet"]').getBoundingClientRect();
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom), viewportHeight: window.innerHeight };
+    })()`) as { top: number; bottom: number; viewportHeight: number };
+    assert.ok(
+      geom.top >= 0 && geom.bottom <= geom.viewportHeight,
+      `the sheet runs from ${geom.top} to ${geom.bottom} in a ${geom.viewportHeight}px viewport`,
+    );
+
+    // And it is the real list, not a read-only view: Add opens the editor.
+    await sheet.getByTestId("button-add-health-reminder-dad").click();
+    await page.getByTestId("save-health-reminder").waitFor({ state: "visible", timeout: 5000 });
+  } finally {
+    await page.close();
+  }
+});
+
+test("a medication push with no inbox card to point at opens the reminders instead", async () => {
+  const page = await openScenario("healthPushNoCard");
+  try {
+    // The handler waits up to 10s for the card before giving up on it.
+    const sheet = page.getByTestId("health-reminders-sheet");
+    await sheet.waitFor({ state: "visible", timeout: 15_000 });
+    await sheet.getByTestId("health-reminder-hr1").waitFor({ state: "visible", timeout: 5000 });
+  } finally {
+    await page.close();
+  }
+});
+
+test("the + menu's Health reminder opens everyone's reminders, the person on screen first", async () => {
+  const page = await openScenario("familyHub");
+  try {
+    await page.getByTestId("profile-ava").click();
+    await page.getByTestId("home-main-add-button").click();
+    await page.getByTestId("menu-add-health-reminder").click();
+    const sheet = page.getByTestId("health-reminders-sheet");
+    await sheet.waitFor({ state: "visible", timeout: 5000 });
+    const order = await sheet
+      .locator('[data-testid^="button-add-health-reminder-"]')
+      .evaluateAll((buttons) => buttons.map((b) => b.getAttribute("data-testid")));
+    assert.deepEqual(order, ["button-add-health-reminder-kid1", "button-add-health-reminder-dad"]);
+  } finally {
+    await page.close();
+  }
+});
+
+/** The homePraise scenario on this device's saved person, optionally opening
+ *  on another tab. */
+async function openHomePraise(person: string, tab?: string): Promise<Page> {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(`(() => {
+    localStorage.setItem("superhub_device_person", ${JSON.stringify(person)});
+    ${tab ? `localStorage.setItem("familyHub_defaultTab", ${JSON.stringify(tab)});` : ""}
+  })()`);
+  await page.goto(`${BASE_URL}?scenario=homePraise`);
+  await page.waitForTimeout(1200);
+  return page;
+}
+
+test("Completed Actions shows the week's praise and notes, and marks seen only what reached the person on screen", async () => {
+  // SuperHub's Home dropped the Announcements banner, which was the only place
+  // praise and notes showed. The praise card that stayed is hidden, yet it
+  // still marked everything seen, so the badge cleared with nothing shown.
+  const page = await openHomePraise("kid1");
+  try {
+    await page.getByTestId("home-earlier-toggle").waitFor({ timeout: 15_000 });
+    await page.waitForTimeout(1500);
+    assert.deepEqual(
+      await page.evaluate(`window.__seenPosts.slice()`),
+      [],
+      "praise was marked seen while Completed Actions was still closed",
+    );
+
+    await page.getByTestId("home-earlier-toggle").click();
+    const rows = await page.locator("#home-earlier li").evaluateAll((items) =>
+      items.map((item) => [item.getAttribute("data-testid"), item.textContent?.trim()]),
+    );
+    assert.deepEqual(rows, [
+      ["home-earlier-note", "📝 Dad: Dentist moved to Thursday"],
+      ["home-earlier-praise", "🌟 Dad to Ava: Great job on the dishes"],
+      ["home-earlier-praise", "🥞 Ava to Dad: Thanks for the pancakes"],
+      ["home-earlier-praise", "📚 Dad to Ava: Nice reading"],
+    ]);
+
+    // Ava received two of them. The one she sent is Dad's to see, and the
+    // ten-day-old one never showed.
+    await page.waitForFunction(`window.__seenPosts.length >= 2`, undefined, { timeout: 5000 });
+    await page.waitForTimeout(500);
+    const posted = (await page.evaluate(`window.__seenPosts.slice()`)) as string[];
+    assert.deepEqual([...posted].sort(), ["p-new", "p-old"]);
+  } finally {
+    await page.close();
+  }
+});
+
+test("the Home badge counts praise for the person on screen, and following it lands on that praise", async () => {
+  const page = await openHomePraise("kid1", "chores");
+  try {
+    const badge = page.getByTestId("home-tab-unread");
+    await badge.waitFor({ state: "visible", timeout: 15_000 });
+    // Ava's two from this week; not the ten-day-old one Home would never show.
+    assert.equal(await badge.textContent(), "2");
+
+    await page.getByTestId("profile-dad").click();
+    await page.waitForFunction(`document.querySelector('[data-testid="home-tab-unread"]')?.textContent === "1"`, undefined, { timeout: 3000 });
+    await page.getByTestId("profile-ava").click();
+    await page.waitForFunction(`document.querySelector('[data-testid="home-tab-unread"]')?.textContent === "2"`, undefined, { timeout: 3000 });
+
+    await page.getByTestId("home-tab").click();
+    await page.waitForSelector('[data-testid="spotlight-hole"]', { timeout: 8000 });
+    await page.waitForTimeout(500);
+    const geom = (await page.evaluate(`(() => {
+      const hole = document.querySelector('[data-testid="spotlight-hole"]').getBoundingClientRect();
+      const row = document.getElementById("home-earlier-praise");
+      const section = document.getElementById("home-earlier");
+      const r = row ? row.getBoundingClientRect() : null;
       return {
-        holeTop: Math.round(h.top),
-        holeBottom: Math.round(h.bottom),
-        holeHeight: Math.round(h.height),
+        rowText: row ? row.textContent : null,
+        rowHeight: r ? Math.round(r.height) : null,
+        sectionHeight: Math.round(section.getBoundingClientRect().height),
+        holeHeight: Math.round(hole.height),
+        dBottom: r ? Math.round(hole.bottom - (r.bottom + 8)) : null,
+        rowTop: r ? Math.round(r.top) : null,
         viewportHeight: window.innerHeight,
-        sectionHeight: section ? Math.round(section.getBoundingClientRect().height) : null,
-        cardHeight: card ? Math.round(card.getBoundingClientRect().height) : null,
-        hasSection: !!section,
       };
-    })()`) as any;
+    })()`)) as { rowText: string | null; rowHeight: number; sectionHeight: number; holeHeight: number; dBottom: number; rowTop: number; viewportHeight: number };
+    assert.equal(geom.rowText, "🌟 Dad to Ava: Great job on the dishes");
+    assert.ok(geom.rowHeight < geom.sectionHeight, "the row is as tall as its section, so this cannot tell them apart");
+    assert.ok(geom.holeHeight < geom.sectionHeight, `the spotlight (${geom.holeHeight}px) lit the whole section (${geom.sectionHeight}px)`);
+    assert.ok(Math.abs(geom.dBottom) < 4, `the spotlight is not on the newest praise (off by ${geom.dBottom}px)`);
+    assert.ok(geom.rowTop >= 0 && geom.rowTop < geom.viewportHeight, `the praise is off screen (top ${geom.rowTop})`);
 
-    // Guard against a vacuous pass: if the two candidate targets were the same
-    // size, this test could not tell them apart.
-    assert.ok(geom.hasSection, "the health reminders section never rendered — nothing to aim at");
-    assert.ok(
-      geom.cardHeight > geom.sectionHeight,
-      `the Tasks card (${geom.cardHeight}px) is not taller than the reminders section ` +
-        `(${geom.sectionHeight}px), so this test cannot distinguish the two targets`,
-    );
-
-    // The hole frames the section, not the card.
-    assert.ok(
-      geom.holeHeight < geom.cardHeight,
-      `the spotlight is ${geom.holeHeight}px tall, the whole Tasks card is ${geom.cardHeight}px — ` +
-        `it is still lighting up the entire card`,
-    );
-
-    // And what it frames is actually on screen, which was the other half of
-    // the complaint.
-    assert.ok(
-      geom.holeTop >= 0 && geom.holeBottom <= geom.viewportHeight,
-      `the spotlight runs from ${geom.holeTop} to ${geom.holeBottom} in a ` +
-        `${geom.viewportHeight}px viewport — part of what it highlights is off screen`,
-    );
+    // Shown, so it is seen: the badge does not come back on another tab.
+    await page.waitForFunction(`window.__seenPosts.length >= 2`, undefined, { timeout: 5000 });
+    await page.getByTestId("chores-tab").click();
+    await page.waitForTimeout(1500);
+    assert.equal(await page.getByTestId("home-tab-unread").count(), 0, "the badge came back after its praise was shown");
   } finally {
     await page.close();
   }
@@ -6033,8 +6270,9 @@ test("Privacy screen: a background that won't load falls back to another picture
 test("Outlook: an event follows its calendar's Assign to, not the account it came from", async () => {
   const page = await openScenario("outlookAssignTo");
   try {
-    await page.getByTestId("events-card").waitFor({ timeout: 10000 });
-    await page.getByText("Swim practice").first().waitFor({ timeout: 8000 });
+    const today = page.getByTestId("home-today-events");
+    await today.waitFor({ timeout: 10000 });
+    await today.getByText("Swim practice").first().waitFor({ timeout: 8000 });
   } finally {
     await page.close();
   }

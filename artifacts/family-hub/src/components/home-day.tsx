@@ -5,7 +5,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Event, Meal } from "@workspace/shared-types";
-import { choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, eventsOnHomeDay, forecastFor, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonMail, horizonWithoutChecked, mailClockParts, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, newsletterIssues, newsletterInitials, PLAN_HORIZON, PLAN_KEY_DATES, PLAN_NEWSLETTERS, PLAN_TODO_FOLD, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "@/lib/homeDay";
+import { recentShoutoutsQuery, type DailyContentAssignment, type DailyContentItem, type Shoutout } from "@/components/recent-shoutouts-card";
+import { choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, eventsOnHomeDay, forecastFor, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonMail, horizonWithoutChecked, mailClockParts, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, newsletterIssues, newsletterInitials, notesForHome, PLAN_HORIZON, PLAN_KEY_DATES, PLAN_NEWSLETTERS, PLAN_TODO_FOLD, planDateLabel, planTodoRows, plainEventDetail, praiseForHome, schoolEmailNames, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "@/lib/homeDay";
 import { eventSourceChip } from "@/lib/upcoming";
 import { appendPlace, eventClockLine, planEventTitle, pointsProfileId } from "@/lib/chatTools";
 import { confirmDialog } from "@/lib/confirmDialog";
@@ -33,6 +34,12 @@ type Props = {
   onOpenEvent?: (eventId: string) => void;
   onShiftDay?: (by: number) => void;
   onRefresh?: () => void;
+  /** `failing` names each source whose events could not be fetched. */
+  calendarStatus?: { connected: boolean; failing: string[] };
+  onOpenCalendarSettings?: () => void;
+  familyProfileId?: string | null;
+  /** Bumped to open Completed Actions, for a praise or note push. */
+  openEarlierKey?: number;
 };
 
 const SNOOZE_KEY = "superhub_home_snooze";
@@ -91,8 +98,11 @@ function logoInk(text: string): string {
   return LOGO_INKS[sum % LOGO_INKS.length];
 }
 
-export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, kidName, personId, people = [], onOpenChores, onAddTodo, onEditTodo, onDeleteTodo, onOpenCalendar, onOpenEvent, onShiftDay, onRefresh }: Props) {
+export function HomeDay({ chores, completions, events, selectedIds, familyIds, day, kidName, personId, people = [], onOpenChores, onAddTodo, onEditTodo, onDeleteTodo, onOpenCalendar, onOpenEvent, onShiftDay, onRefresh, calendarStatus, onOpenCalendarSettings, familyProfileId = null, openEarlierKey = 0 }: Props) {
   const [earlierOpen, setEarlierOpen] = useState(false);
+  useEffect(() => {
+    if (openEarlierKey) setEarlierOpen(true);
+  }, [openEarlierKey]);
   const [showAllTodos, setShowAllTodos] = useState(false);
   const [showDoneTodos, setShowDoneTodos] = useState(false);
   const [showAllKeys, setShowAllKeys] = useState(false);
@@ -133,6 +143,9 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
     retry: false,
     staleTime: 10 * 60 * 1000,
   });
+  const { data: praiseList = [] } = useQuery<Shoutout[]>(recentShoutoutsQuery);
+  const { data: dailyContent = [] } = useQuery<DailyContentItem[]>({ queryKey: ["/api/daily-content"] });
+  const { data: contentAssignments = [] } = useQuery<DailyContentAssignment[]>({ queryKey: ["/api/daily-content-assignments"] });
 
   const muteSender = useMutation({
     mutationFn: async (address: string) => {
@@ -321,6 +334,24 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
     completions.filter((completion) => selectedIds.length === 0 || allSelected || (!!completion.profileId && selectedIds.includes(completion.profileId))),
     now,
   );
+  const everyone = selectedIds.length === 0 || allSelected;
+  const praise = praiseForHome(praiseList, selectedIds, everyone, now);
+  const notes = notesForHome(dailyContent, contentAssignments, selectedIds, everyone, familyProfileId, now);
+  const earlierRows = [
+    ...earlier.map((completion) => ({ kind: "done" as const, id: completion.id, at: new Date(completion.completedAt ?? 0), choreId: completion.choreId })),
+    ...praise,
+    ...notes,
+  ].sort((a, b) => b.at.getTime() - a.at.getTime());
+  const nameOf = (id: string | null) => people.find((person) => person.id === id)?.name;
+  const markedSeen = useRef(new Set<string>());
+  const unseenShown = earlierOpen ? praise.filter((p) => p.unseen).map((p) => p.id).join(",") : "";
+  useEffect(() => {
+    const ids = unseenShown.split(",").filter((id) => id && !markedSeen.current.has(id));
+    if (ids.length === 0) return;
+    ids.forEach((id) => markedSeen.current.add(id));
+    void Promise.all(ids.map((id) => apiRequest("POST", `/api/shoutouts/${id}/seen`, {}).catch(() => null)))
+      .then(() => queryClient.invalidateQueries({ queryKey: ["/api/shoutouts"] }));
+  }, [unseenShown]);
   const daysOut = Math.round((new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
   const todosTitle = daysOut === 0 ? "Today's To-dos" : daysOut === 1 ? "Tomorrow's To-dos" : `${day.toLocaleDateString("en-US", { weekday: "long" })}'s To-dos`;
   const scheduleTitle = daysOut === 0 ? "Today's Schedule" : "Schedule";
@@ -639,8 +670,30 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
             </button>
           )}
         </div>
+        {/* A connection that expired still reads as connected; only the failed
+            fetch says so, and without this line the day just looks empty. */}
+        {!!calendarStatus?.failing.length && (
+          <button
+            type="button"
+            onClick={onOpenCalendarSettings}
+            className="mb-2 block text-left text-xs text-destructive underline decoration-dotted"
+            data-testid="calendar-sync-error-cta"
+          >
+            {calendarStatus.failing.join(" and ")} couldn't sync
+          </button>
+        )}
         {todayEvents.length === 0 && offCalendar.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing on the calendar.</p>
+          calendarStatus && !calendarStatus.connected ? (
+            <button type="button" onClick={onOpenCalendarSettings} className="text-left text-sm font-medium text-[#5E8FAD]" data-testid="connect-calendar-cta">
+              Connect a calendar to see your events here
+            </button>
+          ) : calendarStatus?.failing.length ? (
+            <button type="button" onClick={onOpenCalendarSettings} className="text-left text-sm font-medium text-destructive" data-testid="calendar-needs-reconnect-cta">
+              Reconnect {calendarStatus.failing.join(" and ")} to see your events again
+            </button>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nothing on the calendar.</p>
+          )
         ) : (
           <ul className="flex flex-col gap-2">
             {todayEvents.map((event) => {
@@ -766,20 +819,37 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
         )}
       </section>
 
-      <section className="plan-card">
+      <section id="home-earlier" className="plan-card">
         <button type="button" data-testid="home-earlier-toggle" className="flex w-full items-center gap-2 text-left" aria-expanded={earlierOpen} onClick={() => setEarlierOpen((open) => !open)}>
           <CheckCheck className="h-5 w-5 text-[#6e6e78]" aria-hidden="true" />
           <span className="text-[17px] font-medium">Completed Actions</span>
-          <span className="ml-auto inline-flex min-h-[22px] min-w-[22px] items-center justify-center rounded-full bg-[#E7F1F6] px-1.5 text-xs font-semibold text-[#5E8FAD]">{earlier.length}</span>
+          <span className="ml-auto inline-flex min-h-[22px] min-w-[22px] items-center justify-center rounded-full bg-[#E7F1F6] px-1.5 text-xs font-semibold text-[#5E8FAD]">{earlierRows.length}</span>
           <ChevronRight className="h-4 w-4 text-[#a0a0a8]" aria-hidden="true" />
         </button>
         {earlierOpen && (
           <ul className="mt-2 flex flex-col gap-1">
-            {earlier.map((completion) => (
-              <li key={completion.id} data-testid="home-earlier-row" className="text-sm text-muted-foreground">
-                {chores.find((chore) => chore.id === completion.choreId)?.title ?? "Done"}
-              </li>
-            ))}
+            {earlierRows.map((row) => {
+              if (row.kind === "done") {
+                return (
+                  <li key={row.id} data-testid="home-earlier-row" className="text-sm text-muted-foreground">
+                    {chores.find((chore) => chore.id === row.choreId)?.title ?? "Done"}
+                  </li>
+                );
+              }
+              if (row.kind === "praise") {
+                return (
+                  <li key={row.id} id={row.id === praise[0]?.id ? "home-earlier-praise" : undefined} data-testid="home-earlier-praise" className="text-sm text-muted-foreground">
+                    {row.emoji} {nameOf(row.fromId) ?? "Someone"} to {nameOf(row.toId) ?? "someone"}: {row.text}
+                  </li>
+                );
+              }
+              const author = nameOf(row.authorId);
+              return (
+                <li key={row.id} id={row.id === notes[0]?.id ? "home-earlier-note" : undefined} data-testid="home-earlier-note" className="line-clamp-2 text-sm text-muted-foreground">
+                  📝 {author ? `${author}: ` : ""}{row.text}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
