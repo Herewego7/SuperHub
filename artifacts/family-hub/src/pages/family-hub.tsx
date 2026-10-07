@@ -1,6 +1,6 @@
-import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, LIVE_REFRESH_MS } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCelebrationSuggestion } from "@/hooks/use-celebration-suggestion";
 import { Profile, CustomProfileGroup, ChoreCompletion, ActivityLogEntryType, Chore, RewardSettings } from "@workspace/shared-types";
@@ -8,27 +8,18 @@ import { ChoreManagementDrawer } from "@/components/chore-management-drawer";
 import { EventModal, type EventFormData } from "@/components/event-modal";
 import { TabType, ChoresSubTabType } from "@/lib/types";
 import { BOTTOM_NAV_IDS } from "@/lib/bottomNav";
-import { ChatView, stagePendingChat } from "@/components/chat-view";
 import { appendUserMessage, clearChatUnread, unreadFor } from "@/lib/chatThread";
-import { stageEveningPlan } from "@/components/chat-view";
+import { stageEveningPlan, stagePendingChat } from "@/lib/chatStaging";
 import { devicePersonIds, readDevicePerson, writeDevicePerson } from "@/lib/devicePerson";
 import { consumeTabDeepLinkFromUrl, onTabDeepLink, consumeCelebrationDeepLinkFromUrl, onCelebrationDeepLink } from "@/lib/pushDeepLink";
 import { ProfileCircle } from "@/components/profile-circle";
-import { SettingsModal } from "@/components/settings-modal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { HomeView } from "@/components/home-view";
-import { HistoryView } from "@/components/history-view";
-import { ChoresView } from "@/components/chores-view";
-import { TodosView } from "@/components/todos-view";
-import { BonusChoresView } from "@/components/bonus-chores-view";
 import { CreateTaskModal, TaskKind, deriveTaskKind, KIND_GATE } from "@/components/create-task-modal";
 import { PeopleView } from "@/components/people-view";
-import { Calendar3View, type Calendar3ViewHandle } from "@/components/calendar3-view";
-import { RewardsView } from "@/components/rewards-view";
-import { TrophyCaseView } from "@/components/trophy-case-view";
+import type { Calendar3ViewHandle } from "@/components/calendar3-view";
 import { StatsInsightsCard } from "@/components/stats-insights-card";
 import { WeatherWidget } from "@/components/weather-widget";
-import { MealsView } from "@/components/meals-view";
 import { TasksPageSettings, getTasksCardSettings, type TasksCardConfig } from "@/components/tasks-page-settings";
 import { CustomizePageCard } from "@/components/customize-page-card";
 import { FeatureNudgeController } from "@/components/feature-nudge-controller";
@@ -49,8 +40,7 @@ import { AddRemoveStarsModal } from "@/components/add-remove-stars-modal";
 import { objectUrl } from "@/lib/apiBase";
 import { robustScrollIntoView, robustScrollToTop, stickyHeaderOffset } from "@/lib/scroll";
 import { useSpotlight } from "@/lib/spotlight";
-import { OnboardingWizard, type SkippableStep } from "@/components/onboarding-wizard";
-import { BehaviourBoardView } from "@/components/behaviour-board-view";
+import type { SkippableStep } from "@/components/onboarding-wizard";
 import { BehaviourTimerWidget } from "@/components/behaviour-timer-widget";
 import { EventReminderWatcher } from "@/components/event-reminder-watcher";
 import { ConfirmDialogHost } from "@/lib/confirmDialog";
@@ -62,7 +52,26 @@ import { useEdgeSwipeDateNav } from "@/lib/useEdgeSwipeDateNav";
 import { useParentGate } from "@/lib/parentGate";
 import { refreshNativePushRegistration } from "@/lib/nativeNotifications";
 import { useLocalHealthReminders } from "@/hooks/useLocalHealthReminders";
+import { lazyScreen, preloadWhenIdle } from "@/lib/lazyScreen";
 import confetti from "canvas-confetti";
+
+const Calendar3View = lazyScreen("calendar", () => import("@/components/calendar3-view").then((m) => m.Calendar3View));
+const ChoresView = lazyScreen("chores", () => import("@/components/chores-view").then((m) => m.ChoresView));
+const TodosView = lazyScreen("todos", () => import("@/components/todos-view").then((m) => m.TodosView));
+const MealsView = lazyScreen("meals", () => import("@/components/meals-view").then((m) => m.MealsView));
+const ChatView = lazyScreen("chat", () => import("@/components/chat-view").then((m) => m.ChatView));
+const SettingsModal = lazyScreen("settings", () => import("@/components/settings-modal").then((m) => m.SettingsModal));
+const RewardsView = lazyScreen("rewards", () => import("@/components/rewards-view").then((m) => m.RewardsView));
+const TrophyCaseView = lazyScreen("trophies", () => import("@/components/trophy-case-view").then((m) => m.TrophyCaseView));
+const BonusChoresView = lazyScreen("bonus-chores", () => import("@/components/bonus-chores-view").then((m) => m.BonusChoresView));
+const BehaviourBoardView = lazyScreen("behaviour", () => import("@/components/behaviour-board-view").then((m) => m.BehaviourBoardView));
+const HistoryView = lazyScreen("history", () => import("@/components/history-view").then((m) => m.HistoryView));
+const OnboardingWizard = lazyScreen("onboarding", () => import("@/components/onboarding-wizard").then((m) => m.OnboardingWizard));
+// Preloaded in this order, most often opened first.
+const SCREENS = [Calendar3View, ChoresView, TodosView, MealsView, ChatView, SettingsModal, RewardsView, TrophyCaseView, BonusChoresView, BehaviourBoardView, HistoryView, OnboardingWizard];
+// Holds a screen's place while its code loads, so the page doesn't collapse.
+const screenLoading = <div className="min-h-[60vh]" aria-busy="true" data-testid="screen-loading" />;
+const cardLoading = <div className="min-h-[8rem]" aria-busy="true" data-testid="screen-loading" />;
 
 // These were previously one shared constant; split so the date-reset timer
 // (Home/Tasks/People snapping back to Today) can be tuned independently of
@@ -734,6 +743,14 @@ export default function FamilyHub() {
   const openHistory = () => { setHistoryTypeFilter(undefined); setFocusHistoryEntryId(null); setShowHistory(true); };
   const openHistoryEntry = (entryId: string) => { setHistoryTypeFilter(undefined); setFocusHistoryEntryId(entryId); setShowHistory(true); };
 
+  // Settings and Family Activity mount on first open and stay mounted, so
+  // closing one still plays its exit animation.
+  const [settingsOpened, setSettingsOpened] = useState(false);
+  if (showSettings && !settingsOpened) setSettingsOpened(true);
+  const [historyOpened, setHistoryOpened] = useState(false);
+  if (showHistory && !historyOpened) setHistoryOpened(true);
+  useEffect(() => preloadWhenIdle(SCREENS), []);
+
   // (The old per-type "quick add" dialog + its Settings toggles were retired
   // when the unified CreateTaskModal replaced every scattered add path.)
 
@@ -815,7 +832,7 @@ export default function FamilyHub() {
 
   const { data: unseenShoutouts } = useQuery<{ count: number }>({
     queryKey: ["/api/shoutouts/unseen-count"],
-    refetchInterval: 60_000,
+    refetchInterval: LIVE_REFRESH_MS,
   });
   const unseenShoutoutCount = unseenShoutouts?.count ?? 0;
 
@@ -1057,15 +1074,20 @@ export default function FamilyHub() {
     // below — onboarding's "no photo yet?" confirmation (YouStep) uses the
     // shared confirmDialog() helper, which needs a mounted host to show its
     // styled dialog instead of falling back to a native window.confirm.
+    const onboardingLoading = <div className="hearth-theme opaque-vars min-h-screen bg-background" />;
     if (startedWithNoProfilesRef.current) {
       return <>
-        <OnboardingWizard onSignOut={() => setSignOutStep(1)} />
+        <Suspense fallback={onboardingLoading}>
+          <OnboardingWizard onSignOut={() => setSignOutStep(1)} />
+        </Suspense>
         {onboardingSignOutDialog}
         <ConfirmDialogHost />
       </>;
     }
     return <>
-      <OnboardingWizard onSignOut={() => setSignOutStep(1)} forJoiner />
+      <Suspense fallback={onboardingLoading}>
+        <OnboardingWizard onSignOut={() => setSignOutStep(1)} forJoiner />
+      </Suspense>
       {onboardingSignOutDialog}
       <ConfirmDialogHost />
     </>;
@@ -1562,16 +1584,18 @@ export default function FamilyHub() {
         
         {activeTab === "calendar" && (
           <div className="-mx-3 sm:-mx-6 -mb-8">
-            <Calendar3View
-              ref={calendarRef}
-              selectedProfiles={selectedProfiles}
-              profiles={profiles}
-              selectedDate={selectedDate}
-              onDateChange={setSelectedDate}
-              pendingOpenEventId={pendingOpenEventId}
-              onPendingEventOpened={() => setPendingOpenEventId(null)}
-              onOpenCalendarSettings={(profileId) => openSettings("calendar", profileId)}
-            />
+            <Suspense fallback={screenLoading}>
+              <Calendar3View
+                ref={calendarRef}
+                selectedProfiles={selectedProfiles}
+                profiles={profiles}
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
+                pendingOpenEventId={pendingOpenEventId}
+                onPendingEventOpened={() => setPendingOpenEventId(null)}
+                onOpenCalendarSettings={(profileId) => openSettings("calendar", profileId)}
+              />
+            </Suspense>
           </div>
         )}
 
@@ -1642,20 +1666,22 @@ export default function FamilyHub() {
                   <p className="text-muted-foreground text-xs">Chores & more for the family</p>
                 </CardHeader>
                 <CardContent className="p-4">
-                  <ChoresView
-                    embedded
-                    wideMode={wideTasksCard}
-                    selectedProfiles={selectedProfiles}
-                    profiles={profiles}
-                    selectedDate={selectedDate}
-                    onSelectProfile={handleProfileToggle}
-                    funMode={tasksFunMode}
-                    onToggleFunMode={toggleTasksFunMode}
-                    taskTypeFilter="non-todos"
-                    onRequestCreate={() => openCreateTask(null)}
-                    onEditChore={openEditTask}
-                    onDeleteChore={deleteTask}
-                  />
+                  <Suspense fallback={screenLoading}>
+                    <ChoresView
+                      embedded
+                      wideMode={wideTasksCard}
+                      selectedProfiles={selectedProfiles}
+                      profiles={profiles}
+                      selectedDate={selectedDate}
+                      onSelectProfile={handleProfileToggle}
+                      funMode={tasksFunMode}
+                      onToggleFunMode={toggleTasksFunMode}
+                      taskTypeFilter="non-todos"
+                      onRequestCreate={() => openCreateTask(null)}
+                      onEditChore={openEditTask}
+                      onDeleteChore={deleteTask}
+                    />
+                  </Suspense>
                 </CardContent>
               </Card>
             </motion.section>
@@ -1681,7 +1707,9 @@ export default function FamilyHub() {
                   <p className="text-muted-foreground text-xs">Achievements earned by each family member</p>
                 </CardHeader>
                 <CardContent className="p-4">
-                  <TrophyCaseView embedded selectedProfiles={selectedProfiles} profiles={profiles} onSelectProfile={handleProfileToggle} />
+                  <Suspense fallback={cardLoading}>
+                    <TrophyCaseView embedded selectedProfiles={selectedProfiles} profiles={profiles} onSelectProfile={handleProfileToggle} />
+                  </Suspense>
                 </CardContent>
               </Card>
             </motion.section>
@@ -1737,7 +1765,9 @@ export default function FamilyHub() {
                   </p>
                 </CardHeader>
                 <CardContent className="p-4">
-                  <RewardsView embedded selectedProfiles={selectedProfiles} profiles={profiles} triggerAdd={rewardsAddTrigger} triggerManage={rewardsManageTrigger} triggerParentUnlock={rewardsParentUnlockTrigger} onParentUnlockTriggerHandled={() => setRewardsParentUnlockTrigger(0)} />
+                  <Suspense fallback={cardLoading}>
+                    <RewardsView embedded selectedProfiles={selectedProfiles} profiles={profiles} triggerAdd={rewardsAddTrigger} triggerManage={rewardsManageTrigger} triggerParentUnlock={rewardsParentUnlockTrigger} onParentUnlockTriggerHandled={() => setRewardsParentUnlockTrigger(0)} />
+                  </Suspense>
                 </CardContent>
               </Card>
             </motion.section>
@@ -1759,7 +1789,9 @@ export default function FamilyHub() {
                   <p className="text-muted-foreground text-xs">Pick one up any time for extra stars</p>
                 </CardHeader>
                 <CardContent className="p-4">
-                  <BonusChoresView embedded profiles={profiles} selectedProfiles={selectedProfiles} onRequestCreate={() => openCreateTask("bonus")} />
+                  <Suspense fallback={cardLoading}>
+                    <BonusChoresView embedded profiles={profiles} selectedProfiles={selectedProfiles} onRequestCreate={() => openCreateTask("bonus")} />
+                  </Suspense>
                 </CardContent>
               </Card>
             </motion.section>
@@ -1835,19 +1867,23 @@ export default function FamilyHub() {
 
         {activeTab === "todos" && (
           <div>
-            <TodosView selectedProfiles={selectedProfiles} profiles={profiles} onAddTodo={() => openCreateTask("todo")} />
+            <Suspense fallback={screenLoading}>
+              <TodosView selectedProfiles={selectedProfiles} profiles={profiles} onAddTodo={() => openCreateTask("todo")} />
+            </Suspense>
           </div>
         )}
 
         {activeTab === "chat" && (
-          <ChatView
-            key={`${chatProfileKey}-${chatRevision}`}
-            profileKey={chatProfileKey}
-            isChild={chatIsChild}
-            revision={chatRevision}
-            profileReady={hasInitialized}
-            onSent={() => setChatRevision((n) => n + 1)}
-          />
+          <Suspense fallback={screenLoading}>
+            <ChatView
+              key={`${chatProfileKey}-${chatRevision}`}
+              profileKey={chatProfileKey}
+              isChild={chatIsChild}
+              revision={chatRevision}
+              profileReady={hasInitialized}
+              onSent={() => setChatRevision((n) => n + 1)}
+            />
+          </Suspense>
         )}
 
         {activeTab === "people" && (
@@ -1862,24 +1898,28 @@ export default function FamilyHub() {
         )}
 
         {activeTab === "meals" && (
-          <MealsView
-            showGrocery={mealsShowGrocery}
-            onShowGroceryChange={setMealsShowGrocery}
-            weekAnchor={mealsWeekAnchor}
-            onWeekAnchorChange={setMealsWeekAnchor}
-          />
+          <Suspense fallback={screenLoading}>
+            <MealsView
+              showGrocery={mealsShowGrocery}
+              onShowGroceryChange={setMealsShowGrocery}
+              weekAnchor={mealsWeekAnchor}
+              onWeekAnchorChange={setMealsWeekAnchor}
+            />
+          </Suspense>
         )}
 
         {activeTab === "behaviour" && (
-          <BehaviourBoardView
-            profiles={profiles}
-            selectedProfiles={selectedProfiles}
-            onOpenHistory={() => {
-              setHistoryTypeFilter(["behaviour_incident"]);
-              setFocusHistoryEntryId(null);
-              setShowHistory(true);
-            }}
-          />
+          <Suspense fallback={screenLoading}>
+            <BehaviourBoardView
+              profiles={profiles}
+              selectedProfiles={selectedProfiles}
+              onOpenHistory={() => {
+                setHistoryTypeFilter(["behaviour_incident"]);
+                setFocusHistoryEntryId(null);
+                setShowHistory(true);
+              }}
+            />
+          </Suspense>
         )}
 
       </main>
@@ -1911,33 +1951,39 @@ export default function FamilyHub() {
       />
 
       {/* Settings Modal */}
-      <SettingsModal
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        profiles={profiles}
-        hiddenTabs={Array.from(hiddenTabs)}
-        setHiddenTabs={setHiddenTabs}
-        defaultTab={defaultTab}
-        setDefaultTab={setDefaultTab}
-        tabOrder={tabOrder}
-        setTabOrder={setTabOrder}
-        navIconsOnly={navIconsOnly}
-        setNavIconsOnly={setNavIconsOnly}
-        onReplayOnboarding={() => { setShowSettings(false); setReplayOnboardingStep("you"); }}
-        initialOpenSectionId={settingsInitialSection}
-        initialCalendarProfileId={settingsInitialCalendarProfileId}
-        initialCalendarSpotlightAll={settingsSpotlightAllCalendarProfiles}
-        initialHighlightTabId={settingsInitialHighlightTabId}
-      />
+      {settingsOpened && (
+        <Suspense fallback={null}>
+          <SettingsModal
+            isOpen={showSettings}
+            onClose={() => setShowSettings(false)}
+            profiles={profiles}
+            hiddenTabs={Array.from(hiddenTabs)}
+            setHiddenTabs={setHiddenTabs}
+            defaultTab={defaultTab}
+            setDefaultTab={setDefaultTab}
+            tabOrder={tabOrder}
+            setTabOrder={setTabOrder}
+            navIconsOnly={navIconsOnly}
+            setNavIconsOnly={setNavIconsOnly}
+            onReplayOnboarding={() => { setShowSettings(false); setReplayOnboardingStep("you"); }}
+            initialOpenSectionId={settingsInitialSection}
+            initialCalendarProfileId={settingsInitialCalendarProfileId}
+            initialCalendarSpotlightAll={settingsSpotlightAllCalendarProfiles}
+            initialHighlightTabId={settingsInitialHighlightTabId}
+          />
+        </Suspense>
+      )}
 
       {/* Replaying the onboarding walkthrough on top of the app */}
       {replayOnboardingStep && (
         <div className="fixed inset-0 z-[2000] overflow-y-auto bg-background">
-          <OnboardingWizard
-            onSignOut={() => setSignOutStep(1)}
-            initialStep={replayOnboardingStep}
-            onClose={() => setReplayOnboardingStep(null)}
-          />
+          <Suspense fallback={null}>
+            <OnboardingWizard
+              onSignOut={() => setSignOutStep(1)}
+              initialStep={replayOnboardingStep}
+              onClose={() => setReplayOnboardingStep(null)}
+            />
+          </Suspense>
         </div>
       )}
 
@@ -2262,13 +2308,17 @@ export default function FamilyHub() {
       />
 
       {/* ── History / Audit trail ── */}
-      <HistoryView
-        open={showHistory}
-        onClose={() => { setShowHistory(false); setFocusHistoryEntryId(null); }}
-        profiles={profiles}
-        initialTypeFilter={historyTypeFilter}
-        focusEntryId={focusHistoryEntryId}
-      />
+      {historyOpened && (
+        <Suspense fallback={null}>
+          <HistoryView
+            open={showHistory}
+            onClose={() => { setShowHistory(false); setFocusHistoryEntryId(null); }}
+            profiles={profiles}
+            initialTypeFilter={historyTypeFilter}
+            focusEntryId={focusHistoryEntryId}
+          />
+        </Suspense>
+      )}
 
       {/* The old global Bulk-Add-Chores modal was retired — every add path
           now goes through the unified CreateTaskModal (picker). */}

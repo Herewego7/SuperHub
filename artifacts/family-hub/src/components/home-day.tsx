@@ -9,6 +9,7 @@ import { choreProgress, choresForCount, completedActions, dinnerName, driverName
 import { eventSourceChip } from "@/lib/upcoming";
 import { appendPlace, eventClockLine, planEventTitle, pointsProfileId } from "@/lib/chatTools";
 import { confirmDialog } from "@/lib/confirmDialog";
+import { hapticLight } from "@/lib/haptics";
 import { openEmailHref, schoolSaveTarget, slipQuote, slipSender, slipText } from "@/lib/slipMail";
 import { clearInboxScan, readInboxScanOpen } from "@/lib/inboxScan";
 
@@ -175,6 +176,20 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
         localDayStart: localDayStart.toISOString(),
       });
     },
+    onMutate: async (choreId) => {
+      const profileId = profileFor(choreId);
+      if (!profileId) return;
+      hapticLight();
+      await queryClient.cancelQueries({ queryKey: ["/api/chore-completions"] });
+      const prev = queryClient.getQueryData<ChoreCompletion[]>(["/api/chore-completions"]);
+      const points = chores.find((item) => item.id === choreId)?.points ?? 0;
+      const temp = { id: `temp-${Date.now()}`, choreId, profileId, points, completedAt: new Date() } as ChoreCompletion;
+      queryClient.setQueryData<ChoreCompletion[]>(["/api/chore-completions"], (old = []) => [...old, temp]);
+      return { prev };
+    },
+    onError: (_error, _choreId, context) => {
+      if (context?.prev) queryClient.setQueryData(["/api/chore-completions"], context.prev);
+    },
     onSuccess: async (_data, choreId) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/chore-completions"] });
       const profileId = profileFor(choreId);
@@ -186,6 +201,18 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
       const profileId = profileFor(choreId);
       if (!profileId) return;
       await apiRequest("DELETE", `/api/chore-completions/${choreId}/${profileId}`);
+    },
+    onMutate: async (choreId) => {
+      const profileId = profileFor(choreId);
+      if (!profileId) return;
+      await queryClient.cancelQueries({ queryKey: ["/api/chore-completions"] });
+      const prev = queryClient.getQueryData<ChoreCompletion[]>(["/api/chore-completions"]);
+      queryClient.setQueryData<ChoreCompletion[]>(["/api/chore-completions"], (old = []) =>
+        old.filter((item) => !(item.choreId === choreId && item.profileId === profileId)));
+      return { prev };
+    },
+    onError: (_error, _choreId, context) => {
+      if (context?.prev) queryClient.setQueryData(["/api/chore-completions"], context.prev);
     },
     onSuccess: async (_data, choreId) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/chore-completions"] });

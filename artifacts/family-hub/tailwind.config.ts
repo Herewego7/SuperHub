@@ -88,7 +88,7 @@ export default {
         sans: ["var(--font-sans)"],
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
-        display: ["Fraunces", "Georgia", "serif"],
+        display: ["var(--font-display)"],
       },
       boxShadow: {
         sm: "0 1px 2px rgba(42,39,35,0.04)",

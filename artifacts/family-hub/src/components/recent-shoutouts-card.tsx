@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, LIVE_REFRESH_MS } from "@/lib/queryClient";
 import type { Profile, CustomProfileGroup } from "@workspace/shared-types";
 
 interface Shoutout {
@@ -238,7 +238,7 @@ export function RecentShoutoutsCard({ profiles, triggerNote = 0, triggerShoutout
       const res = await apiRequest("GET", "/api/shoutouts?limit=10");
       return res.json();
     },
-    refetchInterval: 60_000,
+    refetchInterval: LIVE_REFRESH_MS,
   });
 
   const { data: allDailyContent = [], isLoading: contentLoading } = useQuery<DailyContentItem[]>({
@@ -247,7 +247,7 @@ export function RecentShoutoutsCard({ profiles, triggerNote = 0, triggerShoutout
       const res = await apiRequest("GET", "/api/daily-content");
       return res.json();
     },
-    refetchInterval: 60_000,
+    refetchInterval: LIVE_REFRESH_MS,
   });
 
   const { data: assignments = [] } = useQuery<DailyContentAssignment[]>({

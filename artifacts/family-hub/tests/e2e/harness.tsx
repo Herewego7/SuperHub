@@ -75,6 +75,8 @@ import * as eventModalSeriesNote from "./scenarios/eventModalSeriesNote";
 import * as eventMultiDriver from "./scenarios/eventMultiDriver";
 import * as calendarReturn from "./scenarios/calendarReturn";
 import * as calendarSyncErrorNamed from "./scenarios/calendarSyncErrorNamed";
+import * as homeCheckOff from "./scenarios/homeCheckOff";
+import * as liveRefresh from "./scenarios/liveRefresh";
 
 // One persistent, multi-scenario harness page instead of a disposable
 // dev-harness.tsx per session — add a new module to ./scenarios and
@@ -155,6 +157,8 @@ const SCENARIOS: Record<string, { setup: () => void; Component: React.ComponentT
   eventMultiDriver,
   calendarReturn,
   calendarSyncErrorNamed,
+  homeCheckOff,
+  liveRefresh,
 };
 
 const params = new URLSearchParams(window.location.search);

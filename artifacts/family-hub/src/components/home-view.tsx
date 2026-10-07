@@ -24,7 +24,7 @@ import { Plus, Check, BookOpen, Heart, Book, Bookmark, FileText, Calendar, MapPi
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format, isToday, formatDistanceToNow, startOfDay, endOfDay } from "date-fns";
-import { queryClient, apiRequest, getQueryFn } from "@/lib/queryClient";
+import { queryClient, apiRequest, getQueryFn, LIVE_REFRESH_MS } from "@/lib/queryClient";
 import { confirmDialog } from "@/lib/confirmDialog";
 import { parseGoogleEventDates, parseOutlookEventDates, icalDisplayEnd } from "@/lib/calendarDates";
 import { applySavedEventToCache, removeEventFromCache, applyGoogleAssignmentToCache } from "@/lib/eventCache";
@@ -401,7 +401,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
     queries: googleConnectedProfiles.map(profile => ({
       queryKey: ["/api/google-calendar/events", profile.id],
       queryFn: getQueryFn({ on401: "returnNull" }),
-      refetchInterval: 60000,
+      refetchInterval: LIVE_REFRESH_MS,
       retry: false,
     }))
   });
@@ -414,7 +414,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
     queries: outlookConnectedProfiles.map(profile => ({
       queryKey: ["/api/outlook-calendar/events", profile.id],
       queryFn: getQueryFn({ on401: "returnNull" }),
-      refetchInterval: 60000,
+      refetchInterval: LIVE_REFRESH_MS,
       retry: false,
     }))
   });
@@ -423,7 +423,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
     queries: icalConnectedProfiles.map(profile => ({
       queryKey: ["/api/ical-calendar/events", profile.id],
       queryFn: getQueryFn({ on401: "returnNull" }),
-      refetchInterval: 60000,
+      refetchInterval: LIVE_REFRESH_MS,
       retry: false,
     }))
   });

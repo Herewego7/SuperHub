@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import confetti from "canvas-confetti";
 import { hasCelebratedAllDone, markCelebratedAllDone, clearCelebratedAllDone } from "@/lib/allDoneCelebration";
-import { hapticSuccess } from "@/lib/haptics";
+import { hapticLight, hapticSuccess } from "@/lib/haptics";
 import { revealFieldAboveKeyboard } from "@/lib/keyboardFieldReveal";
 import { motion, AnimatePresence } from "framer-motion";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -1391,6 +1391,7 @@ export function useTodoMutations(profiles: Profile[], selectedProfileIds: string
       return res.json();
     },
     onMutate: async (v) => {
+      hapticLight();
       await queryClient.cancelQueries({ queryKey: ["/api/chore-completions"] });
       const prev = queryClient.getQueryData<ChoreCompletion[]>(["/api/chore-completions"]);
       const tempId = `temp-${Date.now()}`;

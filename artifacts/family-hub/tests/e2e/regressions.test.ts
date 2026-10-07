@@ -6039,3 +6039,213 @@ test("Outlook: an event follows its calendar's Assign to, not the account it cam
     await page.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// SuperHub polish (2026-10-06): the device's own font with rounded headings,
+// a light tap and an instant tick on check-off, five-minute refreshes, and
+// screens that load on first open.
+// ---------------------------------------------------------------------------
+
+/** Records every `navigator.vibrate` pattern in `window.__vibrations`. */
+const RECORD_VIBRATIONS = `(() => {
+  window.__vibrations = [];
+  Object.defineProperty(navigator, "vibrate", {
+    configurable: true,
+    value: (pattern) => { window.__vibrations.push(pattern); return true; },
+  });
+})()`;
+
+/** Records the URL of every request in `window.__apiCalls`, by wrapping
+ *  whatever the scenario installs as `window.fetch`. */
+const RECORD_API_CALLS = `(() => {
+  window.__apiCalls = [];
+  const nativeFetch = window.fetch;
+  let mockFetch = null;
+  Object.defineProperty(window, "fetch", {
+    configurable: true,
+    get() {
+      if (!mockFetch) return nativeFetch;
+      return (url, opts) => { window.__apiCalls.push(String(url)); return mockFetch(url, opts); };
+    },
+    set(handler) { mockFetch = handler; },
+  });
+})()`;
+
+const callsTo = async (page: Page, path: string): Promise<number> =>
+  (await page.evaluate(`window.__apiCalls.filter((url) => url.includes(${JSON.stringify(path)})).length`)) as number;
+
+/** Opens a scenario on Playwright's clock, so minutes can pass in a moment. */
+async function openWithClock(scenario: string): Promise<Page> {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(RECORD_API_CALLS);
+  await page.clock.install();
+  await page.goto(`${BASE_URL}?scenario=${scenario}`);
+  await page.getByTestId("calendar-tab").waitFor({ timeout: 15_000 });
+  await page.waitForTimeout(1500);
+  return page;
+}
+
+test("Fonts: body text uses the device's own font and headings its rounded one", async () => {
+  const page = await openScenario("familyHub");
+  try {
+    const font = (selector: string, text?: RegExp) =>
+      page.locator(selector, text ? { hasText: text } : {}).first().evaluate((el) => getComputedStyle(el).fontFamily);
+    await page.locator("#app-scroll-container .plan-card h2").first().waitFor({ timeout: 10_000 });
+    const body = await font("#app-scroll-container");
+    const card = await font("#app-scroll-container .plan-card h2");
+    await page.getByTestId("chores-tab").click();
+    await page.locator("#app-scroll-container h3", { hasText: /^Chores$/ }).first().waitFor({ timeout: 10_000 });
+    const heading = await font("#app-scroll-container h3", /^Chores$/);
+
+    assert.match(body, /^-apple-system,/, `body text should use the device's font, got ${body}`);
+    assert.match(heading, /^ui-rounded,/, `headings should use the rounded font, got ${heading}`);
+    assert.match(card, /^-apple-system,/, `Home's card titles should match its body text, got ${card}`);
+    for (const family of [body, heading, card]) {
+      assert.doesNotMatch(family, /Fraunces|Plus Jakarta|Inter/, `no downloaded font should be named, got ${family}`);
+    }
+  } finally {
+    await page.close();
+  }
+});
+
+test("Check-off: a to-do on Home ticks the moment it's tapped, with one light tap", async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  try {
+    await page.addInitScript(RECORD_VIBRATIONS);
+    await page.goto(`${BASE_URL}?scenario=homeCheckOff`);
+    const tick = page.getByRole("button", { name: "Check off Return library books" });
+    await tick.waitFor({ timeout: 15_000 });
+
+    // The scenario's server takes 2.5 seconds to save; the tick lands first.
+    await tick.click();
+    await page.getByRole("button", { name: "Show 1 done" }).waitFor({ timeout: 700 });
+    assert.equal(await page.getByTestId("home-todo-t1").count(), 0, "the ticked to-do should leave the open list at once");
+    assert.deepEqual(await page.evaluate("window.__vibrations"), [10], "one light tap per check-off");
+
+    await page.waitForTimeout(3000);
+    assert.equal(await page.getByRole("button", { name: "Show 1 done" }).count(), 1, "the tick should stay once the save lands");
+
+    await page.getByRole("button", { name: "Show 1 done" }).click();
+    await page.getByRole("button", { name: "Mark Return library books not done" }).click();
+    await page.getByTestId("home-todo-t1").waitFor({ timeout: 700 });
+    assert.deepEqual(await page.evaluate("window.__vibrations"), [10], "un-ticking is silent");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Check-off: a to-do on the To-Dos tab gives one light tap", async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  try {
+    await page.addInitScript(RECORD_VIBRATIONS);
+    await page.goto(`${BASE_URL}?scenario=todosPartialConfetti`);
+    const tick = page.locator('[data-testid="todo-row"]', { hasText: "Pack bag" }).locator('[data-testid="todo-complete"]');
+    await tick.waitFor({ state: "visible", timeout: 15_000 });
+    await tick.click();
+    await page.waitForTimeout(500);
+    assert.deepEqual(await page.evaluate("window.__vibrations"), [10]);
+  } finally {
+    await page.close();
+  }
+});
+
+test("Live refresh: an open Home asks for calendar events every five minutes", async () => {
+  const page = await openWithClock("liveRefresh");
+  try {
+    const first = await callsTo(page, "/api/google-calendar/events");
+    assert.ok(first >= 1, "the connected calendar should load at startup");
+    await page.clock.runFor(4 * 60_000 + 45_000);
+    assert.equal(await callsTo(page, "/api/google-calendar/events"), first, "no calendar refresh inside five minutes");
+    await page.clock.runFor(30_000);
+    assert.equal(await callsTo(page, "/api/google-calendar/events"), first + 1, "one refresh at five minutes");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Live refresh: the behaviour timer widget asks nothing while no timer runs", async () => {
+  const page = await openWithClock("liveRefresh");
+  try {
+    const first = await callsTo(page, "/api/behaviour-board");
+    assert.ok(first >= 1, "the board should load at startup");
+    await page.clock.runFor(3 * 60_000);
+    assert.equal(await callsTo(page, "/api/behaviour-board"), first, "no repeat requests without a running timer");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Live refresh: a running behaviour timer refreshes every 30 seconds", async () => {
+  const page = await openWithClock("liveRefresh&timer");
+  try {
+    const first = await callsTo(page, "/api/behaviour-board");
+    await page.clock.runFor(65_000);
+    assert.equal(await callsTo(page, "/api/behaviour-board"), first + 2, "two refreshes a minute while a timer runs");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Screens on demand: every tab opens its screen", async () => {
+  const page = await openScenario("familyHub");
+  try {
+    const screens: [string, () => Promise<void>][] = [
+      ["calendar-tab", () => page.getByTestId("open-celebrations-toolbar-button").first().waitFor({ timeout: 10_000 })],
+      ["chores-tab", () => page.getByText("No chores or to-dos yet").first().waitFor({ timeout: 10_000 })],
+      ["meals-tab", () => page.getByText("This Week's Meals").first().waitFor({ timeout: 10_000 })],
+      ["chat-tab", () => page.getByTestId("chat-panel").waitFor({ timeout: 10_000 })],
+    ];
+    for (const [tab, shown] of screens) {
+      await page.getByTestId(tab).click();
+      await shown();
+    }
+  } finally {
+    await page.close();
+  }
+});
+
+/** familyHub with Chat's file failing to load: in the first page only, or in
+ *  every page. Chat is the screen no other scenario imports, so blocking it
+ *  leaves the harness itself intact. */
+async function openWithBrokenChat(always: boolean): Promise<{ page: Page; documents: () => number }> {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  let documents = 0;
+  page.on("request", (request) => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documents += 1;
+  });
+  await page.route("**/src/components/chat-view.tsx*", (route) =>
+    always || documents <= 1 ? route.abort() : route.continue());
+  await page.goto(`${BASE_URL}?scenario=familyHub`);
+  return { page, documents: () => documents };
+}
+
+async function waitForDocuments(page: Page, documents: () => number, count: number): Promise<void> {
+  for (let waited = 0; documents() < count && waited < 10_000; waited += 250) await page.waitForTimeout(250);
+}
+
+test("Screens on demand: a screen that fails to load reloads the app once, then opens", async () => {
+  const { page, documents } = await openWithBrokenChat(false);
+  try {
+    await page.getByTestId("chat-tab").click({ timeout: 15_000 });
+    await waitForDocuments(page, documents, 2);
+    assert.equal(documents(), 2, "the failed screen should reload the app");
+    await page.getByTestId("chat-tab").click({ timeout: 15_000 });
+    await page.getByTestId("chat-panel").waitFor({ timeout: 10_000 });
+    assert.equal(documents(), 2, "exactly one reload");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Screens on demand: a screen that keeps failing reloads once, then stops", async () => {
+  const { page, documents } = await openWithBrokenChat(true);
+  try {
+    await page.getByTestId("chat-tab").click({ timeout: 15_000 });
+    await waitForDocuments(page, documents, 2);
+    await page.getByTestId("chat-tab").click({ timeout: 15_000 });
+    await page.waitForTimeout(3000);
+    assert.equal(documents(), 2, "a second failure must reach the error screen, not reload again");
+  } finally {
+    await page.close();
+  }
+});
