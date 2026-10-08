@@ -25,7 +25,7 @@ import {
   MapPin, Star, Heart, Book, Bookmark, FileText, StickyNote, SlidersHorizontal,
   Flame, Trophy, Sparkles, AlertTriangle, Gift, Target as TargetIcon, ChevronDown, ChevronUp, ChevronRight,
 } from "lucide-react";
-import { taskTypeMeta } from "@/components/chores-view";
+import { taskTypeMeta } from "@/components/task-types";
 import { isFutureDate } from "@/lib/choreSchedule";
 import { format, isToday, startOfDay, endOfDay, isBefore } from "date-fns";
 import { isWithinInterval } from "date-fns";

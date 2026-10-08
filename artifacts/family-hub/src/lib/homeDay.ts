@@ -795,23 +795,72 @@ export function newsletterIssues<T extends PlanChore>(todos: T[], now: Date): (T
   return [...newest.values()].sort((a, b) => b.when.getTime() - a.when.getTime());
 }
 
-/** Finished to-dos from the last 7 days, counting today. Newest first. */
-export function completedActions<T extends { id: string; choreId: string; completedAt?: Date | string | null }>(
-  completions: T[],
-  now: Date,
-): T[] {
+function inCompletedWindow(at: Date, now: Date): boolean {
   const today = dayStart(now);
   const earliest = new Date(today);
   earliest.setDate(earliest.getDate() - (PLAN_COMPLETED_DAYS - 1));
   const end = new Date(today);
   end.setDate(end.getDate() + 1);
+  return at >= earliest && at < end;
+}
+
+/** Finished to-dos from the last 7 days, counting today. Newest first. */
+export function completedActions<T extends { id: string; choreId: string; completedAt?: Date | string | null }>(
+  completions: T[],
+  now: Date,
+): T[] {
   return completions
-    .filter((completion) => {
-      if (!completion.completedAt) return false;
-      const at = new Date(completion.completedAt);
-      return at >= earliest && at < end;
-    })
+    .filter((completion) => !!completion.completedAt && inCompletedWindow(new Date(completion.completedAt), now))
     .sort((a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime());
+}
+
+export type HomePraise = { kind: "praise"; id: string; at: Date; fromId: string; toId: string; emoji: string; text: string; unseen: boolean };
+export type HomeNote = { kind: "note"; id: string; at: Date; authorId: string | null; text: string };
+
+/** Praise from the same seven days, to or from the people on screen. Only
+ *  praise TO them counts as unseen: whoever sent it has nothing new to see. */
+export function praiseForHome(
+  praise: { id: string; fromProfileId: string; toProfileId: string; emoji: string; message: string; createdAt: Date | string; seenAt?: Date | string | null }[],
+  selectedIds: string[],
+  everyone: boolean,
+  now: Date,
+): HomePraise[] {
+  return praise
+    .filter((p) => inCompletedWindow(new Date(p.createdAt), now)
+      && (everyone || selectedIds.includes(p.toProfileId) || selectedIds.includes(p.fromProfileId)))
+    .map((p) => ({
+      kind: "praise" as const,
+      id: p.id,
+      at: new Date(p.createdAt),
+      fromId: p.fromProfileId,
+      toId: p.toProfileId,
+      emoji: p.emoji,
+      text: p.message,
+      unseen: !p.seenAt && (everyone || selectedIds.includes(p.toProfileId)),
+    }))
+    .sort((a, b) => b.at.getTime() - a.at.getTime());
+}
+
+/** Family notes from the same seven days, for or by the people on screen. A
+ *  note for All Family, or with no recipients, is for everyone. */
+export function notesForHome(
+  notes: { id: string; type: string; content: string; reference: string | null; isActive: boolean | null; createdAt: Date | string | null }[],
+  assignments: { contentId: string; profileId: string }[],
+  selectedIds: string[],
+  everyone: boolean,
+  familyId: string | null,
+  now: Date,
+): HomeNote[] {
+  return notes
+    .filter((note) => {
+      if (note.type !== "note" || note.isActive === false || !note.createdAt) return false;
+      if (!inCompletedWindow(new Date(note.createdAt), now)) return false;
+      if (everyone || (note.reference && selectedIds.includes(note.reference))) return true;
+      const to = assignments.filter((a) => a.contentId === note.id).map((a) => a.profileId);
+      return to.length === 0 || to.some((id) => id === familyId || selectedIds.includes(id));
+    })
+    .map((note) => ({ kind: "note" as const, id: note.id, at: new Date(note.createdAt!), authorId: note.reference, text: note.content }))
+    .sort((a, b) => b.at.getTime() - a.at.getTime());
 }
 
 export function forecastFor(

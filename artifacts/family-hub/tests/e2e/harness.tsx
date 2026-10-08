@@ -46,13 +46,15 @@ import * as createTaskSubTodos from "./scenarios/createTaskSubTodos";
 import * as historyEntrySpotlight from "./scenarios/historyEntrySpotlight";
 import * as eventAllDayFlow from "./scenarios/eventAllDayFlow";
 import * as upgradeDialog from "./scenarios/upgradeDialog";
-import * as onboardingRenameProfile from "./scenarios/onboardingRenameProfile";
-import * as onboardingYouStepPersist from "./scenarios/onboardingYouStepPersist";
 import * as parentPinChecklist from "./scenarios/parentPinChecklist";
 import * as parentPinSet from "./scenarios/parentPinSet";
 import * as parentGateNoPin from "./scenarios/parentGateNoPin";
 import * as onboardingTour from "./scenarios/onboardingTour";
-import * as onboardingDone from "./scenarios/onboardingDone";
+import * as setupChatFresh from "./scenarios/setupChatFresh";
+import * as setupChatJoiner from "./scenarios/setupChatJoiner";
+import * as setupChatReplay from "./scenarios/setupChatReplay";
+import * as setupChatResume from "./scenarios/setupChatResume";
+import * as setupChatCalendar from "./scenarios/setupChatCalendar";
 import * as toastSwipe from "./scenarios/toastSwipe";
 import * as trophyStripOverflow from "./scenarios/trophyStripOverflow";
 import * as createTaskAssignees from "./scenarios/createTaskAssignees";
@@ -64,6 +66,8 @@ import * as groceryEdit from "./scenarios/groceryEdit";
 import * as announcementsFinishSetupRace from "./scenarios/announcementsFinishSetupRace";
 import * as announcementsRewardSuggestion from "./scenarios/announcementsRewardSuggestion";
 import * as healthPushSpotlight from "./scenarios/healthPushSpotlight";
+import * as homePraise from "./scenarios/homePraise";
+import * as healthPushNoCard from "./scenarios/healthPushNoCard";
 import * as spotlightHeaderClamp from "./scenarios/spotlightHeaderClamp";
 import * as homeCalendarSyncError from "./scenarios/homeCalendarSyncError";
 import * as screenshotInventory from "./scenarios/screenshotInventory";
@@ -75,6 +79,8 @@ import * as eventModalSeriesNote from "./scenarios/eventModalSeriesNote";
 import * as eventMultiDriver from "./scenarios/eventMultiDriver";
 import * as calendarReturn from "./scenarios/calendarReturn";
 import * as calendarSyncErrorNamed from "./scenarios/calendarSyncErrorNamed";
+import * as homeCheckOff from "./scenarios/homeCheckOff";
+import * as liveRefresh from "./scenarios/liveRefresh";
 
 // One persistent, multi-scenario harness page instead of a disposable
 // dev-harness.tsx per session — add a new module to ./scenarios and
@@ -125,13 +131,15 @@ const SCENARIOS: Record<string, { setup: () => void; Component: React.ComponentT
   historyEntrySpotlight,
   eventAllDayFlow,
   upgradeDialog,
-  onboardingRenameProfile,
-  onboardingYouStepPersist,
   parentPinChecklist,
   parentPinSet,
   parentGateNoPin,
   onboardingTour,
-  onboardingDone,
+  setupChatFresh,
+  setupChatJoiner,
+  setupChatReplay,
+  setupChatResume,
+  setupChatCalendar,
   toastSwipe,
   trophyStripOverflow,
   createTaskAssignees,
@@ -143,6 +151,8 @@ const SCENARIOS: Record<string, { setup: () => void; Component: React.ComponentT
   announcementsFinishSetupRace,
   announcementsRewardSuggestion,
   healthPushSpotlight,
+  homePraise,
+  healthPushNoCard,
   healthPushOtherProfile,
   spotlightHeaderClamp,
   homeCalendarSyncError,
@@ -155,6 +165,8 @@ const SCENARIOS: Record<string, { setup: () => void; Component: React.ComponentT
   eventMultiDriver,
   calendarReturn,
   calendarSyncErrorNamed,
+  homeCheckOff,
+  liveRefresh,
 };
 
 const params = new URLSearchParams(window.location.search);

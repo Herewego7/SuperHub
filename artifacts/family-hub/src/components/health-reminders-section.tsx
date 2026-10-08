@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { objectUrl } from "@/lib/apiBase";
 import { confirmDialog } from "@/lib/confirmDialog";
 import { useToast } from "@/hooks/use-toast";
 import type { Profile } from "@workspace/shared-types";
@@ -82,9 +83,37 @@ function describeSchedule(s: Schedule): string {
 interface Props {
   profile: Profile;
   allProfiles: Profile[];
+  /** Replaces the "Health reminders" label, for a list that groups several
+   *  people under their own names. */
+  heading?: React.ReactNode;
+  /** Off where the list around this section already shows it once. */
+  showWebNotice?: boolean;
+  /** Empty string shows nothing for a person with no reminders. */
+  emptyText?: string;
 }
 
-export function HealthRemindersSection({ profile, allProfiles }: Props) {
+// Web only, and deliberately: in the app these reminders are handed to iOS and
+// fire on their own, so there is nothing to warn about. In a browser they
+// depend on the server being awake to send them, which is not something we can
+// promise — saying so is better than a reminder quietly not arriving.
+function WebReminderNotice() {
+  if (Capacitor.isNativePlatform()) return null;
+  return (
+    <p className="text-xs text-muted-foreground mb-2" data-testid="health-reminders-web-notice">
+      Reminders are most reliable in the Family&nbsp;Hub+ app, which can alert
+      you even when it&rsquo;s closed. In a browser they may arrive late or
+      not at all.
+    </p>
+  );
+}
+
+export function HealthRemindersSection({
+  profile,
+  allProfiles,
+  heading,
+  showWebNotice = true,
+  emptyText = "No reminders yet — tap Add to set up a medication, appointment, or refill reminder.",
+}: Props) {
   const [editing, setEditing] = useState<HealthReminder | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const { toast } = useToast();
@@ -116,11 +145,6 @@ export function HealthRemindersSection({ profile, allProfiles }: Props) {
   const open = editing ?? (showAdd ? null : undefined);
 
   return (
-    // The id is the scroll/spotlight target for the "Manage" button on Home's
-    // "Health reminders to acknowledge" card. That used to aim at the whole
-    // Tasks card, which on a phone is chores, to-dos, bonus, goals and
-    // inspiration stacked above this — so it dimmed most of the screen and
-    // left the reminders themselves half off the bottom (2026-09-29).
     <section id={`health-reminders-${profile.id}`}>
       <div className="flex items-center gap-1.5 mb-2">
         {/* Same colour as the heading beside it, which is what every other
@@ -129,8 +153,12 @@ export function HealthRemindersSection({ profile, allProfiles }: Props) {
             one heading read as a warning rather than as a section
             (2026-09-14). The individual reminder rows below still carry their
             own type colours. */}
-        <Pill className="w-3.5 h-3.5 text-muted-foreground" />
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Health reminders</h4>
+        {heading ?? (
+          <>
+            <Pill className="w-3.5 h-3.5 text-muted-foreground" />
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Health reminders</h4>
+          </>
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -141,20 +169,9 @@ export function HealthRemindersSection({ profile, allProfiles }: Props) {
           <Plus className="w-3 h-3 mr-1" /> Add
         </Button>
       </div>
-      {/* Web only, and deliberately: in the app these reminders are handed to
-          iOS and fire on their own, so there is nothing to warn about. In a
-          browser they depend on the server being awake to send them, which is
-          not something we can promise — saying so is better than a reminder
-          quietly not arriving. */}
-      {!Capacitor.isNativePlatform() && (
-        <p className="text-xs text-muted-foreground mb-2" data-testid="health-reminders-web-notice">
-          Reminders are most reliable in the Family&nbsp;Hub+ app, which can alert
-          you even when it&rsquo;s closed. In a browser they may arrive late or
-          not at all.
-        </p>
-      )}
+      {showWebNotice && <WebReminderNotice />}
       {reminders.length === 0 ? (
-        <p className="text-xs text-muted-foreground italic">No reminders yet — tap Add to set up a medication, appointment, or refill reminder.</p>
+        emptyText && <p className="text-xs text-muted-foreground italic">{emptyText}</p>
       ) : (
         <ul className="space-y-1.5">
           {reminders.map((r) => {
@@ -222,6 +239,67 @@ export function HealthRemindersSection({ profile, allProfiles }: Props) {
       {/* avoid unused-warning: open variable used implicitly above */}
       <span hidden>{open === null ? "" : ""}</span>
     </section>
+  );
+}
+
+/** Everyone's health reminders in one dialog, opened from the + menu and from
+ *  Manage on Home's inbox. `firstId` puts that person at the top. */
+export function HealthRemindersSheet({
+  open,
+  onOpenChange,
+  profiles,
+  firstId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  profiles: Profile[];
+  firstId?: string | null;
+}) {
+  const people = profiles.filter((p) => !p.isAllFamilyProfile);
+  const ordered = [...people.filter((p) => p.id === firstId), ...people.filter((p) => p.id !== firstId)];
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="max-w-md"
+        data-testid="health-reminders-sheet"
+        // Radix focuses the first Add button on open, which reads as already
+        // chosen. Same guard the profile pickers carry.
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle>Health reminders</DialogTitle>
+        </DialogHeader>
+        <WebReminderNotice />
+        {ordered.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Add someone in Settings → People first, then you can set a reminder for them.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            {ordered.map((p) => (
+              <HealthRemindersSection
+                key={p.id}
+                profile={p}
+                allProfiles={profiles}
+                showWebNotice={false}
+                emptyText=""
+                heading={
+                  <>
+                    <span
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0 overflow-hidden"
+                      style={{ backgroundColor: p.color }}
+                    >
+                      {p.photoUrl ? <img src={objectUrl(p.photoUrl)} alt="" className="w-full h-full object-cover" /> : p.initials}
+                    </span>
+                    <h4 className="text-sm font-semibold truncate">{p.name}</h4>
+                  </>
+                }
+              />
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -933,6 +933,17 @@ export function CelebrationFormDialog({
   );
 }
 
+/** One celebration by id, over whatever is on screen: a celebration reminder
+ *  push opens this. Shows nothing until the list has loaded. */
+export function CelebrationByIdDialog({ id, onClose }: { id: string; onClose: () => void }) {
+  const { data: celebrations = [] } = useQuery<CelebrationListItem[]>({ queryKey: ["/api/celebrations"] });
+  const [editing, setEditing] = useState(false);
+  const celebration = celebrations.find((c) => c.id === id);
+  if (!celebration) return null;
+  if (editing) return <CelebrationFormDialog key={celebration.id} celebration={celebration} onClose={onClose} />;
+  return <CelebrationDetailDialog celebration={celebration} onClose={onClose} onEdit={() => setEditing(true)} />;
+}
+
 // ───────────────────── Detail dialog (gifts + photos) ─────────────────────
 
 interface CelebrationDetailDialogProps {

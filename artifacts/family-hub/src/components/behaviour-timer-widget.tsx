@@ -38,7 +38,7 @@ export function BehaviourTimerWidget({
   const { data } = useQuery<BoardData>({
     queryKey: ["/api/behaviour-board"],
     queryFn: async () => (await apiRequest("GET", "/api/behaviour-board")).json(),
-    refetchInterval: 30_000,
+    refetchInterval: (query) => (query.state.data?.activeIncidents?.length ? 30_000 : false),
   });
 
   const active = data?.activeIncidents ?? [];

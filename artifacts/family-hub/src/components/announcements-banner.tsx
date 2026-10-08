@@ -16,7 +16,7 @@ import {
 import type { Profile, DailyContent, DailyContentAssignment, OnboardingStatus, RewardSettings } from "@workspace/shared-types";
 import { format } from "date-fns";
 import { CelebrationDetailDialog, CelebrationFormDialog, TYPE_META, type CelebrationListItem } from "@/components/celebrations-view";
-import type { SkippableStep } from "@/components/onboarding-wizard";
+import type { SkippableStep } from "@/lib/onboardingSteps";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Shoutout {

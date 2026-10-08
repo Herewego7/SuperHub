@@ -42,10 +42,8 @@ interface Props {
       a med reminder for one kid shouldn't appear while a different person is
       the only one selected. */
   selectedProfiles?: string[];
-  /** Opens the Tasks tab with a specific profile selected — that's where
-      that person's own "Health reminders" section actually lives (add/
-      edit/pause/delete), via `PersonCard`. There's no dedicated Health
-      settings screen, so this is the one deep-link this card can offer. */
+  /** Opens everyone's reminders (add, edit, pause, delete) with this person
+      first. */
   onManage?: (profileId: string) => void;
 }
 

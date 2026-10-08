@@ -71,6 +71,11 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
+/** How often an open screen re-asks for what another device may have changed:
+ * calendar events, praise and family notes. Coming back to the app refreshes
+ * at once anyway (refetchOnWindowFocus below). */
+export const LIVE_REFRESH_MS = 5 * 60_000;
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
