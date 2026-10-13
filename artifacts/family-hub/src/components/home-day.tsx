@@ -421,8 +421,10 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
   return (
     <div className="flex flex-col gap-3.5" data-testid="home-day">
       <InboxScanBanner />
+      {/* touch-pan-y keeps a sideways drag with us. Without it WebKit can
+          claim the drag as a page scroll and cancel it, and the swipe is lost. */}
       <section
-        className="plan-card flex items-center gap-1"
+        className="plan-card flex touch-pan-y items-center gap-1"
         onPointerDown={(event) => { drag.current = { x: event.clientX, y: event.clientY, id: "day" }; }}
         onPointerUp={onDaySwipe}
         onPointerCancel={() => { drag.current = null; }}
@@ -472,7 +474,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
                     </div>
                   )}
                   <div
-                    className="flex items-start gap-3 py-3"
+                    className="flex touch-pan-y items-start gap-3 py-3"
                     onPointerDown={(event) => {
                       drag.current = { x: event.clientX, y: event.clientY, id: todo.id };
                       clearHold();
@@ -492,7 +494,7 @@ export function HomeDay({ chores, completions, events, selectedIds, familyIds, d
                       if (dx > 0) (todo.done ? undo : complete).mutate(todo.id);
                       else setRevealed(todo.id);
                     }}
-                    onPointerCancel={clearHold}
+                    onPointerCancel={() => { clearHold(); drag.current = null; }}
                     onContextMenu={(event) => { event.preventDefault(); setSheet({ chore: todo, mode: "actions" }); }}
                   >
                     <button

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
 import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
 import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleDeleteChoice, googleMoveBody, outlookChatWrite, outlookDeleteChoice, outlookMoveBody } from "@/lib/chatGoogle";
 import type { Chore } from "@workspace/shared-types";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, feedbackNotesFrom, feedbackStored, FEEDBACK_KEY, forgetFact, forgetSchool, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, chatSuggestions, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, feedbackNotesFrom, feedbackStored, FEEDBACK_KEY, forgetFact, forgetSchool, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { assignedDinners, dinnerPlanReply, dinnerReply, dinnersForTheWeek, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, proposedDinners, queueGroceryPrompts, statedDinners, wantsDinnerPlan, withSavedMeals, type GroceryPromptMeal } from "@/lib/mealCalendar";
@@ -1028,9 +1028,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   const viewerName = profiles.find((profile) => profileKey.split(",").includes(profile.id))?.name || "there";
   const hour = new Date().getHours();
   const part = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
-  const suggestions = isChild
-    ? ["What's going on tomorrow?", "What's for dinner?", "What chores do I have?"]
-    : ["What's going on tomorrow — and later this week?", "What's for dinner?", "Am I forgetting anything?", "What's in this week's newsletters?"];
+  const suggestions = chatSuggestions(isChild);
 
   function clearThread() {
     localStorage.removeItem(`superhub_chat_thread_${profileKey}`);
@@ -1048,15 +1046,6 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       <div className="max-w-[85%] rounded-2xl bg-white px-3 py-2 text-sm shadow-[0_2px_10px_rgba(42,24,80,0.07)]" data-testid="chat-greeting">
         {`Good ${part}, ${viewerName}. What can I take off your plate?`}
       </div>
-      {shown.length === 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {suggestions.map((prompt) => (
-            <button key={prompt} type="button" data-testid="chat-suggestion" className="shrink-0 rounded-full bg-[#E7F1F6] px-3 py-1.5 text-sm font-medium text-[#5E8FAD]" onClick={() => send(prompt)}>
-              {prompt}
-            </button>
-          ))}
-        </div>
-      )}
       {shown.length > 0 && (
         <ul className="flex flex-col gap-2">
           {shown.map((bubble) => (
@@ -1086,6 +1075,27 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
           ))}
         </div>
       )}
+      </div>
+      {/* Suggested questions sit right above the box and swipe sideways for more.
+          data-edge-swipe-ignore keeps a swipe here from flipping the date. */}
+      <div
+        data-testid="chat-suggestions"
+        data-edge-swipe-ignore=""
+        aria-label="Suggested questions"
+        className="chat-suggestions -mx-1 flex shrink-0 snap-x gap-2 overflow-x-auto px-1 pb-1 pt-2"
+      >
+        {suggestions.map((prompt) => (
+          <button
+            key={prompt}
+            type="button"
+            data-testid="chat-suggestion"
+            disabled={thinking}
+            className="shrink-0 snap-start whitespace-nowrap rounded-full bg-[#E7F1F6] px-3 py-1.5 text-sm font-medium text-[#5E8FAD] disabled:opacity-50"
+            onClick={() => send(prompt)}
+          >
+            {prompt}
+          </button>
+        ))}
       </div>
       <form
         className="flex shrink-0 items-end gap-2 pt-1"

@@ -221,6 +221,22 @@ test("today's dinner event is omitted when the dinner line is shown", () => {
   assert.deepEqual(rows.map((row) => row.title), ["Soccer"]);
 });
 
+test("all-day events sit at the top of the day, then the rest by time", () => {
+  const day = new Date(2026, 9, 1, 12, 0);
+  const rows = eventsOnHomeDay(
+    [
+      { title: "Soccer", startTime: new Date(2026, 9, 1, 16, 0), source: "app" },
+      { title: "Teacher workday", startTime: new Date(2026, 9, 1, 0, 0), source: "app", isAllDay: true },
+      { title: "Dentist", startTime: new Date(2026, 9, 1, 9, 0), source: "app" },
+      { title: "Spirit week", startTime: new Date(2026, 9, 1, 0, 0), source: "app", isAllDay: true },
+    ],
+    day,
+    null,
+    null,
+  );
+  assert.deepEqual(rows.map((row) => row.title), ["Teacher workday", "Spirit week", "Dentist", "Soccer"]);
+});
+
 test("a timed school email stays on the to-do and leaves Today", () => {
   const day = new Date(2026, 9, 1, 12, 0);
   const rows = eventsOnHomeDay(

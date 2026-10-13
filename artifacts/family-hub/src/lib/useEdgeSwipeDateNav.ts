@@ -34,7 +34,7 @@ export function useEdgeSwipeDateNav(
       // week" the instant the finger moved, since this listener has no way
       // to know a drag was already in progress.
       const target = e.target as HTMLElement | null;
-      const isDragSource = !!target?.closest('[draggable="true"]');
+      const isDragSource = !!target?.closest('[draggable="true"], [data-edge-swipe-ignore]');
       startRef.current = {
         x: t.clientX,
         y: t.clientY,

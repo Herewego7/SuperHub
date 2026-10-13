@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anniversaryReply, assignChange, birthdayReply, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, planForOthers, planWho, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, feedbackStored, feedbackList, forgetSchool, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { anniversaryReply, assignChange, birthdayReply, chatSuggestions, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, planForOthers, planWho, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, feedbackStored, feedbackList, forgetSchool, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -557,4 +557,13 @@ test("deleting an imported event asks first", () => {
   assert.equal(importedEventNeedsConfirm("ics"), true);
   assert.equal(importedEventNeedsConfirm("meal"), false);
   assert.equal(importedEventNeedsConfirm(null), false);
+});
+
+test("chat offers more questions than fit on screen, with fewer for a child", () => {
+  const grown = chatSuggestions(false);
+  const kid = chatSuggestions(true);
+  assert.ok(grown.length > 4);
+  assert.ok(kid.length > 3);
+  assert.equal(new Set(grown).size, grown.length);
+  assert.ok(!kid.some((question) => /newsletter|school email/i.test(question)));
 });

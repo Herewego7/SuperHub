@@ -594,11 +594,13 @@
   color: #5e8fad;
 }
 
+/* The outline is a real 1px border so it reads the same on every side.
+   A blurred shadow alone looks darker at the corners and fades along the edges. */
 .hearth-theme .plan-card {
   background: #ffffff;
-  border: 0;
+  border: 1px solid #e3e1ea;
   border-radius: 20px;
-  box-shadow: 0 2px 12px rgba(42, 24, 80, 0.07);
+  box-shadow: 0 1px 3px rgba(42, 24, 80, 0.04);
   padding: 16px;
 }
 
@@ -651,7 +653,8 @@
 
 .dark .hearth-theme .plan-card {
   background: #1c1c21;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  border-color: #2e2e35;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 /* ── hearth-theme opaque-vars fix ──
@@ -691,4 +694,13 @@
   --accent: hsl(207, 28%, 20%);          --accent-foreground: hsl(207, 40%, 72%);
   --destructive: hsl(0, 68%, 55%);       --destructive-foreground: hsl(40, 18%, 96%);
   --border: hsl(30, 10%, 22%);           --input: hsl(30, 10%, 22%);   --ring: hsl(207, 40%, 58%);
+}
+
+/* Chat's suggested questions scroll sideways without a visible scrollbar. */
+.chat-suggestions {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.chat-suggestions::-webkit-scrollbar {
+  display: none;
 }

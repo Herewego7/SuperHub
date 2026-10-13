@@ -28,6 +28,31 @@ export function toolsForRole(isChild: boolean): string[] {
   return CHAT_TOOLS.filter((tool) => !INBOX_TOOLS.has(tool));
 }
 
+/** Questions offered above the chat box. The first few fit on screen; the rest are a sideways swipe away. */
+export function chatSuggestions(isChild: boolean): string[] {
+  return isChild
+    ? [
+      "What's going on tomorrow?",
+      "What's for dinner?",
+      "What chores do I have?",
+      "How many points do I have?",
+      "What's happening this weekend?",
+      "Is anyone's birthday coming up?",
+    ]
+    : [
+      "What's going on tomorrow — and later this week?",
+      "What's for dinner?",
+      "Am I forgetting anything?",
+      "What's in this week's newsletters?",
+      "Who's driving this week?",
+      "What's on the to-do list today?",
+      "What's happening this weekend?",
+      "What do we need from the store?",
+      "Any school emails I should see?",
+      "Is anyone's birthday coming up?",
+    ];
+}
+
 export function unknownReply(isChild: boolean): string {
   return isChild
     ? "I can tell you the plan, check a chore, or add a to-do."

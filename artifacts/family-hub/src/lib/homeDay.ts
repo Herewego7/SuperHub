@@ -271,6 +271,7 @@ export function eventsOnHomeDay<T extends {
   title: string;
   description?: string | null;
   category?: string | null;
+  isAllDay?: boolean | null;
 }>(events: T[], day: Date, kidName: string | null, dinner: string | null, todos: { title: string; category?: string | null }[] = []): T[] {
   const start = new Date(day);
   start.setHours(0, 0, 0, 0);
@@ -282,6 +283,10 @@ export function eventsOnHomeDay<T extends {
     if (event.source === "school" && slips.has(slipTitle(event.title).toLowerCase())) return false;
     const at = new Date(event.startTime);
     return at >= start && at < end && mailVisibleToKid(event, kidName);
+  }).sort((a, b) => {
+    // All-day events lead the day; the timed ones follow in clock order.
+    const allDay = Number(b.isAllDay === true) - Number(a.isAllDay === true);
+    return allDay || new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
   });
 }
 
