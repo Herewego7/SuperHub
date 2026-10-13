@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { horizonEvents } from "../../src/lib/homeDay";
-import { dropSchoolTodoTwins, eventSourceChip, recurringIdFromIcal, recurringIdFromOutlook, schoolEventKind, timeGridDetail, upcomingClock, upcomingKindForMail, upcomingRows, upcomingTitle, withoutCheckedSchoolEvents } from "../../src/lib/upcoming";
+import { dropSchoolTodoTwins, eventSourceChip, recurringIdFromIcal, recurringIdFromOutlook, schoolEventKind, timeGridDetail, upcomingClock, upcomingDayLabel, upcomingDays, upcomingKindForMail, upcomingRows, upcomingTitle, withoutCheckedSchoolEvents } from "../../src/lib/upcoming";
 
 test("a tall week block names the place under the time", () => {
   assert.equal(timeGridDetail("4:00 PM – 5:00 PM", "Field 2"), "4:00 PM – 5:00 PM · Field 2");
@@ -165,4 +165,28 @@ test("a timed school event stays on the Events chip", () => {
 test("a scanned flyer is labeled Scan", () => {
   assert.equal(eventSourceChip("scan"), "Scan");
   assert.equal(eventSourceChip("meal"), null);
+});
+
+test("Upcoming groups by day: all-day first, then by time, to-dos last", () => {
+  const at = (day: number, hour: number) => new Date(2026, 9, day, hour);
+  const days = upcomingDays([
+    { id: "soccer", title: "Soccer", startTime: at(9, 15) },
+    { id: "todo", title: "Call the dentist", startTime: at(7, 11), kind: "todo" as const },
+    { id: "dentist", title: "Dentist", startTime: at(7, 9) },
+    { id: "fair", title: "Book fair", startTime: at(7, 0), isAllDay: true },
+    { id: "lunch", title: "Lunch", startTime: at(7, 12) },
+    { id: "slip", title: "Sign the form", startTime: at(7, 10), kind: "newsletter" as const, undated: true },
+  ]);
+  assert.deepEqual(days.map((day) => day.day.getDate()), [7, 9]);
+  assert.deepEqual(days[0].rows.map((row) => row.id), ["fair", "dentist", "lunch", "slip", "todo"], "a to-do with no time of its own sorts with the to-dos");
+  assert.equal(upcomingClock({ startTime: at(7, 10), kind: "newsletter", undated: true }), null, "and shows no clock");
+  assert.deepEqual(days[1].rows.map((row) => row.id), ["soccer"]);
+});
+
+test("Upcoming day headers read Today, Tomorrow, then the short date", () => {
+  const now = new Date(2026, 9, 7, 21, 30);
+  assert.equal(upcomingDayLabel(new Date(2026, 9, 7), now), "Today");
+  assert.equal(upcomingDayLabel(new Date(2026, 9, 8), now), "Tomorrow");
+  assert.equal(upcomingDayLabel(new Date(2026, 9, 9), now), "Fri Oct 9");
+  assert.equal(upcomingDayLabel(new Date(2026, 10, 2), now), "Mon Nov 2", "a day across the clock change is still one day");
 });

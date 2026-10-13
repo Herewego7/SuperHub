@@ -6,7 +6,8 @@ import { storage } from "../storage";
 import { CHAT_PROBLEM, replyWithChat, type ChatHistory } from "../chatReply";
 import { eventsForChat, type ChatAction, type ChatSnapshot } from "../chatBrain";
 import { connectedCalendarEvents } from "../scheduler/eveningPlan";
-import { choresDismissedBySlip, dismissSlip, muteSender } from "../ingest/process";
+import { choresDismissedBySlip, dismissSlip } from "../ingest/process";
+import { stopSender } from "../ingest/mute";
 import { slipKey } from "../ingest/parse";
 import { draftLine, draftWrite, normalizeDraft, readDraft } from "../ai/draft";
 import { conditionText, type TemperatureUnit } from "../ai/weather";
@@ -278,9 +279,7 @@ async function applyAction(userId: string, action: ChatAction): Promise<{ meals:
     return { meals: [], added: [] };
   }
   if (action.kind === "mute_sender") {
-    const settings = await storage.getCalendarSettingsByUser(userId);
-    const next = muteSender({ mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] }, action.address);
-    await storage.updateCalendarSettings({ mutedSenders: next.mutedSenders, userId });
+    await stopSender(userId, action.address);
     return { meals: [], added: [] };
   }
   if (action.kind === "not_relevant") {

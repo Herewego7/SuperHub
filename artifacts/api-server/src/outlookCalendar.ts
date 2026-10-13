@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { outlookInstancesToDelete } from "./lib/recurrenceRule";
-import { attachFiles, decodeEntities, inboxFetchLimit, inboxSinceIso, INBOX_RECENT_DAYS, outlookAttachments, outlookToInbound, stripQuotedReply, threadLines, type InboundMessage } from "./ingest/parse";
+import { attachFiles, decodeEntities, inboxFetchLimit, inboxSinceIso, INBOX_RECENT_DAYS, ORIGINAL_MAX_CHARS, outlookAttachments, outlookToInbound, outlookWebLink, readableText, stripQuotedReply, threadLines, type InboundMessage } from "./ingest/parse";
 import { graphNextLink, inboxListStopped } from "./ingest/process";
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
@@ -193,6 +193,26 @@ export class OutlookCalendarService {
       if (status === 403 || status === 404) return "scope";
       return "ok";
     }
+  }
+
+  /** One email, read on demand for Read full email. Nothing is kept. */
+  async readMessage(accessToken: string, messageId: string): Promise<{ subject: string; from: string; sentAt: string | null; text: string; webUrl: string | null }> {
+    const response = await graph.get(`${GRAPH_API_BASE}/me/messages/${encodeURIComponent(messageId)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      params: { $select: "subject,from,receivedDateTime,body,webLink" },
+    });
+    const row = response.data ?? {};
+    const raw = typeof row.body?.content === "string" ? row.body.content : "";
+    const text = row.body?.contentType === "text" ? decodeEntities(raw).replace(/\r\n/g, "\n").trim() : readableText(raw);
+    const name = row.from?.emailAddress?.name;
+    const address = row.from?.emailAddress?.address;
+    return {
+      subject: typeof row.subject === "string" ? row.subject : "",
+      from: [name, address ? `<${address}>` : ""].filter(Boolean).join(" "),
+      sentAt: typeof row.receivedDateTime === "string" ? row.receivedDateTime : null,
+      text: text.slice(0, ORIGINAL_MAX_CHARS),
+      webUrl: outlookWebLink(row.webLink),
+    };
   }
 
   async listInbox(accessToken: string, accountId: string, days = INBOX_RECENT_DAYS): Promise<InboundMessage[]> {

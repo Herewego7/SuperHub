@@ -11,6 +11,7 @@ import { startBedtimeReminderScheduler } from "./scheduler/bedtimeReminders";
 import { startDailyBriefScheduler } from "./scheduler/dailyBrief";
 import { startEveningPlanScheduler } from "./scheduler/eveningPlan";
 import { startInboxScanScheduler } from "./scheduler/inboxScan";
+import { assignInboxOwners } from "./ingest/owners";
 import { startHealthReminderScheduler } from "./scheduler/healthReminders";
 import { startWeeklyRecapScheduler } from "./scheduler/weeklyRecap";
 import { startBehaviourTimerScheduler } from "./scheduler/behaviourTimers";
@@ -103,6 +104,7 @@ async function buildApp(): Promise<Express> {
         startBedtimeReminderScheduler();
         startDailyBriefScheduler();
         startEveningPlanScheduler();
+        void assignInboxOwners().catch((err) => logger.error({ err }, "Inbox owner pass failed"));
         startInboxScanScheduler();
         startHealthReminderScheduler();
         startWeeklyRecapScheduler();

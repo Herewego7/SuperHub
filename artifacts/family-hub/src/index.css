@@ -598,7 +598,8 @@
   background: #ffffff;
   border: 0;
   border-radius: 20px;
-  box-shadow: 0 2px 12px rgba(42, 24, 80, 0.07);
+  /* The edge is a ring, not a border, so it adds no width to the card. */
+  box-shadow: 0 0 0 1px #c5c5ce, 0 2px 12px rgba(42, 24, 80, 0.07);
   padding: 16px;
 }
 
@@ -651,7 +652,7 @@
 
 .dark .hearth-theme .plan-card {
   background: #1c1c21;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 1px #45454f, 0 2px 12px rgba(0, 0, 0, 0.35);
 }
 
 /* ── hearth-theme opaque-vars fix ──

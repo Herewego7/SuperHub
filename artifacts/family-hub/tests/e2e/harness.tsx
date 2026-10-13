@@ -81,6 +81,11 @@ import * as calendarReturn from "./scenarios/calendarReturn";
 import * as calendarSyncErrorNamed from "./scenarios/calendarSyncErrorNamed";
 import * as homeCheckOff from "./scenarios/homeCheckOff";
 import * as liveRefresh from "./scenarios/liveRefresh";
+import * as homeGoogleEvent from "./scenarios/homeGoogleEvent";
+import * as homeInbox from "./scenarios/homeInbox";
+import * as homeNewsletters from "./scenarios/homeNewsletters";
+import * as homeSchedule from "./scenarios/homeSchedule";
+import * as settingsStopped from "./scenarios/settingsStopped";
 
 // One persistent, multi-scenario harness page instead of a disposable
 // dev-harness.tsx per session — add a new module to ./scenarios and
@@ -167,6 +172,11 @@ const SCENARIOS: Record<string, { setup: () => void; Component: React.ComponentT
   calendarSyncErrorNamed,
   homeCheckOff,
   liveRefresh,
+  homeGoogleEvent,
+  homeInbox,
+  homeNewsletters,
+  homeSchedule,
+  settingsStopped,
 };
 
 const params = new URLSearchParams(window.location.search);

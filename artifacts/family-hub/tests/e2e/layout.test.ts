@@ -44,6 +44,7 @@ const SCENARIOS = [
   "trophyStripOverflow", "createTaskAssignees", "todosHistoryDrawer",
   "mealModal", "settingsGroupsPin", "monthDots", "screensaver",
   "setupChatFresh", "setupChatJoiner", "setupChatReplay", "setupChatResume", "setupChatCalendar",
+  "homeInbox", "homeNewsletters", "homeSchedule", "settingsStopped",
 ];
 
 /** iPhone-ish. Everything the user has reported was visible at this width. */
@@ -147,6 +148,64 @@ const OPENED: Array<{ name: string; scenario: string; open: (page: Page) => Prom
       await page.waitForFunction(`!document.querySelector('[data-testid="spotlight-hole"]')`, undefined, { timeout: 15_000 });
       await page.getByTestId("button-manage-health-reminders").click();
       await page.getByTestId("health-reminder-hr1").waitFor();
+    },
+  },
+  {
+    name: "Home's To-Dos for everyone, one row swiped open",
+    scenario: "homeInbox",
+    open: async (page) => {
+      await page.getByTestId("profile-all family").click();
+      const row = page.getByTestId("home-todo-planner");
+      await row.waitFor();
+      const box = (await row.boundingBox())!;
+      await page.mouse.move(box.x + box.width * 0.6, box.y + 22);
+      await page.mouse.down();
+      for (let step = 1; step <= 8; step++) await page.mouse.move(box.x + box.width * 0.6 - step * 15, box.y + 22);
+      await page.mouse.up();
+      await row.getByTestId("home-todo-swipe-actions").waitFor();
+    },
+  },
+  {
+    name: "a Home inbox item's sheet with the full email open",
+    scenario: "homeInbox",
+    open: async (page) => {
+      await page.getByTestId("profile-dad").click();
+      await page.getByTestId("home-todo-planner").locator("button", { hasText: "Bring planner" }).first().click();
+      await page.getByTestId("home-read-full-email").click();
+      await page.getByTestId("home-full-email").waitFor();
+    },
+  },
+  {
+    name: "Today's Schedule for everyone",
+    scenario: "homeSchedule",
+    open: async (page) => {
+      await page.getByTestId("profile-all family").click();
+      await page.getByTestId("home-off-calendar").waitFor();
+    },
+  },
+  {
+    name: "Calendar's Upcoming list",
+    scenario: "homeSchedule",
+    open: async (page) => {
+      await page.getByTestId("profile-all family").click();
+      await page.getByTestId("calendar-tab").click();
+      await page.getByTestId("upcoming-day").first().waitFor();
+    },
+  },
+  {
+    name: "a newsletter issue's sheet",
+    scenario: "homeNewsletters",
+    open: async (page) => {
+      await page.getByTestId("home-newsletter-issue").first().click();
+      await page.getByTestId("home-letter-hide").waitFor();
+    },
+  },
+  {
+    name: "a newsletter's All issues sheet",
+    scenario: "homeNewsletters",
+    open: async (page) => {
+      await page.getByRole("button", { name: "All issues" }).first().click();
+      await page.getByTestId("home-letter-issues").waitFor();
     },
   },
 ];

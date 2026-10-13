@@ -59,7 +59,11 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
   const existingEventKeys = savedEvents.flatMap((event) =>
     event.source === "school" && event.externalId ? [event.externalId] : [],
   );
-  const state = { mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] };
+  const state = {
+    mutedSenders: settings?.mutedSenders ?? [],
+    dismissedSlipKeys: settings?.dismissedSlipKeys ?? [],
+    mutedNewsletters: settings?.mutedNewsletters ?? [],
+  };
   const familyCalendarId = settings?.familyCalendarId;
   const calendarId = familyCalendarId && familyCalendarId !== "none" ? familyCalendarId : null;
   const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;

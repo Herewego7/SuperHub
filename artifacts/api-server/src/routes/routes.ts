@@ -27,14 +27,16 @@ import { geocodeCity } from "../lib/geocode";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { mergeGroceryQuantities } from "../lib/groceryMerge";
 import { assignPeopleToCalendar } from "../lib/calendarAssignmentScope";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, holdSchoolEvent, muteSender, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
+import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, holdSchoolEvent, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
 import { applyIngestedMail } from "../ingest/saveMail";
 import { inboxReadiness, scanAfterConnect, scanConnectedInboxes } from "../ingest/scanHousehold";
 import { householdScanProgress, lastInboxRead, scanStatusFor } from "../ingest/scanProgress";
 import { requestInboxScan } from "../ingest/scanState";
 import { markSchedulerWorkDirty } from "../lib/workGate";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp, dinnersToCopy } from "../meals/dinnerEvent";
-import { INBOX_INITIAL_DAYS, slipKey } from "../ingest/parse";
+import { clientMessages, INBOX_INITIAL_DAYS, slipKey } from "../ingest/parse";
+import { hideNewsletter, resumeSender, showNewsletter, stopSender } from "../ingest/mute";
+import { readOriginal } from "../ingest/original";
 import { moveClock } from "../scheduler/eveningPlan";
 import { expandRecurringEvents, resolveSeriesEventId } from "../lib/eventRecurrence";
 import { planRecurringEdit, planRecurringDelete, type EditScope } from "../lib/recurringEdit";
@@ -3181,6 +3183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         shareOriginals: false,
         mealsOnCalendar: false,
         mutedSenders: [],
+        mutedNewsletters: [],
         dismissedSlipKeys: [],
       };
       res.json(defaultSettings);
@@ -3335,8 +3338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const isOwner = await validateProfileOwnership(profileId, userId);
         if (!isOwner) return res.status(403).json({ error: "Forbidden" });
       }
-      const messages = Array.isArray(req.body.messages) ? req.body.messages : [];
-      const saved = await applyIngestedMail(userId, messages, profileIds);
+      const saved = await applyIngestedMail(userId, clientMessages(req.body.messages), profileIds);
       res.status(saved.scanOff ? 200 : 201).json(saved);
     } catch (error) {
       console.error("Error ingesting mail:", error);
@@ -3416,18 +3418,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ingest/mute", isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req);
-      const address = typeof req.body.address === "string" ? req.body.address : "";
-      if (!address) return res.status(400).json({ error: "address is required" });
-      const settings = await storage.getCalendarSettingsByUser(userId);
-      const next = muteSender(
-        { mutedSenders: settings?.mutedSenders ?? [], dismissedSlipKeys: settings?.dismissedSlipKeys ?? [] },
-        address,
-      );
-      const saved = await storage.updateCalendarSettings({ mutedSenders: next.mutedSenders, userId });
-      res.json(saved);
+      const address = typeof req.body.address === "string" ? req.body.address.trim() : "";
+      if (!address) {
+        res.status(400).json({ error: "address is required" });
+        return;
+      }
+      res.json(await stopSender(userId, address));
     } catch (error) {
       console.error("Error muting a sender:", error);
       res.status(500).json({ error: "Failed to mute sender" });
+    }
+  });
+
+  app.post("/api/ingest/unmute", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const address = typeof req.body.address === "string" ? req.body.address.trim() : "";
+      if (!address) {
+        res.status(400).json({ error: "address is required" });
+        return;
+      }
+      res.json(await resumeSender(userId, address));
+    } catch (error) {
+      console.error("Error unmuting a sender:", error);
+      res.status(500).json({ error: "Failed to unmute sender" });
+    }
+  });
+
+  app.post("/api/ingest/newsletter/hide", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const address = typeof req.body.address === "string" ? req.body.address.trim() : "";
+      const name = typeof req.body.name === "string" ? req.body.name : "";
+      if (!address) {
+        res.status(400).json({ error: "address is required" });
+        return;
+      }
+      res.json(await hideNewsletter(userId, address, name));
+    } catch (error) {
+      console.error("Error hiding a newsletter:", error);
+      res.status(500).json({ error: "Failed to hide newsletter" });
+    }
+  });
+
+  app.post("/api/ingest/newsletter/show", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const key = typeof req.body.key === "string" ? req.body.key : "";
+      if (!key) {
+        res.status(400).json({ error: "key is required" });
+        return;
+      }
+      res.json(await showNewsletter(userId, key));
+    } catch (error) {
+      console.error("Error showing a newsletter:", error);
+      res.status(500).json({ error: "Failed to show newsletter" });
+    }
+  });
+
+  app.get("/api/ingest/original", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const choreId = typeof req.query.choreId === "string" ? req.query.choreId : "";
+      const viewer = typeof req.query.viewer === "string" ? req.query.viewer : undefined;
+      if (!choreId) {
+        res.status(400).json({ error: "choreId is required" });
+        return;
+      }
+      const answer = await readOriginal(userId, choreId, viewer);
+      res.status(answer.status).json(answer.body);
+    } catch (error) {
+      console.error("Error opening an original email:", error);
+      res.status(502).json({ error: "Couldn't open that email right now." });
     }
   });
 

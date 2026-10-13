@@ -27,7 +27,7 @@ import { confirmDialog } from "@/lib/confirmDialog";
 import { Profile, InsertProfile, LocationSettings, insertLocationSettingsSchema, CustomProfileGroup, RewardSettings } from "@workspace/shared-types";
 import { regionToTimezone, deviceTimezone, guessCountry, countryFromName, regionLabel, COUNTRIES, type CountryCode } from "@/lib/regions";
 import { familyCalendarSelectValue, parseFamilyCalendarOption, familyCalendarOptionValue } from "@/lib/familyCalendarChoice";
-import { personRecordLines, savedFacts, savedSchool } from "@/lib/slipMail";
+import { newsletterKeyLabel, personRecordLines, savedFacts, savedSchool } from "@/lib/slipMail";
 import { FEEDBACK_KEY, feedbackList, feedbackNotesFrom, type SavedFeedback } from "@/lib/chatTools";
 import { ObjectUploader } from "./ObjectUploader";
 import { motion, AnimatePresence } from "framer-motion";
@@ -1447,6 +1447,8 @@ export function CalendarConnectionsSection({
     familyCalendarProvider?: string | null;
     scanInbox?: boolean | null;
     shareOriginals?: boolean | null;
+    mutedSenders?: string[] | null;
+    mutedNewsletters?: string[] | null;
   }>({
     queryKey: ["/api/calendar-settings"],
   });
@@ -1512,6 +1514,27 @@ export function CalendarConnectionsSection({
   const inboxMutation = useMutation({
     mutationFn: async (patch: { scanInbox?: boolean; shareOriginals?: boolean }) => {
       await apiRequest("PATCH", "/api/calendar-settings/inbox", patch);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+    },
+  });
+  const stoppedSenders = calendarSettingsData?.mutedSenders ?? [];
+  const hiddenNewsletters = calendarSettingsData?.mutedNewsletters ?? [];
+  const undoStopped = useMutation({
+    mutationFn: async (undo: { list: "mutedSenders" | "mutedNewsletters"; value: string }) => {
+      if (undo.list === "mutedSenders") await apiRequest("POST", "/api/ingest/unmute", { address: undo.value });
+      else await apiRequest("POST", "/api/ingest/newsletter/show", { key: undo.value });
+    },
+    onMutate: async (undo) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/calendar-settings"] });
+      const prev = queryClient.getQueryData<any>(["/api/calendar-settings"]);
+      queryClient.setQueryData(["/api/calendar-settings"], (old: any) => ({ ...(old ?? {}), [undo.list]: ((old?.[undo.list] ?? []) as string[]).filter((value) => value !== undo.value) }));
+      return { prev };
+    },
+    onError: (_err, _undo, ctx) => {
+      if (ctx?.prev !== undefined) queryClient.setQueryData(["/api/calendar-settings"], ctx.prev);
+      toast({ title: "Couldn't undo that", variant: "destructive" });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
@@ -1983,6 +2006,48 @@ export function CalendarConnectionsSection({
                     data-testid="toggle-share-originals"
                   />
                 </div>
+                {(stoppedSenders.length > 0 || hiddenNewsletters.length > 0) && (
+                  <div className="mb-3 flex flex-col gap-3" data-testid="inbox-stopped">
+                    {stoppedSenders.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium mb-1">Stopped senders</p>
+                        <ul className="flex flex-col">
+                          {stoppedSenders.map((address) => (
+                            <li key={address} data-testid="stopped-sender" className="flex items-center justify-between gap-3 px-2.5 py-1">
+                              <span className="min-w-0 truncate text-xs">{address}</span>
+                              <button type="button" aria-label={`Undo stopping ${address}`} className="shrink-0 py-1 text-xs font-semibold text-[#5E8FAD]" onClick={() => undoStopped.mutate({ list: "mutedSenders", value: address })}>
+                                Undo
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {hiddenNewsletters.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium mb-1">Hidden newsletters</p>
+                        <ul className="flex flex-col">
+                          {hiddenNewsletters.map((key) => {
+                            const { sender, name } = newsletterKeyLabel(key);
+                            const label = name ? name.replace(/\b\w/g, (letter) => letter.toUpperCase()) : `Everything from ${sender}`;
+                            return (
+                              <li key={key} data-testid="hidden-newsletter" className="flex items-center justify-between gap-3 px-2.5 py-1">
+                                <span className="min-w-0">
+                                  <span className="block truncate text-xs">{label}</span>
+                                  {name && <span className="block truncate text-[11px] text-muted-foreground">{sender}</span>}
+                                </span>
+                                <button type="button" aria-label={`Undo hiding ${label}`} className="shrink-0 py-1 text-xs font-semibold text-[#5E8FAD]" onClick={() => undoStopped.mutate({ list: "mutedNewsletters", value: key })}>
+                                  Undo
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-muted-foreground">Undo brings back their future email. Items already cleared stay cleared.</p>
+                  </div>
+                )}
                 <div className="mb-3">
                   <p className="text-xs font-medium mb-1">Family calendar</p>
                   <Select

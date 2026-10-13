@@ -1,6 +1,9 @@
 import { driverNamesFor, mailVisibleToKid, openTodos, todosForHome } from "@/lib/homeDay";
-import { assignmentProfileIds, outlookEventProfileIds, withoutUnwatched } from "@/lib/outlookAttribution";
-import { dropSchoolTodoTwins, UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, recurringIdFromIcal, recurringIdFromOutlook, schoolEventKind, timeGridDetail, upcomingClock, upcomingKindForMail, upcomingRows, upcomingTitle, withoutCheckedSchoolEvents, type UpcomingKind } from "@/lib/upcoming";
+import { familyEventsFor, type FamilyEvent } from "@/lib/familyEvents";
+import { contrastText, eventStrip } from "@/lib/eventColor";
+import { EventRow } from "@/components/event-row";
+import { useFamilyEvents } from "@/hooks/use-family-events";
+import { dropSchoolTodoTwins, UPCOMING_KIND_LABELS, UPCOMING_KINDS, eventSourceChip, recurringIdFromIcal, recurringIdFromOutlook, schoolEventKind, timeGridDetail, upcomingClock, upcomingDayLabel, upcomingDays, upcomingKindForMail, upcomingRows, upcomingTitle, withoutCheckedSchoolEvents, type UpcomingKind } from "@/lib/upcoming";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Profile, Event, InsertEvent, CalendarAssignment, Chore } from "@workspace/shared-types";
@@ -42,87 +45,10 @@ import { driverIdsOf, sameIds, driverIdsFromGoogleEvent } from "@/lib/eventDrive
 // ── Constants ─────────────────────────────────────────────────────────────────
 const HOUR_HEIGHT = 64; // px per hour
 
-// ── Email normalization ────────────────────────────────────────────────────────
-// Gmail treats addresses as case-insensitive and ignores dots in the local part.
-// Normalize before comparing so "John.Doe+tag@gmail.com" == "johndoe@gmail.com".
-function normalizeGmail(email?: string | null): string | null {
-  if (!email) return null;
-  const trimmed = email.trim().toLowerCase();
-  const [local, domain] = trimmed.split("@");
-  if (!local || !domain) return null;
-  const isGoogle = domain === "gmail.com" || domain === "googlemail.com";
-  const cleanedLocal = isGoogle
-    ? local.replace(/\./g, "").split("+")[0]
-    : local.split("+")[0];
-  return `${cleanedLocal}@${domain}`;
-}
-
 type ViewMode = "upcoming" | "day" | "workweek" | "week" | "month";
 
 // ── Normalized event shape ────────────────────────────────────────────────────
-interface Cal3Event {
-  id: string;
-  title: string;
-  startTime: Date;
-  endTime: Date;
-  profileIds: string[];
-  /** Drivers, as a set — see lib/eventDrivers.ts. */
-  drivingProfileIds: string[];
-  description?: string | null;
-  location?: string | null;
-  isAllDay: boolean;
-  source: "local" | "google" | "outlook" | "ical";
-  color: string;
-  // raw originals for editing
-  localId?: string;
-  googleEventId?: string;
-  googleProfileId?: string;
-  googleCalendarId?: string;
-  outlookCalendarId?: string | null;
-  recurringEventId?: string | null;
-  // Local recurrence (see api-server/src/lib/eventRecurrence.ts) — a
-  // synthetic occurrence's `id` is not a real row; edits/deletes must
-  // resolve back to the series' first occurrence.
-  isRecurringInstance?: boolean;
-  seriesId?: string;
-  recurrenceType?: "daily" | "weekly" | "monthly" | "annually" | null;
-  recurrenceEndDate?: string | null;
-  recurrenceInterval?: number | null;
-  daysOfWeek?: number[] | null;
-}
-
-// ── Helper: get profile color ─────────────────────────────────────────────────
-// An event assigned to literally every real profile should show the "All
-// Family" pseudo-profile's own color, not whichever real person happens to
-// sort first in the profiles array (previously always "Dad" if he's first).
-// Guarded on 2+ real profiles so a single-person household's own color isn't
-// silently overridden by this rule.
-function getProfileColor(profileIds: string[], profiles: Profile[]): string {
-  const realProfiles = profiles.filter(p => !p.isAllFamilyProfile);
-  const isEveryoneAssigned = realProfiles.length >= 2 && realProfiles.every(p => profileIds.includes(p.id));
-  if (isEveryoneAssigned) {
-    const allFamily = profiles.find(p => p.isAllFamilyProfile);
-    if (allFamily?.color) return allFamily.color;
-  }
-  const first = profiles.find(p => profileIds.includes(p.id));
-  return first?.color || "#6366f1";
-}
-
-// ── Helper: pick black or white text for a given background color (WCAG) ──────
-function getContrastText(hex: string): string {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.substring(0, 2), 16);
-  const g = parseInt(c.substring(2, 4), 16);
-  const b = parseInt(c.substring(4, 6), 16);
-  // Relative luminance (WCAG 2.1)
-  const toLinear = (v: number) => {
-    const s = v / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-  // White on dark (L < 0.35), black on light
-  return L > 0.35 ? "#1a1a1a" : "#ffffff";
-}
+type Cal3Event = FamilyEvent;
 
 // ── Helper: position of an event within a bounded hour range ─────────────────
 function clampMins(mins: number, lo: number, hi: number) {
@@ -366,7 +292,7 @@ function TimeGridEvent({
   // Recurring occurrences drag too — the drop asks whether it means just that
   // one or the rest of the series. A Google/Outlook/iCal event still doesn't:
   // it belongs to the calendar it came from.
-  const canDrag = !!onReschedule && ev.source === "local" && !ev.isAllDay;
+  const canDrag = !!onReschedule && ev.provider === "local" && !ev.isAllDay;
 
   const rootRef = useRef<HTMLDivElement>(null);
   // WHERE THE BLOCK SITS, as a time rather than as an offset. Everything about
@@ -482,7 +408,7 @@ function TimeGridEvent({
         left: `${left}%`,
         width: `${width}%`,
         backgroundColor: ev.color,
-        color: getContrastText(ev.color),
+        color: contrastText(ev.color),
         minHeight: 22,
       }}
       onPointerDown={handlePointerDown}
@@ -652,7 +578,7 @@ function MonthCell({
         className={`rounded font-medium truncate cursor-pointer hover:opacity-90 transition-opacity flex items-center ${
           compact ? "text-[10px] px-1 py-0.5 gap-0" : "text-[11px] px-1.5 py-0.5 gap-1"
         }`}
-        style={{ backgroundColor: ev.color, color: getContrastText(ev.color) }}
+        style={{ backgroundColor: ev.color, color: contrastText(ev.color) }}
         onClick={e => { e.stopPropagation(); setShowOverflow(false); onEventClick(ev); }}
         data-testid={`${testIdPrefix}-${ev.id}`}
       >
@@ -1433,27 +1359,9 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
   });
 
   // ── Data fetching ───────────────────────────────────────────────────────────
-  const { data: localEvents = [] } = useQuery<Event[]>({ queryKey: ["/api/events"] });
   const { data: chores = [] } = useQuery<Chore[]>({ queryKey: ["/api/chores"] });
   const { data: completions = [] } = useQuery<{ choreId: string }[]>({ queryKey: ["/api/chore-completions"] });
-  const { data: calendarAssignments = [] } = useQuery<CalendarAssignment[]>({
-    queryKey: ["/api/calendar-assignments"],
-    retry: false,
-  });
   const { data: calendarSettings } = useQuery<any>({ queryKey: ["/api/calendar-settings"] });
-  const { data: googleAccounts = [] } = useQuery<{ profileId: string; email: string }[]>({
-    queryKey: ["/api/google-calendar/accounts"],
-    retry: false,
-    staleTime: 300_000,
-  });
-  const googleAccountEmailMap = useMemo(
-    () => new Map(
-      googleAccounts
-        .map(a => [normalizeGmail(a.email), a.profileId] as const)
-        .filter((e): e is readonly [string, string] => e[0] !== null)
-    ),
-    [googleAccounts],
-  );
 
   const displayStartHour: number = (calendarSettings as any)?.startHour ?? 8;
   const displayEndHour: number = (calendarSettings as any)?.endHour ?? 22;
@@ -1463,224 +1371,16 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
 
   const regularProfiles = useMemo(() => profiles.filter(p => !p.isAllFamilyProfile), [profiles]);
 
-  const googleConnectedProfiles = useMemo(() => regularProfiles.filter(p => p.googleCalendarConnected), [regularProfiles]);
-  const googleQueries = useQueries({
-    queries: googleConnectedProfiles.map(p => ({
-      queryKey: ["/api/google-calendar/events", p.id],
-      queryFn: getQueryFn({ on401: "returnNull" }),
-      retry: false,
-      staleTime: 60_000,
-    })),
-  });
-  const googleSyncError = googleQueries.some(q => q.isError);
-  // First profile whose connection is actually erroring — lets the banner
-  // deep-link straight to that person's row in Settings instead of just the
-  // Calendar section in general.
-  const googleErrorProfileId = googleConnectedProfiles[googleQueries.findIndex(q => q.isError)]?.id;
-  const googleErrorNames = googleConnectedProfiles.filter((_, i) => googleQueries[i]?.isError).map(p => p.name);
-
-  const outlookConnectedProfiles = useMemo(() => regularProfiles.filter(p => p.outlookCalendarConnected), [regularProfiles]);
-  const outlookQueries = useQueries({
-    queries: outlookConnectedProfiles.map(p => ({
-      queryKey: ["/api/outlook-calendar/events", p.id],
-      queryFn: getQueryFn({ on401: "returnNull" }),
-      retry: false,
-      staleTime: 60_000,
-    })),
-  });
-  // Previously read nowhere — an expired/broken Outlook connection failed
-  // silently and just rendered as "no events," indistinguishable from an
-  // account with nothing scheduled. Google gets this exact banner already.
-  const outlookSyncError = outlookQueries.some(q => q.isError);
-  const outlookErrorProfileId = outlookConnectedProfiles[outlookQueries.findIndex(q => q.isError)]?.id;
-  const outlookErrorNames = outlookConnectedProfiles.filter((_, i) => outlookQueries[i]?.isError).map(p => p.name);
-
-  const icalConnectedProfiles = useMemo(() => regularProfiles.filter(p => p.icalConnected), [regularProfiles]);
-  const icalQueries = useQueries({
-    queries: icalConnectedProfiles.map(p => ({
-      queryKey: ["/api/ical-calendar/events", p.id],
-      queryFn: getQueryFn({ on401: "returnNull" }),
-      retry: false,
-      staleTime: 60_000,
-    })),
-  });
-  const icalSyncError = icalQueries.some(q => q.isError);
-
-  // ── Normalize all events ────────────────────────────────────────────────────
-  // Signatures keyed on each query's dataUpdatedAt: useQueries returns a new array
-  // reference every render, which would otherwise invalidate the memo below on
-  // every render and re-normalize thousands of events on each tab/profile switch.
-  const googleDataSig = googleQueries.map(q => q.dataUpdatedAt ?? 0).join("|");
-  const outlookDataSig = outlookQueries.map(q => q.dataUpdatedAt ?? 0).join("|");
-  const icalDataSig = icalQueries.map(q => q.dataUpdatedAt ?? 0).join("|");
-  const allEvents = useMemo<Cal3Event[]>(() => {
-    const result: Cal3Event[] = [];
-
-    // 1. Local events
-    for (const e of localEvents) {
-      if (!e.startTime || !e.endTime) continue;
-      const pIds = (e.profileIds as string[] | null) ?? [];
-      result.push({
-        id: e.id,
-        localId: e.id,
-        title: e.title,
-        startTime: new Date(e.startTime),
-        endTime: new Date(e.endTime),
-        profileIds: pIds,
-        drivingProfileIds: driverIdsOf(e),
-        description: e.description,
-        location: e.location,
-        isAllDay: e.isAllDay ?? false,
-        source: "local",
-        color: getProfileColor(pIds, profiles),
-        isRecurringInstance: (e as any).isRecurringInstance ?? false,
-        seriesId: (e as any).seriesId,
-        recurrenceType: (e as any).recurrenceType ?? null,
-        recurrenceEndDate: (e as any).recurrenceEndDate ?? null,
-        recurrenceInterval: (e as any).recurrenceInterval ?? 1,
-        daysOfWeek: (e as any).daysOfWeek ?? null,
-      });
-    }
-
-    // 2. Google Calendar
-    // Use iCalUID as the stable dedup key (same event across two calendars gets
-    // different ge.id values but the same iCalUID). When the same event appears
-    // on multiple family members' calendars, keep the copy whose creator email
-    // matches a connected family account (Priority 2 win) over one that only
-    // resolved via Priority 3/4.
-    // resolveRank ranks how a copy's profile assignment was determined, so that
-    // when the SAME occurrence appears on multiple calendars we keep the most
-    // authoritative copy: an explicit manual assignment (3) must beat a
-    // creator-email match (2), which beats any weaker fallback (1).
-    type Resolved = { ge: any; pIds: string[]; resolveRank: number; pid: string };
-    const bestByKey = new Map<string, Resolved>();
-
-    googleQueries.forEach((q, i) => {
-      const pid = googleConnectedProfiles[i]?.id;
-      if (!pid) return;
-      for (const ge of (q.data ?? []) as any[]) {
-        // Dedup the SAME occurrence appearing on multiple calendars, while keeping
-        // distinct occurrences of a recurring series separate. With singleEvents,
-        // every occurrence shares one iCalUID, so we include the instance start in
-        // the key — otherwise a whole recurring series collapses into a single
-        // (earliest) event and current/future occurrences disappear.
-        // The start must be NORMALIZED to a canonical instant: the same event on
-        // two calendars can serialize its start differently (e.g. "...-07:00" vs
-        // "...Z"); comparing raw strings would treat those as different and leak a
-        // duplicate. Timed events key on epoch ms; all-day events on their date.
-        const occurrenceStart = ge.start?.dateTime
-          ? String(new Date(ge.start.dateTime).getTime())
-          : (ge.start?.date || "");
-        const key = `${ge.iCalUID || ge.id}::${occurrenceStart}`;
-        let pIds: string[] = [];
-        let resolveRank = 1;
-
-        // Priority 1: explicit familyhub assignment (DB-backed override or stored
-        // on the event). This is a deliberate user choice and outranks everything.
-        const stored = ge.extendedProperties?.private?.["familyhub_profile_ids"];
-        if (stored) { try { const p = JSON.parse(stored); if (Array.isArray(p) && p.length) { pIds = p; resolveRank = 3; } } catch { } }
-
-        // Priority 2: creator/organizer email → connected account (normalized)
-        if (!pIds.length) {
-          const email = normalizeGmail(ge.creator?.email) ?? normalizeGmail(ge.organizer?.email);
-          const p2 = email ? googleAccountEmailMap.get(email) : undefined;
-          if (p2) { pIds = [p2]; resolveRank = 2; }
-        }
-
-        // Priority 3: match by the event's own google_calendar_id
-        const gcalId = ge.extendedProperties?.private?.["google_calendar_id"];
-        if (!pIds.length && gcalId) {
-          const a = calendarAssignments.find((a: any) => a.calendarId === gcalId && a.calendarType === "google");
-          if (a) pIds = assignmentProfileIds(a);
-        }
-
-        // Priority 4: fall back to the iterating profile
-        if (!pIds.length) pIds = [pid];
-
-        const existing = bestByKey.get(key);
-        if (!existing || resolveRank > existing.resolveRank) {
-          bestByKey.set(key, { ge, pIds, resolveRank, pid });
-        }
-      }
-    });
-
-    for (const { ge, pIds, pid } of bestByKey.values()) {
-      const gcalId = ge.extendedProperties?.private?.["google_calendar_id"];
-      // parseGoogleEventDates handles the all-day EXCLUSIVE end date — the
-      // old inline parsing made every all-day event spill onto the next day.
-      const { start, end } = parseGoogleEventDates(ge);
-
-      const gcDrivingProfileIds = driverIdsFromGoogleEvent(ge);
-      result.push({
-        id: `google-${ge.id}`,
-        googleEventId: ge.id,
-        googleProfileId: pid,
-        googleCalendarId: gcalId,
-        recurringEventId: ge.recurringEventId ?? null,
-        title: ge.summary || "Untitled",
-        startTime: start,
-        endTime: end,
-        profileIds: pIds,
-        drivingProfileIds: gcDrivingProfileIds,
-        description: ge.description,
-        location: ge.location,
-        isAllDay: !ge.start?.dateTime,
-        source: "google",
-        color: getProfileColor(pIds, profiles),
-      });
-    }
-
-    // 3. Outlook Calendar
-    const outProfiles = regularProfiles.filter(p => p.outlookCalendarConnected);
-    outlookQueries.forEach((q, i) => {
-      const pid = outProfiles[i]?.id;
-      if (!pid) return;
-      const known = new Set(profiles.map(p => p.id));
-      for (const oe of (q.data ?? []) as any[]) {
-        const oPids = outlookEventProfileIds(oe, pid, calendarAssignments as any[], known);
-        result.push({
-          id: `outlook-${oe.id}`,
-          title: oe.subject || "Untitled",
-          ...(() => { const d = parseOutlookEventDates(oe); return { startTime: d.start, endTime: d.end }; })(),
-          profileIds: oPids,
-          drivingProfileIds: [], // Outlook has no driver concept
-          description: oe.bodyPreview,
-          location: oe.location?.displayName,
-          isAllDay: oe.isAllDay ?? false,
-          source: "outlook",
-          outlookCalendarId: oe.calendar?.id ?? null,
-          recurringEventId: recurringIdFromOutlook(oe),
-          color: getProfileColor(oPids, profiles),
-        });
-      }
-    });
-
-    // 4. iCal (.ics URL) subscriptions — read-only, assigned to a single profile.
-    icalQueries.forEach((q, i) => {
-      const pid = icalConnectedProfiles[i]?.id;
-      if (!pid) return;
-      for (const ie of (q.data ?? []) as any[]) {
-        result.push({
-          id: `ical-${ie.id}`,
-          title: ie.title || "Untitled",
-          startTime: new Date(ie.start),
-          endTime: icalDisplayEnd(ie.end, ie.isAllDay ?? false, new Date(ie.start)),
-          profileIds: [pid],
-          drivingProfileIds: [], // iCal feeds have no driver concept
-          description: ie.description,
-          location: ie.location,
-          isAllDay: ie.isAllDay ?? false,
-          source: "ical",
-          recurringEventId: recurringIdFromIcal(ie),
-          // Prefer the feed's own color if set, else the profile color.
-          color: ie.calendarColor || getProfileColor([pid], profiles),
-        });
-      }
-    });
-
-    return result;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localEvents, googleDataSig, outlookDataSig, icalDataSig, calendarAssignments, googleAccountEmailMap, profiles, regularProfiles]);
+  // Same events, ids and colors as Home — see hooks/use-family-events.ts.
+  const { events: allEvents, calendarAssignments, google: googleSync, outlook: outlookSync, ical: icalSync } = useFamilyEvents(profiles);
+  const googleSyncError = googleSync.failing;
+  const googleErrorProfileId = googleSync.profileId;
+  const googleErrorNames = googleSync.names;
+  // A broken Outlook connection must not read as "no events".
+  const outlookSyncError = outlookSync.failing;
+  const outlookErrorProfileId = outlookSync.profileId;
+  const outlookErrorNames = outlookSync.names;
+  const icalSyncError = icalSync.failing;
 
   // ── Synthetic celebration events ────────────────────────────────────────────
   const celebRangeStart = useMemo(
@@ -1718,7 +1418,8 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
         description: null,
         location: null,
         isAllDay: true,
-        source: "local",
+        provider: "local",
+        source: null,
         color: c.type === "birthday" ? "#ec4899" : c.type === "anniversary" ? "#f43f5e" : "#8b5cf6",
       };
     });
@@ -1729,23 +1430,17 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
   // Which calendars sync at all is now decided server-side (selectedCalendarIds,
   // set via Settings' "Manage" picker) — there's no separate client-side
   // enable/disable filter to apply here anymore.
-  const visibleEvents = useMemo(() => {
-    const pickedPeople = profiles.filter((profile) => !profile.isAllFamilyProfile && selectedProfiles.includes(profile.id));
-    const kidName = pickedPeople.length === 1 && (pickedPeople[0].role === "child" || pickedPeople[0].isChild) ? pickedPeople[0].name : null;
-    const picked = allEventsWithCelebrations.filter(e => {
-      if (selectedProfiles.length === 0) return true;
-      return e.profileIds.length === 0 ||
-        e.profileIds.some(id => selectedProfiles.includes(id)) ||
-        e.drivingProfileIds.some(id => selectedProfiles.includes(id));
-    }).filter((event) => mailVisibleToKid(event, kidName));
-    return withoutUnwatched(picked, calendarAssignments);
-  }, [allEventsWithCelebrations, selectedProfiles, calendarAssignments, profiles]);
+  const visibleEvents = useMemo(
+    () => familyEventsFor(allEventsWithCelebrations, selectedProfiles, profiles, calendarAssignments),
+    [allEventsWithCelebrations, selectedProfiles, calendarAssignments, profiles],
+  );
 
   const upcomingItems = useMemo(() => {
     const familyIds = profiles.filter((profile) => !profile.isAllFamilyProfile).map((profile) => profile.id);
+    const everyoneId = profiles.find((profile) => profile.isAllFamilyProfile)?.id;
     const picked = profiles.filter((profile) => !profile.isAllFamilyProfile && selectedProfiles.includes(profile.id));
     const kidName = picked.length === 1 && (picked[0].role === "child" || picked[0].isChild) ? picked[0].name : null;
-    const checkedSlips = todosForHome(chores, selectedProfiles, familyIds).filter((todo) => todo.category === "school_email" && completions.some((completion) => completion.choreId === todo.id));
+    const checkedSlips = todosForHome(chores, selectedProfiles, familyIds, everyoneId).filter((todo) => todo.category === "school_email" && completions.some((completion) => completion.choreId === todo.id));
     const events = withoutCheckedSchoolEvents(
       visibleEvents.filter((event) => mailVisibleToKid(event, kidName)).map((event) => {
         const kind = schoolEventKind(event);
@@ -1754,13 +1449,14 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
       checkedSlips,
     );
     const todos = dropSchoolTodoTwins(
-      openTodos(todosForHome(chores, selectedProfiles, familyIds), completions).filter((todo) => mailVisibleToKid(todo, kidName)),
+      openTodos(todosForHome(chores, selectedProfiles, familyIds, everyoneId), completions).filter((todo) => mailVisibleToKid(todo, kidName)),
       events,
     ).map((todo) => ({
       id: todo.id,
       title: todo.title,
       startTime: currentDate,
       kind: upcomingKindForMail(todo.category),
+      undated: true,
       profileIds: todo.profileIds,
       source: null,
     }));
@@ -2102,7 +1798,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
       ...ev,
       seriesStartTime: seriesStart,
       id: ev.localId ?? ev.id,
-      isGoogleCalendar: ev.source === "google",
+      isGoogleCalendar: ev.provider === "google",
       googleEventId: ev.googleEventId ?? null,
       googleProfileId: ev.googleProfileId ?? null,
       googleCalendarId: ev.googleCalendarId ?? null,
@@ -2825,20 +2521,30 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
                     </button>
                   ))}
                 </div>
-                <ul className="flex flex-col">
-                  {upcomingRows(upcomingItems, upcomingKind, currentDate).map((event) => {
-                    const clock = upcomingClock(event);
-                    return (
-                    <li key={event.id} className="border-b border-border px-3 py-2 text-sm">
-                      <div className="text-xs text-muted-foreground">{format(event.startTime, "EEE, MMM d")}{clock ? ` · ${clock}` : ""}</div>
-                      <span>{upcomingTitle({ ...event, drivers: driverNamesFor("drivingProfileIds" in event ? event.drivingProfileIds : undefined, profiles) })}</span>
-                      {eventSourceChip(event.source) && (
-                        <span data-testid="event-scan-chip" className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">{eventSourceChip(event.source)}</span>
-                      )}
-                    </li>
-                    );
-                  })}
-                </ul>
+                <div className="flex flex-col px-2 pb-3">
+                  {upcomingDays(upcomingRows(upcomingItems, upcomingKind, currentDate)).map(({ day, rows }) => (
+                    <section key={day.getTime()} data-testid="upcoming-day">
+                      <h3 className="sticky top-0 z-[1] bg-white px-1 pb-1 pt-3 text-xs font-semibold text-muted-foreground dark:bg-card">{upcomingDayLabel(day, new Date())}</h3>
+                      <ul className="flex flex-col gap-1">
+                        {rows.map((event) => {
+                          const chip = eventSourceChip(event.source);
+                          return (
+                            <li key={event.id}>
+                              <EventRow
+                                testId="upcoming-row"
+                                colors={eventStrip(event, profiles)}
+                                time={upcomingClock(event) ?? ("provider" in event ? "All day" : "To-do")}
+                                title={upcomingTitle({ ...event, drivers: driverNamesFor("drivingProfileIds" in event ? event.drivingProfileIds : undefined, profiles) })}
+                                chips={chip && <span data-testid="event-scan-chip" className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-xs">{chip}</span>}
+                                onClick={"provider" in event ? () => handleEventClick(event) : undefined}
+                              />
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -2990,7 +2696,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
                               <div
                                 key={ev.id}
                                 className="text-[10px] px-1.5 py-0.5 rounded font-medium truncate cursor-pointer hover:opacity-90 flex items-center gap-1"
-                                style={{ backgroundColor: ev.color, color: getContrastText(ev.color) }}
+                                style={{ backgroundColor: ev.color, color: contrastText(ev.color) }}
                                 onClick={() => handleEventClick(ev)}
                                 data-testid={`allday-event-${ev.id}`}
                               >

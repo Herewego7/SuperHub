@@ -12,7 +12,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chromium, type Browser, type Page } from "playwright";
+import { chromium, type Browser, type Locator, type Page } from "playwright";
 
 const PORT = 5299;
 const SANDBOX_CHROMIUM = "/opt/pw-browsers/chromium";
@@ -6346,7 +6346,7 @@ test("Fonts: body text uses the device's own font and headings its rounded one",
   }
 });
 
-test("Check-off: a to-do on Home ticks the moment it's tapped, with one light tap", async () => {
+test("Check-off: a to-do on Home goes green the moment it's tapped, holds, then moves into Done", async () => {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   try {
     await page.addInitScript(RECORD_VIBRATIONS);
@@ -6354,11 +6354,29 @@ test("Check-off: a to-do on Home ticks the moment it's tapped, with one light ta
     const tick = page.getByRole("button", { name: "Check off Return library books" });
     await tick.waitFor({ timeout: 15_000 });
 
-    // The scenario's server takes 2.5 seconds to save; the tick lands first.
+    await page.evaluate(`(() => {
+      window.__doneScale = 0;
+      const sample = () => {
+        const count = document.querySelector('[data-testid="home-todo-done-count"]');
+        const matrix = count && getComputedStyle(count).transform;
+        if (matrix && matrix !== "none") window.__doneScale = Math.max(window.__doneScale, parseFloat(matrix.slice(7)));
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    })()`);
+
+    // The scenario's server takes 2.5 seconds to save; the tick lands first,
+    // and the row stays where it is long enough to see it go green.
     await tick.click();
-    await page.getByRole("button", { name: "Show 1 done" }).waitFor({ timeout: 700 });
-    assert.equal(await page.getByTestId("home-todo-t1").count(), 0, "the ticked to-do should leave the open list at once");
+    const ticked = page.getByTestId("home-todo-t1").getByRole("button", { name: "Mark Return library books not done" });
+    await ticked.waitFor({ timeout: 300 });
+    assert.equal(await ticked.evaluate((el) => getComputedStyle(el).backgroundColor), "rgb(52, 168, 83)", "the circle fills green");
     assert.deepEqual(await page.evaluate("window.__vibrations"), [10], "one light tap per check-off");
+
+    await page.getByRole("button", { name: "Show 1 done" }).waitFor({ timeout: 1500 });
+    await page.getByTestId("home-todo-t1").waitFor({ state: "detached", timeout: 1000 });
+    await page.waitForTimeout(400);
+    assert.ok(((await page.evaluate("window.__doneScale")) as number) > 1.1, "the folded Done count pulses as the row lands in it");
 
     await page.waitForTimeout(3000);
     assert.equal(await page.getByRole("button", { name: "Show 1 done" }).count(), 1, "the tick should stay once the save lands");
@@ -6367,6 +6385,261 @@ test("Check-off: a to-do on Home ticks the moment it's tapped, with one light ta
     await page.getByRole("button", { name: "Mark Return library books not done" }).click();
     await page.getByTestId("home-todo-t1").waitFor({ timeout: 700 });
     assert.deepEqual(await page.evaluate("window.__vibrations"), [10], "un-ticking is silent");
+  } finally {
+    await page.close();
+  }
+});
+
+async function homeTodoIds(page: Page): Promise<string[]> {
+  const rows = page.getByTestId("home-day").locator('li[data-testid^="home-todo-"]');
+  return (await rows.evaluateAll((els) => els.map((el) => el.getAttribute("data-testid") ?? ""))).sort();
+}
+
+test("Home to-dos: one parent sees theirs and the shared ones, and All Family sees everyone's", async () => {
+  const page = await openScenario("homeInbox");
+  try {
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    await page.getByTestId("home-todo-planner").waitFor({ timeout: 3000 });
+
+    await page.getByTestId("profile-mom").click();
+    await page.getByTestId("home-todo-planner").waitFor({ state: "detached", timeout: 3000 });
+    assert.deepEqual(await homeTodoIds(page), ["home-todo-dentist", "home-todo-slip", "home-todo-weekend"], "Mom sees hers, the family's and the unassigned one, not Dad's");
+
+    await page.getByTestId("profile-all family").click();
+    await page.getByTestId("home-todo-planner").waitFor({ timeout: 3000 });
+    assert.deepEqual(await homeTodoIds(page), ["home-todo-dentist", "home-todo-planner", "home-todo-slip", "home-todo-weekend"], "All Family sees every to-do");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Home to-dos: each name chip is in that person's color", async () => {
+  const page = await openScenario("homeInbox");
+  try {
+    const chip = (id: string) => page.getByTestId(`home-todo-${id}`).getByTestId("home-todo-chip");
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    await chip("planner").waitFor({ timeout: 3000 });
+    const look = (id: string) => chip(id).evaluate((el) => ({ text: el.textContent, color: getComputedStyle(el).backgroundColor }));
+    assert.deepEqual(await look("planner"), { text: "Dad", color: "rgb(59, 130, 246)" });
+    assert.deepEqual(await look("slip"), { text: "Mom", color: "rgb(224, 122, 95)" });
+    assert.deepEqual(await look("weekend"), { text: "Everyone", color: "rgb(124, 92, 191)" }, "a family to-do wears the All Family color");
+    assert.equal(await chip("dentist").textContent(), "Assign", "nobody yet reads as a prompt");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Home to-dos: a swipe left offers Snooze and Remove, and Remove slides the row away before the server answers", async () => {
+  const page = await openScenario("homeInbox");
+  try {
+    const row = page.getByTestId("home-todo-planner");
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    await row.waitFor({ timeout: 3000 });
+    const box = (await row.boundingBox())!;
+    const x = box.x + box.width * 0.6;
+    const y = box.y + 22;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let step = 1; step <= 8; step++) await page.mouse.move(x - step * 15, y);
+    await page.mouse.up();
+    const actions = row.getByTestId("home-todo-swipe-actions");
+    await actions.waitFor({ timeout: 2000 });
+    assert.deepEqual(await actions.getByRole("button").allTextContents(), ["Snooze", "Remove"]);
+
+    await page.evaluate(`(() => {
+      const frames = (window.__frames = []);
+      const next = document.querySelector('[data-testid="home-todo-planner"]').nextElementSibling;
+      const nextId = next && next.getAttribute("data-testid");
+      document.addEventListener("click", () => { window.__clickAt = performance.now(); }, { capture: true, once: true });
+      const sample = () => {
+        const el = document.querySelector('[data-testid="home-todo-planner"]');
+        const below = nextId && document.querySelector('[data-testid="' + nextId + '"]');
+        frames.push({ t: performance.now(), left: el ? el.getBoundingClientRect().left : null, nextTop: below ? below.getBoundingClientRect().top : null });
+        if (frames.length < 240) requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    })()`);
+    await actions.getByRole("button", { name: "Remove" }).click();
+    await page.waitForTimeout(1200);
+    type Frame = { t: number; left: number | null; nextTop: number | null };
+    const { frames, clickAt } = (await page.evaluate("({ frames: window.__frames, clickAt: window.__clickAt })")) as { frames: Frame[]; clickAt: number };
+    const start = frames.filter((frame) => frame.t < clickAt).at(-1)!;
+    const after = frames.filter((frame) => frame.t >= clickAt);
+    assert.ok(start.left !== null && start.nextTop !== null, "the sampler should see the row and the one below it before the tap");
+
+    // REMOVE_MS is 1.5 s, so a row that waited for the server would still be sitting here.
+    const slid = after.find((frame) => frame.left !== null && frame.left < start.left! - 100);
+    assert.ok(slid && slid.t - clickAt < 400, `the row should slide left at once, saw ${JSON.stringify(after.slice(0, 10).map((frame) => frame.left))}`);
+    const gone = after.find((frame) => frame.left === null);
+    assert.ok(gone && gone.t - clickAt < 700, "the row should be gone well before the server answers");
+    const rising = after.find((frame) => frame.nextTop !== null && frame.nextTop < start.nextTop! - 2);
+    assert.ok(rising, "the row below should move up into the gap");
+    assert.ok(rising.t >= gone.t - 20, "the gap closes once the row has left, not while it slides");
+
+    await page.waitForTimeout(1500);
+    assert.equal(await page.getByTestId("home-todo-planner").count(), 0, "it stays gone once the server answers");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Home to-dos: an item's sheet lists its note as bullets, and its own parent can read the full email", async () => {
+  const page = await openScenario("homeInbox");
+  try {
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    await page.getByTestId("home-todo-planner").waitFor({ timeout: 3000 });
+    const openSheet = async () => {
+      await page.getByTestId("home-todo-planner").locator("button", { hasText: "Bring planner" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByTestId("home-note-bullets").waitFor({ timeout: 3000 });
+      return sheet;
+    };
+
+    let sheet = await openSheet();
+    assert.deepEqual(await sheet.getByTestId("home-note-bullets").locator("li").allTextContents(), ["Bring the planner to class.", "Sign the reading log.", "For Ava."]);
+    assert.equal(await sheet.getByTestId("home-read-full-email").count(), 0, "with All Family selected nobody in particular is reading, so the email stays closed");
+    await page.keyboard.press("Escape");
+    await sheet.waitFor({ state: "detached", timeout: 3000 });
+
+    await page.getByTestId("profile-dad").click();
+    sheet = await openSheet();
+    await sheet.getByTestId("home-read-full-email").click();
+    const mail = sheet.getByTestId("home-full-email");
+    await mail.waitFor({ timeout: 3000 });
+    assert.match((await mail.textContent()) ?? "", /send your child to class with their planner/);
+    assert.equal(await mail.getByRole("link", { name: "Open in Gmail" }).getAttribute("href"), "https://mail.google.com/mail/u/0/#all/m1");
+  } finally {
+    await page.close();
+  }
+});
+
+/** A real finger dragged sideways, for anything the browser scrolls natively. */
+async function touchSwipeAcross(page: Page, x1: number, y: number, x2: number, steps = 10): Promise<void> {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: x1, y, id: 1 }] });
+  for (let i = 1; i <= steps; i++) {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x1 + (x2 - x1) * (i / steps), y, id: 1 }] });
+    await page.waitForTimeout(16);
+  }
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+}
+
+test("School Newsletters: one swipeable row per newsletter, with its place, its issues and its highlights", async () => {
+  const page = await openScenarioTouch("homeNewsletters", { width: 390, height: 844 });
+  try {
+    const rows = page.getByTestId("home-newsletter");
+    await rows.first().waitFor({ timeout: 15_000 });
+    assert.equal(await rows.count(), 2, "one row per newsletter, not one per issue");
+    const weekly = rows.filter({ hasText: "Lincoln Weekly" });
+    const position = weekly.getByTestId("home-newsletter-position");
+    const activeDot = () => weekly.getByTestId("home-newsletter-dot").evaluateAll((dots) => dots.findIndex((dot) => dot.getAttribute("data-active") === "true"));
+    assert.equal(await position.textContent(), "1 of 3");
+    assert.equal(await weekly.getByTestId("home-newsletter-dot").count(), 3);
+    assert.equal(await activeDot(), 0);
+    assert.equal(await weekly.getByTestId("home-newsletter-highlight").first().textContent(), "Picture day is coming up.", "each issue leads with its first highlight");
+    assert.equal(await rows.filter({ hasText: "PTA News" }).getByTestId("home-newsletter-position").count(), 0, "a single issue needs no count");
+
+    const track = weekly.getByTestId("home-newsletter-track");
+    const box = (await track.boundingBox())!;
+    await touchSwipeAcross(page, box.x + box.width - 30, box.y + box.height / 2, box.x + 30);
+    await position.filter({ hasText: "2 of 3" }).waitFor({ timeout: 3000 });
+    assert.equal(await activeDot(), 1, "the dots follow the swipe");
+
+    await weekly.getByRole("button", { name: "All issues" }).click();
+    const sheet = page.getByRole("dialog");
+    const issues = sheet.getByTestId("home-letter-issues").locator("li");
+    await issues.first().waitFor({ timeout: 3000 });
+    assert.equal(await issues.count(), 3, "All issues lists every issue from the last 30 days");
+    await issues.nth(1).getByRole("button").click();
+    await sheet.getByTestId("home-note-bullets").waitFor({ timeout: 3000 });
+    assert.deepEqual(await sheet.getByTestId("home-note-bullets").locator("li").allTextContents(), ["Thank you for a great open house.", "Spirit wear orders are due."]);
+
+    await sheet.getByTestId("home-letter-hide").click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Stop showing", exact: true }).click();
+    await weekly.waitFor({ state: "detached", timeout: 3000 });
+    assert.deepEqual(await page.evaluate("window.__hideCalls"), [{ address: "news@lincoln.org", name: "Lincoln Weekly" }]);
+    assert.equal(await rows.count(), 1, "the other newsletter stays");
+  } finally {
+    await page.context().close();
+  }
+});
+
+/** The colors down an event row's person strip, top to bottom. */
+async function stripColors(row: Locator): Promise<string[]> {
+  return row.getByTestId("event-strip").locator("[data-color]").evaluateAll((segments) => segments.map((segment) => getComputedStyle(segment).backgroundColor));
+}
+
+test("Today's Schedule: each row wears its person's color, a shared one shows each person, and an emailed time is dashed", async () => {
+  const page = await openScenario("homeSchedule");
+  try {
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    const schedule = page.getByTestId("home-today-events");
+    const row = (title: string) => schedule.getByTestId("home-event").filter({ hasText: title });
+    await row("Soccer practice").waitFor({ timeout: 5000 });
+    assert.deepEqual(await stripColors(row("Soccer practice")), ["rgb(239, 68, 68)"]);
+    assert.equal(await row("Soccer practice").evaluate((el) => getComputedStyle(el).backgroundColor), "rgba(239, 68, 68, 0.157)", "the row is tinted in Ava's color");
+    assert.deepEqual(await stripColors(row("Parent-teacher night")), ["rgb(224, 122, 95)", "rgb(59, 130, 246)"], "a shared event shows each person");
+    assert.deepEqual(await stripColors(row("Family movie night")), ["rgb(124, 92, 191)"], "a family event wears the All Family color");
+    const emailed = schedule.getByTestId("home-off-calendar").filter({ hasText: "Picture day" });
+    const edge = await emailed.evaluate((el) => ({ style: getComputedStyle(el).borderTopStyle, color: getComputedStyle(el).borderTopColor }));
+    assert.deepEqual(edge, { style: "dashed", color: "rgb(59, 130, 246)" }, "a time only in Dad's email is dashed in his color");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Today's Schedule: Open in Calendar lands on the day Home is showing", async () => {
+  const page = await openScenario("homeSchedule");
+  try {
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Next day" }).click();
+    await page.getByTestId("home-today-events").getByTestId("home-event").filter({ hasText: "Dentist" }).waitFor({ timeout: 5000 });
+    await page.getByTestId("home-open-calendar").click();
+    const days = page.getByTestId("upcoming-day");
+    await days.first().waitFor({ timeout: 10_000 });
+    assert.equal(await days.first().locator("h3").textContent(), "Tomorrow", "Calendar opens on the day Home was showing, not today");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Calendar Upcoming: day headers, each row in its person's color with a time column, and a tap opens the event", async () => {
+  const page = await openScenario("homeSchedule");
+  try {
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    await page.getByTestId("calendar-tab").click();
+    const days = page.getByTestId("upcoming-day");
+    await days.first().waitFor({ timeout: 10_000 });
+    assert.deepEqual(await days.locator("h3").allTextContents(), ["Today", "Tomorrow"]);
+    const soccer = page.getByTestId("upcoming-row").filter({ hasText: "Soccer practice" });
+    assert.deepEqual(await stripColors(soccer), ["rgb(239, 68, 68)"]);
+    assert.deepEqual(await stripColors(page.getByTestId("upcoming-row").filter({ hasText: "Parent-teacher night" })), ["rgb(224, 122, 95)", "rgb(59, 130, 246)"]);
+    assert.equal(await soccer.getByTestId("event-time").textContent(), "5:00 PM");
+    assert.equal(await page.getByTestId("upcoming-row").filter({ hasText: "Picture day" }).getByTestId("event-time").textContent(), "To-do", "a to-do shows no made-up time");
+    await soccer.click();
+    const title = page.getByRole("dialog").getByPlaceholder("Event title");
+    await title.waitFor({ timeout: 10_000 });
+    assert.equal(await title.inputValue(), "Soccer practice", "the tapped row's event opens");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Settings: stopped senders and hidden newsletters are listed under Scan inbox, each with an Undo", async () => {
+  const page = await openScenario("settingsStopped");
+  try {
+    const lists = page.getByTestId("inbox-stopped");
+    await lists.waitFor({ timeout: 15_000 });
+    const sender = lists.getByTestId("stopped-sender");
+    const letter = lists.getByTestId("hidden-newsletter");
+    assert.equal(await sender.locator("span").first().textContent(), "deals@shop.example");
+    assert.match((await letter.textContent()) ?? "", /^Lincoln Weekly\s*news@lincoln\.org/, "a hidden newsletter reads by its own name, with its sender under it");
+
+    await sender.getByRole("button", { name: "Undo stopping deals@shop.example" }).click();
+    await sender.waitFor({ state: "detached", timeout: 3000 });
+    await letter.getByRole("button", { name: "Undo hiding Lincoln Weekly" }).click();
+    await lists.waitFor({ state: "detached", timeout: 3000 });
+    assert.deepEqual(await page.evaluate("window.__undoCalls"), [{ unmute: "deals@shop.example" }, { show: "news@lincoln.org|lincoln weekly" }]);
   } finally {
     await page.close();
   }
@@ -6396,6 +6669,79 @@ test("Live refresh: an open Home asks for calendar events every five minutes", a
     assert.equal(await callsTo(page, "/api/google-calendar/events"), first, "no calendar refresh inside five minutes");
     await page.clock.runFor(30_000);
     assert.equal(await callsTo(page, "/api/google-calendar/events"), first + 1, "one refresh at five minutes");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Home events: a Google event tapped on Home opens on the Calendar tab", async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  try {
+    await page.goto(`${BASE_URL}?scenario=homeGoogleEvent`);
+    const row = page.getByTestId("home-today-events").getByRole("button", { name: /Soccer tournament/ });
+    await row.waitFor({ timeout: 15_000 });
+    await row.click();
+    const title = page.getByRole("dialog").getByPlaceholder("Event title");
+    await title.waitFor({ timeout: 10_000 });
+    assert.equal(await title.inputValue(), "Soccer tournament", "the event tapped on Home should be the one that opens");
+  } finally {
+    await page.close();
+  }
+});
+
+async function homeCardOrder(page: Page): Promise<string[]> {
+  const cards = page.getByTestId("home-day").locator("[data-home-card]");
+  const ids: string[] = [];
+  for (let i = 0; i < (await cards.count()); i++) ids.push((await cards.nth(i).getAttribute("data-home-card")) ?? "");
+  return ids;
+}
+
+test("Customize Home: cards move and hide, and the layout stays on this device", async () => {
+  const page = await openScenario("familyHub");
+  try {
+    await page.getByTestId("home-day").waitFor({ timeout: 15_000 });
+    assert.deepEqual(
+      await homeCardOrder(page),
+      ["todos", "keyDates", "chores", "newsletters", "schedule", "horizon", "completed"],
+      "every card shows, in the default order",
+    );
+
+    await page.getByTestId("customize-home-page-card").click();
+    for (let i = 0; i < 4; i++) await page.getByTestId("move-up-schedule").click();
+    await page.getByTestId("toggle-keyDates").click();
+    await page.getByTestId("save-card-settings").click();
+    const moved = ["schedule", "todos", "chores", "newsletters", "horizon", "completed"];
+    assert.deepEqual(await homeCardOrder(page), moved, "Today's Schedule moves to the top and Key Dates to Add is gone");
+
+    await page.reload();
+    await page.getByTestId("home-day").waitFor({ timeout: 15_000 });
+    assert.deepEqual(await homeCardOrder(page), moved, "the layout is still there after the app reopens");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Home cards: a tapped header folds the card to one line, and it stays folded", async () => {
+  const page = await openScenario("homeCheckOff");
+  try {
+    const card = page.locator('[data-home-card="todos"]');
+    const header = card.locator("h2 button");
+    await header.waitFor({ timeout: 15_000 });
+    const open = await card.locator('li[data-testid^="home-todo-"]').count();
+    assert.ok(open > 0, "the fixture should have open to-dos, or the summary below proves nothing");
+    assert.equal(await header.getAttribute("aria-expanded"), "true");
+
+    await header.click();
+    assert.equal(await header.getAttribute("aria-expanded"), "false");
+    assert.equal(await card.getByTestId("home-card-summary").textContent(), `${open} open`, "a folded card says how many are open");
+    assert.equal(await card.locator('li[data-testid^="home-todo-"]').count(), 0, "and hides its rows");
+
+    await page.reload();
+    await header.waitFor({ timeout: 15_000 });
+    assert.equal(await header.getAttribute("aria-expanded"), "false", "still folded after the app reopens");
+
+    await header.click();
+    assert.equal(await card.locator('li[data-testid^="home-todo-"]').count(), open, "unfolding brings the rows back");
   } finally {
     await page.close();
   }

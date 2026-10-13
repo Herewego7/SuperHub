@@ -73,7 +73,8 @@ export const TENANT_LOCAL_STORAGE_PREFIXES: readonly string[] = [
  *   familyHub_screensaver          per-device screensaver toggle
  *   familyHub_eventRemindersEnabled per-device reminder toggle
  *   familyHub_todosSort            sort order preference
- *   todayPageCardSettings_v5       card layout on this device
+ *   superhub_homeCards_v1          Home's card order and on/off on this device
+ *   superhub_homeCollapsed_v1      which Home cards are collapsed on this device
  *   tasksPageCardSettings_v1       card layout on this device
  *   familyHub_reviewPromptAskedAt  App Store prompt pacing, per device
  *   familyHub_reviewPromptDays     as above

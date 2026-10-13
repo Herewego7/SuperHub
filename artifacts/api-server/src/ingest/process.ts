@@ -103,6 +103,8 @@ export function inboxTokenExpiry(tokenExpiry: Date | string | null | undefined, 
 export type HouseholdMail = {
   mutedSenders: string[];
   dismissedSlipKeys: string[];
+  /** "sender|newsletter name" pairs. A pair with no name covers every newsletter from that sender. */
+  mutedNewsletters?: string[];
 };
 
 export type PlannedTodo = {
@@ -253,6 +255,89 @@ export function muteSender(state: HouseholdMail, address: string): HouseholdMail
   return { ...state, mutedSenders: [...state.mutedSenders, next] };
 }
 
+export function unmuteSender(state: HouseholdMail, address: string): HouseholdMail {
+  const next = address.trim().toLowerCase();
+  return { ...state, mutedSenders: state.mutedSenders.filter((item) => item !== next) };
+}
+
+export function newsletterKey(address: string, name?: string | null): string {
+  return `${address.trim().toLowerCase()}|${slipKey(name ?? "")}`;
+}
+
+/** A pair with no name covers the sender's every newsletter, and an issue with no name matches any pair for its sender. */
+export function newsletterMuted(keys: readonly string[] | undefined, address: string | null | undefined, name?: string | null): boolean {
+  if (!keys?.length || !address) return false;
+  const wanted = newsletterKey(address, name);
+  const at = wanted.indexOf("|");
+  const sender = wanted.slice(0, at);
+  const title = wanted.slice(at + 1);
+  return keys.some((key) => {
+    const split = key.indexOf("|");
+    if (split < 0 || key.slice(0, split) !== sender) return false;
+    const muted = key.slice(split + 1);
+    return !muted || !title || muted === title;
+  });
+}
+
+export function muteNewsletter(keys: readonly string[], address: string, name?: string | null): string[] {
+  if (!address.trim()) return [...keys];
+  const key = newsletterKey(address, name);
+  return keys.includes(key) ? [...keys] : [...keys, key];
+}
+
+export function unmuteNewsletter(keys: readonly string[], key: string): string[] {
+  return keys.filter((item) => item !== key);
+}
+
+type SlipHeader = Partial<Record<"From" | "Plan" | "Ref" | "Name" | "Sender" | "Sent" | "Mail", string>>;
+const HEADER_LINE = /^(From|Plan|Ref|Name|Sender|Sent|Mail): (.*)$/;
+
+/** The header lines at the top of an inbox item's note. The body starts at the first other line. */
+export function slipHeader(description: string | null | undefined): SlipHeader {
+  const out: SlipHeader = {};
+  for (const line of (description ?? "").split("\n")) {
+    const match = HEADER_LINE.exec(line);
+    if (!match) break;
+    const label = match[1] as keyof SlipHeader;
+    out[label] ??= match[2].trim();
+  }
+  return out;
+}
+
+const NEWSLETTER_MARK = /(?:^|\n)Plan: newsletter(?:\n|$)/;
+
+/** Open inbox items from one sender. Calendar events stay, and finished items stay in history. */
+export function openMailFrom<T extends { id: string; category?: string | null; description?: string | null }>(
+  chores: T[],
+  address: string,
+  done: ReadonlySet<string>,
+): string[] {
+  const sender = address.trim().toLowerCase();
+  if (!sender) return [];
+  return chores
+    .filter((chore) => chore.category === "school_email" && !done.has(chore.id) && slipSender(chore.description)?.toLowerCase() === sender)
+    .map((chore) => chore.id);
+}
+
+/** Open issues of one newsletter. An older issue saved without a name counts as the sender's. */
+export function openLettersFrom<T extends { id: string; category?: string | null; description?: string | null }>(
+  chores: T[],
+  address: string,
+  name: string | null | undefined,
+  done: ReadonlySet<string>,
+): string[] {
+  const key = [newsletterKey(address, name)];
+  return chores
+    .filter((chore) => chore.category === "school_email" && !done.has(chore.id) && NEWSLETTER_MARK.test(chore.description ?? ""))
+    .filter((chore) => newsletterMuted(key, slipSender(chore.description), slipHeader(chore.description).Name))
+    .map((chore) => chore.id);
+}
+
+/** Subject or length says newsletter. Used when no model read the message. */
+export function newsletterShaped(message: { subject: string; body?: string }): boolean {
+  return /\b(newsletter|weekly|bulletin|week ahead)\b/i.test(message.subject) || (message.body || "").length > 3000;
+}
+
 export function choresDismissedBySlip<T extends { id: string; title: string; category?: string | null }>(chores: T[], key: string): string[] {
   return chores.filter((chore) => chore.category === "school_email" && slipKey(chore.title) === key).map((chore) => chore.id);
 }
@@ -284,12 +369,40 @@ export function eventsDismissedBySlip<T extends { id: string; title: string; sou
     .map((event) => event.id);
 }
 
-export function slipBody(fromAddress: string | undefined, snippet: string, body?: string): string {
+export function slipBody(fromAddress: string | undefined, snippet: string, body?: string, meta = ""): string {
   const address = fromAddress?.trim();
-  const head = !address ? snippet : `From: ${address}\n${snippet}`;
+  const head = !address ? `${meta}${snippet}` : `From: ${address}\n${meta}${snippet}`;
   const extra = body?.trim();
   if (!extra || extra === snippet.trim()) return head;
   return `${head}\n\n${extra}`;
+}
+
+/** Owners of one message: its mailbox, or the caller's people when it has none. */
+export function mailOwners(message: InboundMessage, fallback: string[]): string[] {
+  return message.ownerProfileIds?.length ? [...message.ownerProfileIds] : fallback;
+}
+
+/**
+ * Header lines Home reads and never shows: the newsletter's own name, who sent it, when,
+ * and where the original lives so Read full email can fetch it.
+ */
+export function mailLines(message: InboundMessage, name?: string): string {
+  const line = (label: string, value: string | undefined) => {
+    const clean = value?.replace(/\s+/g, " ").trim().slice(0, 120);
+    return clean ? `${label}: ${clean}\n` : "";
+  };
+  const owner = message.ownerProfileIds?.[0];
+  const mail = message.provider && message.messageId && owner && !/\s/.test(message.messageId)
+    ? `${message.provider}:${owner}:${message.messageId}`
+    : "";
+  return line("Name", name) + line("Sender", message.fromName) + line("Sent", message.receivedAt) + (mail ? `Mail: ${mail}\n` : "");
+}
+
+/** Where a saved item's original email lives, read from its own note. */
+export function slipMail(description: string | null | undefined): { provider: "gmail" | "outlook"; ownerProfileId: string; messageId: string } | null {
+  const match = slipHeader(description).Mail?.match(/^(gmail|outlook):([^:\s]+):(\S+)$/);
+  if (!match) return null;
+  return { provider: match[1] as "gmail" | "outlook", ownerProfileId: match[2], messageId: match[3] };
 }
 
 export function slipSender(description: string | null | undefined): string | null {
@@ -397,12 +510,19 @@ export function ingestMessages(
   const events: PlannedEvent[] = [];
   for (const message of messages) {
     if (message.fromAddress && muted.has(message.fromAddress.toLowerCase())) continue;
+    if (newsletterShaped(message) && newsletterMuted(state.mutedNewsletters, message.fromAddress)) continue;
     if (!mailWorthSaving(message)) continue;
     const key = slipKey(message.subject);
     if (!key) continue;
+    const owners = mailOwners(message, profileIds);
     if (seen.has(key)) {
+      // The same slip in a second parent's mailbox belongs to both of them.
+      for (const row of [...todos, ...events]) {
+        if ((("slipKey" in row) ? row.slipKey : row.externalId) !== key) continue;
+        row.profileIds = [...new Set([...row.profileIds, ...owners])];
+      }
       if (!dismissed.has(key) && !heldEvents.has(key) && !haveEvent.has(key)) {
-        const event = plannedEvent(message, key, profileIds);
+        const event = plannedEvent(message, key, owners);
         if (event) {
           events.push(event);
           haveEvent.add(key);
@@ -413,15 +533,15 @@ export function ingestMessages(
     seen.add(key);
     todos.push({
       title: message.subject.trim(),
-      description: slipBody(message.fromAddress, message.snippet, message.body),
+      description: slipBody(message.fromAddress, message.snippet, message.body, mailLines(message)),
       taskType: "todo",
       category: "school_email",
       points: 0,
-      profileIds,
+      profileIds: owners,
       daysOfWeek: [],
       slipKey: key,
     });
-    const event = plannedEvent(message, key, profileIds);
+    const event = plannedEvent(message, key, owners);
     if (event) {
       events.push(event);
       haveEvent.add(key);

@@ -3,24 +3,110 @@ export function slipSender(description: string | null | undefined): string | nul
   return match?.[1] ?? null;
 }
 
+type SlipHeader = Partial<Record<"From" | "Plan" | "Ref" | "Name" | "Sender" | "Sent" | "Mail", string>>;
+const HEADER_LINE = /^(From|Plan|Ref|Name|Sender|Sent|Mail): (.*)$/;
+
+/** The lines the inbox writes at the top of a note. The body starts at the first other line. */
+export function slipHeader(description: string | null | undefined): SlipHeader {
+  const out: SlipHeader = {};
+  for (const line of (description ?? "").split("\n")) {
+    const match = HEADER_LINE.exec(line);
+    if (!match) break;
+    const label = match[1] as keyof SlipHeader;
+    out[label] ??= match[2].trim();
+  }
+  return out;
+}
+
 export function slipText(description: string | null | undefined): string {
   if (!description) return "";
-  return description.replace(/^From: \S+\n/, "").replace(/^Plan: (?:newsletter|keydate|todo)\n/, "").replace(/^Ref: .+\n/, "");
+  const lines = description.split("\n");
+  let at = 0;
+  while (at < lines.length && HEADER_LINE.test(lines[at])) at += 1;
+  return lines.slice(at).join("\n");
 }
 
 export function slipQuote(description: string | null | undefined): string {
   return slipText(description).split(/\n\s*\n/)[0] ?? "";
 }
 
-/** The adult who connected the account can open the original. Other adults need the share switch. A child never gets the link. */
-export function openEmailHref(
+const ABBREVIATION = /\b(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|vs|etc|No|Rm|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|a\.m|p\.m|e\.g|i\.e)\.$/i;
+
+/** The note as a list: one line per line it was written on, and one per sentence within a line. */
+export function noteBullets(description: string | null | undefined): string[] {
+  const out: string[] = [];
+  for (const line of slipText(description).split("\n")) {
+    const pieces: string[] = [];
+    for (const piece of line.replace(/^\s*[-•*]\s+/, "").split(/(?<=[.!?])\s+/)) {
+      if (pieces.length && ABBREVIATION.test(pieces[pieces.length - 1])) pieces[pieces.length - 1] += ` ${piece}`;
+      else pieces.push(piece);
+    }
+    out.push(...pieces.map((piece) => piece.trim()).filter(Boolean));
+  }
+  return out;
+}
+
+/** The sender's own name, like "Elizabeth Simonovich". Older items only have the address. */
+export function slipSenderName(description: string | null | undefined): string | null {
+  return slipHeader(description).Sender || null;
+}
+
+/** What a newsletter calls itself, like "Room 12 News". */
+export function slipNewsletterName(description: string | null | undefined): string | null {
+  return slipHeader(description).Name || null;
+}
+
+/** When the email was sent. Older items don't say. */
+export function slipSentAt(description: string | null | undefined): Date | null {
+  const raw = slipHeader(description).Sent;
+  const at = raw ? new Date(raw) : null;
+  return at && !Number.isNaN(at.getTime()) ? at : null;
+}
+
+/** Whose mailbox holds the original, when the app can open it. */
+export function slipMailOwner(description: string | null | undefined): string | null {
+  return slipHeader(description).Mail?.match(/^(?:gmail|outlook):([^:\s]+):\S+$/)?.[1] ?? null;
+}
+
+/** The mailbox owner can read the original. Other adults need Share originals. A child never can. */
+export function canReadOriginal(
   shareOriginals: boolean,
-  sender: string | null,
-  viewer?: { isChild?: boolean; ownsAccount?: boolean },
-): string | null {
-  if (!sender || viewer?.isChild) return null;
-  if (viewer?.ownsAccount || shareOriginals) return `mailto:${sender}`;
-  return null;
+  ownerId: string | null,
+  viewer?: { id?: string | null; isChild?: boolean },
+): boolean {
+  if (!ownerId || viewer?.isChild) return false;
+  return shareOriginals || (!!viewer?.id && viewer.id === ownerId);
+}
+
+function nameKey(name: string | null | undefined): string {
+  return (name ?? "").toLowerCase().replace(/^(re|fwd):\s*/i, "").replace(/\s+/g, " ").trim();
+}
+
+/** Same pair the server keeps: "sender|newsletter name". */
+export function newsletterKey(address: string, name?: string | null): string {
+  return `${address.trim().toLowerCase()}|${nameKey(name)}`;
+}
+
+/** A pair with no name covers the sender's every newsletter, and an issue with no name matches any pair for its sender. */
+export function newsletterMuted(keys: readonly string[] | undefined, address: string | null | undefined, name?: string | null): boolean {
+  if (!keys?.length || !address) return false;
+  const wanted = newsletterKey(address, name);
+  const at = wanted.indexOf("|");
+  const sender = wanted.slice(0, at);
+  const title = wanted.slice(at + 1);
+  return keys.some((key) => {
+    const split = key.indexOf("|");
+    if (split < 0 || key.slice(0, split) !== sender) return false;
+    const muted = key.slice(split + 1);
+    return !muted || !title || muted === title;
+  });
+}
+
+/** How Settings names a hidden newsletter: its name, or the sender when it had none. */
+export function newsletterKeyLabel(key: string): { sender: string; name: string | null } {
+  const split = key.indexOf("|");
+  if (split < 0) return { sender: key, name: null };
+  return { sender: key.slice(0, split), name: key.slice(split + 1) || null };
 }
 
 /** One remembered fact per line. A blank field clears them. A repeat is kept once. */

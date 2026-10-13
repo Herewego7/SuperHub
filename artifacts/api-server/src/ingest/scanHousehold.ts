@@ -3,7 +3,7 @@ import { OutlookCalendarService } from "../outlookCalendar";
 import { getFreshOutlookAccessToken } from "../calendarSync";
 import { storage } from "../storage";
 import { applyIngestedMail } from "./saveMail";
-import { gmailNewsletterQuery, INBOX_INITIAL_DAYS, INBOX_NEWSLETTER_LIMIT, INBOX_RECENT_DAYS, latestPerSender } from "./parse";
+import { gmailNewsletterQuery, INBOX_INITIAL_DAYS, INBOX_NEWSLETTER_LIMIT, INBOX_RECENT_DAYS, latestPerSender, mergeMailboxes, type InboundMessage } from "./parse";
 import { inboxBlockReason, inboxMailFailure, inboxScanEnabled, shareScan } from "./process";
 import { beginHouseholdScan, emptyTally, finishHouseholdScan, noteLastRead, SCAN_BEAT_MS, type MailboxRead, type MailTally } from "./scanProgress";
 import { claimInboxScan, finishInboxScanRecord, noteInboxScanRunning, requestInboxScan } from "./scanState";
@@ -150,8 +150,9 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanR
   const owners = people.filter((person) => !person.isAllFamilyProfile && person.role !== "child" && !person.isChild);
   const google = new GoogleCalendarService();
   const outlook = new OutlookCalendarService();
-  const messages = [];
+  const messages: InboundMessage[] = [];
   const mailboxes: MailboxRead[] = [];
+  const mine = (ownerId: string, list: InboundMessage[]) => list.map((message) => ({ ...message, ownerProfileIds: [ownerId] }));
   let connected = 0;
   let needsReconnect = false;
   let mailProblem: "scope" | "unavailable" | null = null;
@@ -171,7 +172,7 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanR
       try {
         const recent = await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry, days);
         box.emails += recent.length;
-        messages.push(...recent);
+        messages.push(...mine(owner.id, recent));
         if (days >= INBOX_INITIAL_DAYS) {
           // Outlook has no newsletter search. Bot Life skips that pass there too.
           const older = latestPerSender(await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry, days, {
@@ -179,7 +180,7 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanR
             limit: INBOX_NEWSLETTER_LIMIT,
           }));
           box.emails += older.length;
-          messages.push(...older);
+          messages.push(...mine(owner.id, older));
         }
       } catch (err) {
         box.problem = note(err, "Google");
@@ -194,12 +195,12 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanR
         const access = (await getFreshOutlookAccessToken(owner.id)) ?? outlookTokens.accessToken;
         const recent = await outlook.listInbox(access, outlookTokens.email || owner.id, days);
         box.emails += recent.length;
-        messages.push(...recent);
+        messages.push(...mine(owner.id, recent));
       } catch (err) {
         box.problem = note(err, "Outlook");
       }
     }
   }
-  const saved = await applyIngestedMail(userId, messages, audience);
+  const saved = await applyIngestedMail(userId, mergeMailboxes(messages), audience);
   return { ...saved, connected, needsReconnect, mailProblem, mailboxes };
 }
