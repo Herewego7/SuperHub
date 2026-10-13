@@ -9,7 +9,7 @@ import type { HomeModel, Letters, Person } from "./useHomeDay";
 
 export function ItemSheet({ home }: { home: HomeModel }) {
   const { people, personId, kidName, onEditTodo } = home.props;
-  const { sheet, setSheet, now, kept, snoozeItem, assign, removeRow, askStopEmails, removeFromCalendar, saveSchool, placeMail, calendarSettings } = home;
+  const { sheet, setSheet, now, kept, snoozeItem, removeRow, askStopEmails, removeFromCalendar, saveSchool, placeMail, calendarSettings } = home;
   const canRead = (chore: Chore) => canReadOriginal(calendarSettings?.shareOriginals === true, slipMailOwner(chore.description), { id: personId, isChild: !!kidName });
   const [customSnooze, setCustomSnooze] = useState("");
   return (
@@ -56,7 +56,7 @@ export function ItemSheet({ home }: { home: HomeModel }) {
             added={!!kept[sheet.chore.id]}
             onEdit={() => { setSheet(null); onEditTodo?.(sheet.chore); }}
             onSnooze={() => setSheet({ ...sheet, mode: "snooze" })}
-            onClaim={() => { if (personId) assign.mutate({ choreId: sheet.chore.id, profileIds: [personId] }); setSheet(null); }}
+            onClaim={() => { if (personId) home.reassign(sheet.chore, [personId]); setSheet(null); }}
             onRemove={() => removeRow(sheet.chore)}
             onStopEmails={() => { setSheet(null); void askStopEmails(sheet.chore); }}
             onCalendar={() => {

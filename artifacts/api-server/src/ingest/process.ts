@@ -4,6 +4,7 @@
  * one chore row and, when the note names a clock time, one event row.
  * Not-relevant and mute-sender live on the household, not on a person.
  */
+import { senderOwners, type OwnerPerson } from "./assign";
 import { zonedWallClock } from "../lib/timezone";
 import { slipKey, type InboundMessage } from "./parse";
 
@@ -586,6 +587,7 @@ export function ingestMessages(
   existingKeys: string[],
   profileIds: string[],
   existingEventKeys: string[] = [],
+  people: OwnerPerson[] = [],
 ): { todos: PlannedTodo[]; events: PlannedEvent[] } {
   const muted = new Set(state.mutedSenders.map((address) => address.toLowerCase()));
   const dismissed = new Set(state.dismissedSlipKeys);
@@ -602,7 +604,8 @@ export function ingestMessages(
     if (deviceAlert(message) || !mailWorthSaving(message)) continue;
     const key = slipKey(message.subject);
     if (!key) continue;
-    const owners = mailOwners(message, profileIds);
+    const taught = senderOwners(message.fromAddress, people);
+    const owners = taught.length > 0 ? taught : mailOwners(message, profileIds);
     if (seen.has(key)) {
       // The same slip in a second parent's mailbox belongs to both of them.
       for (const row of [...todos, ...events]) {

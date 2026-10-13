@@ -7,6 +7,7 @@ import { GoogleGenAI } from "@google/genai";
 import { askJson, BOTLIFE_MODELS } from "../geminiClient";
 import { chunkText, familyGrades, forOtherGrades, shouldRead } from "../ai/parity";
 import { MAX_BODY_CHARS, MAX_THREAD_CHARS, slipKey, type InboundMessage, type MailFile } from "./parse";
+import { namedOwners, senderOwners, type OwnerPerson } from "./assign";
 import { deviceAlert, mailLines, mailOwners, newsletterMuted, newsletterShaped, slipClock, type HouseholdMail, type PlannedEvent, type PlannedTodo } from "./process";
 
 export type MailPerson = { name: string; school?: string | null; facts?: string[] | null; isChild?: boolean | null };
@@ -319,12 +320,21 @@ export function plansFromRead(
   existingEventKeys: string[],
   now: Date,
   grades: Set<string> = new Set(),
+  people: OwnerPerson[] = [],
 ): { todos: PlannedTodo[]; events: PlannedEvent[]; changes: { title: string; changeOf: string; when: string | null; time: string | null }[] } {
   const empty = { todos: [] as PlannedTodo[], events: [] as PlannedEvent[], changes: [] as { title: string; changeOf: string; when: string | null; time: string | null }[] };
   const muted = new Set(state.mutedSenders.map((address) => address.toLowerCase()));
   if (message.fromAddress && muted.has(message.fromAddress.toLowerCase())) return empty;
   if (deviceAlert(message)) return empty;
-  const profileIds = mailOwners(message, fallbackOwners);
+  // Who it is for: what the family taught the app about this sender, then the
+  // people the mail names, then whoever's inbox it came in.
+  const taught = senderOwners(message.fromAddress, people);
+  const profileIds = taught.length > 0 ? taught : mailOwners(message, fallbackOwners);
+  const ownersOf = (who: string[]) => {
+    if (taught.length > 0) return taught;
+    const named = namedOwners(who, people);
+    return named.length > 0 ? named : profileIds;
+  };
   const dismissed = new Set(state.dismissedSlipKeys);
   const seen = new Set([...dismissed, ...existingKeys]);
   const haveEvent = new Set(existingEventKeys);
@@ -361,7 +371,7 @@ export function plansFromRead(
     if (item.kind === "backpack" || item.kind === "decision") {
       const lead = item.kind === "backpack" ? `Bring ${item.title}.` : `Decide: ${item.title}.`;
       const due = when ? `Due ${when}.` : "";
-      todos.push(todoRow(item.kind === "decision" ? `Decide: ${item.title}` : item.title, noteFor(message, "todo", ref, [lead, due, item.detail.trim()].filter(Boolean).join(" "), item.who), profileIds));
+      todos.push(todoRow(item.kind === "decision" ? `Decide: ${item.title}` : item.title, noteFor(message, "todo", ref, [lead, due, item.detail.trim()].filter(Boolean).join(" "), item.who), ownersOf(item.who)));
       continue;
     }
     const clock = clockLabel(item.time);
@@ -378,7 +388,7 @@ export function plansFromRead(
             description: [from ? `From: ${from}` : "", stamp, detail, item.who.length ? `For ${item.who.join(" and ")}.` : ""].filter(Boolean).join("\n"),
             source: "school",
             externalId: key,
-            profileIds,
+            profileIds: ownersOf(item.who),
             hours: parsed.hours,
             minutes: parsed.minutes,
             ...(parsed.endHours != null ? { endHours: parsed.endHours, endMinutes: parsed.endMinutes } : {}),
@@ -389,11 +399,11 @@ export function plansFromRead(
       }
     }
     if ((item.kind === "keydate" || item.kind === "event") && when && !beforeToday(item.date, now)) {
-      todos.push(todoRow(item.title, noteFor(message, "keydate", ref, [when, detail].filter(Boolean).join("\n"), item.who), profileIds));
+      todos.push(todoRow(item.title, noteFor(message, "keydate", ref, [when, detail].filter(Boolean).join("\n"), item.who), ownersOf(item.who)));
       continue;
     }
     const due = when ? `Due ${when}.` : "";
-    todos.push(todoRow(item.title, noteFor(message, "todo", ref, [due, detail].filter(Boolean).join(" "), item.who), profileIds));
+    todos.push(todoRow(item.title, noteFor(message, "todo", ref, [due, detail].filter(Boolean).join(" "), item.who), ownersOf(item.who)));
   }
   return { todos, events, changes };
 }

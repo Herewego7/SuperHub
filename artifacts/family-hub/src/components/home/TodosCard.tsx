@@ -112,7 +112,7 @@ type Row = HomeModel["visibleTodos"][number];
 
 function TodoRow({ home, todo }: { home: HomeModel; todo: Row }) {
   const { events, day, people } = home.props;
-  const { revealed, setRevealed, setSheet, reduced, assign, checkOff, uncheck, removeRow } = home;
+  const { revealed, setRevealed, setSheet, reduced, checkOff, uncheck, removeRow } = home;
   const isMail = todo.category === "school_email";
   const title = isMail ? schoolHomeTitle(todo.title, events, day, people) : todo.title;
   const quote = slipQuote(todo.description);
@@ -203,7 +203,7 @@ function TodoRow({ home, todo }: { home: HomeModel; todo: Row }) {
             <span data-testid="home-todo-source" className="inline-flex min-w-0 max-w-[55%] truncate rounded-full bg-[#F1F1F4] px-2.5 py-1 text-xs text-[#1e1e24]/80">
               {sourceChipLabel(sender, isMail ? "mail" : "todo")}
             </span>
-            <PersonChips home={home} profileIds={todo.profileIds} title={title} onPick={(ids) => assign.mutate({ choreId: todo.id, profileIds: ids })} />
+            <PersonChips home={home} profileIds={todo.profileIds} title={title} onPick={(ids) => home.reassign(todo, ids)} sender={todo.category === "school_email" ? sender : null} />
             <button type="button" aria-label={`More actions for ${title}`} className="grid h-7 w-7 shrink-0 place-items-center text-[#6e6e78]" onClick={() => setSheet({ chore: todo, mode: "actions" })}>
               <MoreVertical className="h-4 w-4" />
             </button>

@@ -115,3 +115,27 @@ test("mail that is not for the family is declined, and a bad reply is ignored", 
   assert.equal(read?.items.length, 0);
   assert.equal(parseMailRead("not json"), null);
 });
+
+test("an item goes to the people the mail names, and a taught sender beats that", () => {
+  const now = new Date("2026-10-05T15:00:00Z");
+  const mail = {
+    id: "m1", accountId: "a", subject: "Thrive 2026 Conference", snippet: "", body: "",
+    fromAddress: "emails@brushfire.com", ownerProfileIds: ["dad", "mom"],
+  };
+  const read = {
+    familyRelated: true,
+    newsletter: null,
+    items: [
+      { kind: "todo" as const, title: "Thrive 2026 Conference", detail: "At Mayo Civic Center.", date: null, time: null, who: ["Mom"], changeOf: null },
+      { kind: "decision" as const, title: "RSVP for the game", detail: "", date: null, time: null, who: [], changeOf: null },
+    ],
+    profileFacts: [],
+  };
+  const people = [{ id: "dad", name: "Dad", facts: [] }, { id: "mom", name: "Mom", facts: [] }];
+  const state = { mutedSenders: [], dismissedSlipKeys: [] };
+  const planned = plansFromRead(mail, read, ["dad", "mom"], state, [], [], now, new Set(), people);
+  assert.deepEqual(planned.todos.map((todo) => todo.profileIds), [["mom"], ["dad", "mom"]], "named people first, then the inboxes it came in");
+  const taught = [{ id: "dad", name: "Dad", facts: ["Mail from emails@brushfire.com is for Dad."] }, { id: "mom", name: "Mom", facts: [] }];
+  const learned = plansFromRead(mail, read, ["dad", "mom"], state, [], [], now, new Set(), taught);
+  assert.deepEqual(learned.todos.map((todo) => todo.profileIds), [["dad"], ["dad"]], "what the family taught wins");
+});

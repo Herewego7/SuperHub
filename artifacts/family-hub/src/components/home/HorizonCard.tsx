@@ -10,7 +10,7 @@ import type { HomeModel } from "./useHomeDay";
 
 export function HorizonCard({ home }: { home: HomeModel }) {
   const { onOpenEvent, onOpenCalendar } = home.props;
-  const { comingEvents, laterMail, laterTodos, showAllHorizon, setShowAllHorizon, complete, assign, setSheet } = home;
+  const { comingEvents, laterMail, laterTodos, showAllHorizon, setShowAllHorizon, complete, setSheet } = home;
   const first = [
     ...comingEvents.map((row) => ({ title: row.title, at: new Date(row.startTime) })),
     ...laterTodos.map((row) => ({ title: row.title, at: row.start })),
@@ -51,7 +51,7 @@ export function HorizonCard({ home }: { home: HomeModel }) {
                   <div className="mt-1 text-xs text-[#6e6e78]">{planDateLabel(row.start, null)}</div>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="inline-flex max-w-[55%] truncate rounded-full bg-[#F1F1F4] px-2.5 py-1 text-xs">{sourceChipLabel(sender, row.category === "school_email" ? "mail" : "todo")}</span>
-                    <PersonChips home={home} profileIds={row.profileIds} title={row.title} onPick={(ids) => assign.mutate({ choreId: row.id, profileIds: ids })} />
+                    <PersonChips home={home} profileIds={row.profileIds} title={row.title} onPick={(ids) => home.reassign(row, ids)} sender={row.category === "school_email" ? sender : null} />
                   </div>
                 </div>
               </li>
@@ -67,7 +67,7 @@ export function HorizonCard({ home }: { home: HomeModel }) {
                   <div className="mt-1 text-xs text-[#6e6e78]">{planDateLabel(row.start, null)} · {row.time}</div>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="inline-flex max-w-[55%] truncate rounded-full bg-[#F1F1F4] px-2.5 py-1 text-xs">{sourceChipLabel(sender, "mail")}</span>
-                    <PersonChips home={home} profileIds={row.profileIds} title={row.title} onPick={(ids) => assign.mutate({ choreId: row.id, profileIds: ids })} />
+                    <PersonChips home={home} profileIds={row.profileIds} title={row.title} onPick={(ids) => home.reassign(row, ids)} sender={row.category === "school_email" ? sender : null} />
                     <button type="button" aria-label={`More actions for ${row.title}`} className="grid h-7 w-7 place-items-center text-[#6e6e78]" onClick={() => setSheet({ chore: row, mode: "actions" })}>
                       <MoreVertical className="h-4 w-4" />
                     </button>

@@ -10,6 +10,8 @@ import { pointsProfileId } from "@/lib/chatTools";
 import { confirmDialog } from "@/lib/confirmDialog";
 import { hapticLight } from "@/lib/haptics";
 import { slipSender, slipSenderName } from "@/lib/slipMail";
+import { ownerFixes, teachSender, type OwnerPerson } from "@/lib/mailOwners";
+import { toast } from "@/hooks/use-toast";
 import { readCollapsed, saveCollapsed, type CardConfig, type HomeCardId } from "./registry";
 
 export type Person = { id: string; name: string; color?: string | null; school?: string | null; isChild?: boolean | null; role?: string | null; connected?: boolean };
@@ -280,6 +282,46 @@ export function useHomeDay(props: HomeDayProps) {
       await queryClient.invalidateQueries({ queryKey: CHORES_KEY });
     },
   });
+  // Who each email to-do belongs to. Profiles carry what the family taught the
+  // app ("Mail from x is for Mom."); rows still on everyone move to the people
+  // their note names. A row picked by hand is never moved again.
+  const { data: ownerProfiles = [] } = useQuery<(OwnerPerson & { isAllFamilyProfile?: boolean | null; isActive?: boolean | null })[]>({ queryKey: ["/api/profiles"] });
+  const owners = ownerProfiles.filter((person) => !person.isAllFamilyProfile && person.isActive !== false);
+  const [handPicked, setHandPicked] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(HAND_PICKED_KEY) ?? "[]") as string[]); } catch { return new Set(); }
+  });
+  const fixing = useRef(new Set<string>());
+  const fixes = owners.length > 0 ? ownerFixes(chores, owners, slipSender, handPicked).filter((fix) => !fixing.current.has(fix.id)) : [];
+  const fixKey = fixes.map((fix) => `${fix.id}:${fix.profileIds.join("+")}`).join(",");
+  useEffect(() => {
+    if (fixes.length === 0) return;
+    fixes.forEach((fix) => fixing.current.add(fix.id));
+    void Promise.all(fixes.map((fix) => apiRequest("PATCH", `/api/chores/${fix.id}`, { profileIds: fix.profileIds }).catch(() => null)))
+      .then(() => queryClient.invalidateQueries({ queryKey: CHORES_KEY }))
+      .finally(() => fixes.forEach((fix) => fixing.current.delete(fix.id)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixKey]);
+  /** Hand a to-do to someone, and when it came from an email, send that sender's mail to them from now on. */
+  const reassign = (todo: Chore, ids: string[]) => {
+    assign.mutate({ choreId: todo.id, profileIds: ids });
+    const picked = new Set(handPicked).add(todo.id);
+    setHandPicked(picked);
+    try { localStorage.setItem(HAND_PICKED_KEY, JSON.stringify([...picked].slice(-500))); } catch { /* private mode */ }
+    const sender = todo.category === "school_email" ? slipSender(todo.description) : null;
+    if (!sender || owners.length === 0) return;
+    const changes = teachSender(sender, ids, owners);
+    if (changes.length === 0) return;
+    void Promise.all(changes.map((change) => apiRequest("PATCH", `/api/profiles/${change.id}`, { facts: change.facts })))
+      .then(() => {
+        void queryClient.invalidateQueries({ queryKey: ["/api/profiles"] });
+        const names = owners.filter((person) => ids.includes(person.id)).map((person) => person.name);
+        toast({
+          title: names.length > 0 ? `Mail from ${sender} goes to ${names.join(" and ")} from now on` : `Mail from ${sender} won't go to anyone in particular`,
+          description: "You can change this in each person's settings.",
+        });
+      })
+      .catch(() => toast({ title: "Couldn't remember that sender", description: "This to-do moved, but new mail from them may not." }));
+  };
   const removeTodo = useMutation({
     mutationFn: async (choreId: string) => {
       await apiRequest("DELETE", `/api/chores/${choreId}`);
@@ -504,7 +546,7 @@ export function useHomeDay(props: HomeDayProps) {
     revealed, setRevealed,
     snoozeItem,
     checkOff, uncheck, removeRow, askStopEmails,
-    saveSchool, complete, undo, assign, removeTodo, removeItem, stopEmails, addToCalendar, removeFromCalendar,
+    saveSchool, complete, undo, assign, reassign, removeTodo, removeItem, stopEmails, addToCalendar, removeFromCalendar,
     newsletters, visibleNewsletters, hideLetters, askHideLetters,
     keyDates, visibleKeys,
     openTodos, doneTodos, folded, visibleTodos,
@@ -523,3 +565,4 @@ export function useHomeDay(props: HomeDayProps) {
 export type HomeModel = ReturnType<typeof useHomeDay>;
 
 const CLEARED_SEEN_KEY = "superhub_cleared_todos_seen";
+const HAND_PICKED_KEY = "superhub_todo_hand_picked";

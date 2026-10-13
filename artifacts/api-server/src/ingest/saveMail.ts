@@ -71,18 +71,21 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
   const familyCalendarId = settings?.familyCalendarId;
   const calendarId = familyCalendarId && familyCalendarId !== "none" ? familyCalendarId : null;
   const timeZone = (await storage.getLocationSettingsByUser(userId))?.timezone || DEFAULT_TIMEZONE;
+  const people = await storage.getProfilesByUser(userId);
+  const owners = people
+    .filter((person) => !person.isAllFamilyProfile && person.isActive !== false && person.name?.trim())
+    .map((person) => ({ id: person.id, name: person.name, facts: person.facts }));
   const ai = geminiClient();
   if (!ai) {
     const saved = await storePlanned(
       userId,
-      ingestMessages(messages, state, existingKeys, profileIds, existingEventKeys),
+      ingestMessages(messages, state, existingKeys, profileIds, existingEventKeys, owners),
       timeZone,
       calendarId,
     );
     return { ...saved, tally: emptyTally(messages.length) };
   }
 
-  const people = await storage.getProfilesByUser(userId);
   const family: MailPerson[] = people
     .filter((person) => !person.isAllFamilyProfile && person.isActive !== false && person.name?.trim())
     .map((person) => ({ name: person.name, school: person.school, facts: person.facts, isChild: person.isChild || person.role === "child" }));
@@ -128,7 +131,7 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
       const index = existingKeys.indexOf(subjectKey);
       if (index >= 0) existingKeys.splice(index, 1);
     }
-    const planned = plansFromRead(message, read, profileIds, state, existingKeys, existingEventKeys, new Date(), grades);
+    const planned = plansFromRead(message, read, profileIds, state, existingKeys, existingEventKeys, new Date(), grades, owners);
     const todosToSave = [];
     for (const todo of planned.todos) {
       const near = chores.find((chore) => chore.title !== todo.title && duplicateBand(titleSimilarity(chore.title, todo.title)) !== "new");
@@ -179,7 +182,7 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
   if (keyword.length > 0) {
     const saved = await storePlanned(
       userId,
-      ingestMessages(keyword, state, existingKeys, profileIds, existingEventKeys),
+      ingestMessages(keyword, state, existingKeys, profileIds, existingEventKeys, owners),
       timeZone,
       calendarId,
     );
