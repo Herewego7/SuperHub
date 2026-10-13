@@ -128,6 +128,8 @@ export type PlannedEvent = {
   minutes: number;
   endHours?: number;
   endMinutes?: number;
+  /** When the email was sent. A time the email gives is read against this, not the scan. */
+  sentAt?: string;
 };
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -247,6 +249,38 @@ export function schoolEventStart(note: string, hours: number, minutes: number, n
   }
   const date = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
   return zonedWallClock(date, hours, minutes, timeZone);
+}
+
+/**
+ * When an event from an email starts, or null when the email is reporting
+ * something that already happened.
+ *
+ * A time with no date belongs to the day the email was sent. If that time had
+ * already passed when the email went out ("delivered at 2:14 PM", "door
+ * opened at 12:26 AM"), the email is a report, not a plan, and there is no
+ * event. schoolEventStart instead rolls a passed time to the next day, which
+ * is right for something a person types and wrong for mail.
+ *
+ * Anything that starts before now is also dropped: a calendar entry for an
+ * hour that is over helps no one.
+ */
+export function mailEventStart(note: string, hours: number, minutes: number, sentAt: Date | null, now: Date, timeZone: string): Date | null {
+  const sent = sentAt && sentAt.getTime() <= now.getTime() ? sentAt : now;
+  const anchor = wallNow(sent, timeZone);
+  const named = slipDate(note, anchor);
+  // A date with no year that already passed reads as next year ("10/9" in a
+  // mid-October email). Mail about a day most of a year away is that rollover,
+  // not a real plan, so it counts as past.
+  if (named && named.getTime() - anchor.getTime() > 300 * 86400000) return null;
+  if (named) anchor.setFullYear(named.getFullYear(), named.getMonth(), named.getDate());
+  else {
+    const shift = dayShift(note, anchor);
+    if (shift != null) anchor.setDate(anchor.getDate() + shift);
+  }
+  const date = `${anchor.getFullYear()}-${String(anchor.getMonth() + 1).padStart(2, "0")}-${String(anchor.getDate()).padStart(2, "0")}`;
+  const start = zonedWallClock(date, hours, minutes, timeZone);
+  if (start.getTime() < sent.getTime() || start.getTime() < now.getTime()) return null;
+  return start;
 }
 
 export function muteSender(state: HouseholdMail, address: string): HouseholdMail {
@@ -470,8 +504,27 @@ export function isSchoolDomain(domain: string): boolean {
   return /(^|\.)k12\.[a-z]{2}\.us$/.test(domain) || /(^|\.)k12\./.test(domain) || /(school|academy|usd|isd)[a-z0-9-]*\.(org|net|edu|us)$/.test(domain);
 }
 
-/** Home security, smart-home, and account alert senders. Their mail reports what already happened. */
+/** Delivery, order, home security, smart-home, and account senders. Their mail reports what happened or is coming, not plans. */
 const ALERT_SENDERS = [
+  // Deliveries, orders, and rides report what happened or is on its way, never a plan.
+  "amazon.com",
+  "ups.com",
+  "fedex.com",
+  "usps.com",
+  "usps.gov",
+  "dhl.com",
+  "ontrac.com",
+  "shipt.com",
+  "instacart.com",
+  "doordash.com",
+  "ubereats.com",
+  "grubhub.com",
+  "narvar.com",
+  "aftership.com",
+  "route.com",
+  "shopify.com",
+  "paypal.com",
+  "venmo.com",
   "alarm.com",
   "ring.com",
   "simplisafe.com",
@@ -491,11 +544,12 @@ const ALERT_SENDERS = [
   "blinkforhome.com",
 ];
 
-const ALERT_SUBJECT = /\b(?:left open|was (?:opened|closed|unlocked|locked|armed|disarmed)|(?:door|window|garage)\s+(?:opened|closed|open|alert)|motion (?:detected|alert)|alarm (?:alert|triggered|activated)|(?:security|system|sensor|camera|doorbell) (?:alert|event|notification)|(?:armed|disarmed) (?:away|stay|home)|new sign-?in|sign-?in attempt|login (?:alert|attempt))\b/i;
+const ALERT_SUBJECT = /\b(?:left open|was (?:opened|closed|unlocked|locked|armed|disarmed)|(?:door|window|garage)\s+(?:opened|closed|open|alert)|motion (?:detected|alert)|alarm (?:alert|triggered|activated)|(?:security|system|sensor|camera|doorbell) (?:alert|event|notification)|(?:armed|disarmed) (?:away|stay|home)|new sign-?in|sign-?in attempt|login (?:alert|attempt)|(?:has been|was|been|package|order) delivered|delivered(?=\s*:)|out for delivery|arriving (?:today|tomorrow|by)|(?:has|have|order|package|item|items) shipped|shipping (?:update|confirmation)|delivery (?:update|notification|attempt|window|confirmation)|order (?:confirmation|confirmed|received|update|#)|your (?:order|package|shipment|receipt|delivery|ride)|receipt for|payment (?:received|confirmation|processed)|verification code|security code|password (?:reset|changed))\b/i;
 
 /**
- * A device or account alert: it reports something that already happened, so
- * it is never an event or a to-do, even when it carries a time.
+ * A delivery, order, device, or account notice. It reports something that
+ * happened or is on its way, so it is never an event or a to-do, even when
+ * it carries a time.
  */
 export function deviceAlert(message: { subject: string; fromAddress?: string }): boolean {
   const domain = senderDomain(message.fromAddress);
@@ -522,6 +576,7 @@ function plannedEvent(message: InboundMessage, key: string, profileIds: string[]
     hours: clock.hours,
     minutes: clock.minutes,
     ...(clock.endHours != null ? { endHours: clock.endHours, endMinutes: clock.endMinutes } : {}),
+    ...(message.receivedAt ? { sentAt: message.receivedAt } : {}),
   };
 }
 

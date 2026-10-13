@@ -6,7 +6,7 @@ import { examplesForMessage, rememberMail } from "../ai/memory";
 import { connectedCalendarEvents } from "../scheduler/eveningPlan";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { slipKey, type InboundMessage } from "./parse";
-import { ingestMessages, schoolEventStart, slipClock, type PlannedEvent, type PlannedTodo } from "./process";
+import { ingestMessages, mailEventStart, schoolEventStart, slipClock, type PlannedEvent, type PlannedTodo } from "./process";
 import { alreadyRead, openContextLines, plansFromRead, readInboxMessage, subjectPlaceholder, type MailPerson } from "./readMail";
 import { emptyTally } from "./scanProgress";
 
@@ -27,10 +27,14 @@ async function storePlanned(
   const now = new Date();
   for (const event of planned.events) {
     const note = `${event.title} ${event.description}`;
-    const start = schoolEventStart(note, event.hours, event.minutes, now, timeZone);
-    const end = event.endHours == null
-      ? new Date(start.getTime() + 60 * 60 * 1000)
-      : schoolEventStart(note, event.endHours, event.endMinutes ?? 0, now, timeZone);
+    const sent = event.sentAt ? new Date(event.sentAt) : null;
+    const sentAt = sent && Number.isFinite(sent.getTime()) ? sent : null;
+    // A time that had passed when the email was sent, or has passed since, is
+    // a report of something that happened. It never becomes an event.
+    const start = mailEventStart(note, event.hours, event.minutes, sentAt, now, timeZone);
+    if (!start) continue;
+    const later = event.endHours == null ? null : mailEventStart(note, event.endHours, event.endMinutes ?? 0, sentAt, now, timeZone);
+    const end = later && later > start ? later : new Date(start.getTime() + 60 * 60 * 1000);
     const saved = await storage.createEvent({
       userId,
       title: event.title,

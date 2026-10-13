@@ -36,7 +36,7 @@ const SYSTEM = [
   "You read one email for a household assistant.",
   "Pull out a newsletter, to-dos, backpack items (something a kid brings or wears), decisions, all-day dates, events with a clock time, and changes to an existing event.",
   "changeOf names the existing event a change updates. Skip ads, receipts, and other grades or teams.",
-  "An event is something planned ahead. Skip alerts and notices about something that already happened, like a door left open, an alarm, motion, a package delivered, or a login, even when they give a time.",
+  "An event is something planned ahead that a person attends or does. Skip anything that already happened or only reports progress, even when it gives a time: alarms, doors, motion, logins, receipts, orders, shipping, package deliveries, and rides.",
   "who uses names from the family list only. profileFacts are facts the message states about a person.",
   "date is yyyy-MM-dd or null. time is like 3:30 PM or null.",
   "A newsletter's highlights are 3 to 7 short sentences for this family.",
@@ -382,6 +382,7 @@ export function plansFromRead(
             hours: parsed.hours,
             minutes: parsed.minutes,
             ...(parsed.endHours != null ? { endHours: parsed.endHours, endMinutes: parsed.endMinutes } : {}),
+            ...(message.receivedAt ? { sentAt: message.receivedAt } : {}),
           });
         }
         continue;

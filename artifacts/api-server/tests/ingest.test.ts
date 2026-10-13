@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptSchool, choresDismissedBySlip, deviceAlert, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, graphNextLink, holdSchoolEvent, inboxBlockReason, inboxFailure, inboxListStopped, inboxMailFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, deviceAlert, mailEventStart, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, graphNextLink, holdSchoolEvent, inboxBlockReason, inboxFailure, inboxListStopped, inboxMailFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
 import { clientMessages, fileParts, gmailInboxQuery, gmailNewsletterQuery, gmailPayload, gmailWebLink, inboxFetchLimit, inboxSinceIso, latestPerSender, mergeMailboxes, outlookAttachments, outlookToInbound, outlookWebLink, readableText, toInbound } from "../src/ingest/parse.ts";
 import { muteNewsletter, newsletterMuted, openLettersFrom, openMailFrom, slipHeader, unmuteNewsletter, unmuteSender } from "../src/ingest/process.ts";
 import { inboxOwnerFixes } from "../src/ingest/owners.ts";
@@ -544,4 +544,25 @@ test("a security or device alert is never a to-do or an event, even with a time 
   assert.equal(deviceAlert({ subject: "Motion detected at Front Porch", fromAddress: "no-reply@ring.com" }), true);
   assert.equal(deviceAlert({ subject: "Picture day is Tuesday at 8:30 AM", fromAddress: "office@greatoaksacademy.org" }), false);
   assert.equal(deviceAlert({ subject: "Soccer practice opened up a 5:30 PM slot", fromAddress: "coach@teamsnap.com" }), false);
+});
+
+test("delivery, order, and receipt mail is never an event, and school mail that mentions delivery still is", () => {
+  assert.equal(deviceAlert({ subject: "Your package has been delivered", fromAddress: "shipment-tracking@amazon.com" }), true);
+  assert.equal(deviceAlert({ subject: "Delivered: Kids rain boots", fromAddress: "store@example-shop.com" }), true);
+  assert.equal(deviceAlert({ subject: "Out for delivery today by 8 PM", fromAddress: "mcinfo@ups.com" }), true);
+  assert.equal(deviceAlert({ subject: "Order confirmed: pizza night", fromAddress: "orders@pizza.example" }), true);
+  assert.equal(deviceAlert({ subject: "Report cards will be delivered Friday at 3 PM", fromAddress: "office@greatoaksacademy.org" }), false);
+  assert.equal(deviceAlert({ subject: "Your trip to Denver: check in at 7 AM", fromAddress: "alerts@united.com" }), false);
+});
+
+test("a time that had passed when the email was sent is a report, not an event", () => {
+  const tz = "America/Chicago";
+  const now = new Date("2026-10-13T15:00:00Z"); // 10 AM in Chicago
+  const sent = new Date("2026-10-13T05:30:00Z"); // 12:30 AM in Chicago
+  assert.equal(mailEventStart("Front door opened at 12:26 AM", 0, 26, sent, now, tz), null, "already happened when sent");
+  assert.equal(mailEventStart("Delivered at 9:14 AM", 9, 14, new Date("2026-10-13T14:20:00Z"), now, tz), null);
+  const later = mailEventStart("Practice moved to 5:30 PM", 17, 30, sent, now, tz);
+  assert.equal(later?.toISOString(), "2026-10-13T22:30:00.000Z", "a time later that day is still an event");
+  assert.equal(mailEventStart("Picture day 10/9 at 8:30 AM", 8, 30, sent, now, tz), null, "a dated event that is over is dropped");
+  assert.equal(mailEventStart("Game tomorrow at 9 AM", 9, 0, sent, now, tz)?.toISOString(), "2026-10-14T14:00:00.000Z");
 });
