@@ -21,6 +21,8 @@ type Row = {
   recurringEventId?: string | null;
   source?: string | null;
   kind?: "todo" | "keyDate" | "event" | "newsletter";
+  /** A to-do listed on the day it is due, with no time of its own. */
+  undated?: boolean;
 };
 
 export function upcomingKindForMail(categoryOrSource: string | null | undefined): "newsletter" | "todo" {
@@ -62,8 +64,8 @@ export function timeGridDetail(clock: string, location?: string | null): string 
   return `${clock} · ${place}`;
 }
 
-export function upcomingClock(row: { startTime: Date | string; kind?: string | null; isAllDay?: boolean | null }): string | null {
-  if (row.kind === "todo" || row.isAllDay) return null;
+export function upcomingClock(row: { startTime: Date | string; kind?: string | null; isAllDay?: boolean | null; undated?: boolean }): string | null {
+  if (row.kind === "todo" || row.isAllDay || row.undated) return null;
   return eventClockLine("", row.startTime) || null;
 }
 
@@ -111,4 +113,35 @@ export function upcomingRows<T extends Row>(rows: T[], kind: UpcomingKind, day: 
     if (kind === "events") return got === "event";
     return got === "newsletter";
   });
+}
+
+const dayOf = (at: Date | string) => {
+  const day = new Date(at);
+  day.setHours(0, 0, 0, 0);
+  return day;
+};
+
+/** Upcoming rows by day, in date order. Within a day: all-day first, then by time, then to-dos. */
+export function upcomingDays<T extends Row>(rows: T[]): { day: Date; rows: T[] }[] {
+  const rank = (row: T) => (row.kind === "todo" || row.undated ? 2 : row.isAllDay ? 0 : 1);
+  const sorted = [...rows].sort((a, b) =>
+    dayOf(a.startTime).getTime() - dayOf(b.startTime).getTime()
+    || rank(a) - rank(b)
+    || new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  const days: { day: Date; rows: T[] }[] = [];
+  for (const row of sorted) {
+    const day = dayOf(row.startTime);
+    const last = days[days.length - 1];
+    if (last && last.day.getTime() === day.getTime()) last.rows.push(row);
+    else days.push({ day, rows: [row] });
+  }
+  return days;
+}
+
+/** "Today", "Tomorrow", then "Thu Oct 9". */
+export function upcomingDayLabel(day: Date, now: Date): string {
+  const ahead = Math.round((dayOf(day).getTime() - dayOf(now).getTime()) / 86_400_000);
+  if (ahead === 0) return "Today";
+  if (ahead === 1) return "Tomorrow";
+  return day.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).replace(",", "");
 }

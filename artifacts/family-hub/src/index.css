@@ -594,13 +594,12 @@
   color: #5e8fad;
 }
 
-/* The outline is a real 1px border so it reads the same on every side.
-   A blurred shadow alone looks darker at the corners and fades along the edges. */
 .hearth-theme .plan-card {
   background: #ffffff;
-  border: 1px solid #e3e1ea;
+  border: 0;
   border-radius: 20px;
-  box-shadow: 0 1px 3px rgba(42, 24, 80, 0.04);
+  /* The edge is a ring, not a border, so it adds no width to the card. */
+  box-shadow: 0 0 0 1px #c5c5ce, 0 2px 12px rgba(42, 24, 80, 0.07);
   padding: 16px;
 }
 
@@ -653,8 +652,7 @@
 
 .dark .hearth-theme .plan-card {
   background: #1c1c21;
-  border-color: #2e2e35;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0 1px #45454f, 0 2px 12px rgba(0, 0, 0, 0.35);
 }
 
 /* ── hearth-theme opaque-vars fix ──

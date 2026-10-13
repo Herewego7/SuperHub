@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, forecastFor, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonEvents, horizonMail, horizonWithoutChecked, mailDate, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, notesForHome, praiseForHome, newsletterIssues, openTodos, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonEvents, horizonMail, horizonWithoutChecked, issueDateLabel, mailDate, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, notesForHome, praiseForHome, newsletterGroups, newsletterRowIds, openTodos, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -20,9 +20,26 @@ test("a shared to-do with two people is one record", () => {
   assert.deepEqual(justLiam.map((todo) => todo.id), ["study", "liam-pack"]);
 });
 
-test("All Family keeps shared to-dos and drops personal ones", () => {
+test("All Family shows everyone's to-dos", () => {
   const all = todosForHome([shared, liamOnly], ["liam", "parent"], ["liam", "parent"]);
-  assert.deepEqual(all.map((todo) => todo.id), ["study"]);
+  assert.deepEqual(all.map((todo) => todo.id), ["study", "liam-pack"]);
+});
+
+test("one people rule for to-dos and events", () => {
+  const family = ["mom", "dad", "liam"];
+  const rows = [
+    { id: "dad-only", profileIds: ["dad"] },
+    { id: "mom-only", profileIds: ["mom"] },
+    { id: "both", profileIds: ["mom", "dad"] },
+    { id: "nobody", profileIds: [] as string[] },
+    { id: "everyone", profileIds: ["family"] },
+    { id: "drive", profileIds: ["liam"], drivingProfileIds: ["mom"] },
+  ];
+  const ids = (picked: string[]) => forPeople(rows, picked, family, "family").map((row) => row.id);
+  assert.deepEqual(ids(["mom"]), ["mom-only", "both", "nobody", "everyone", "drive"]);
+  assert.deepEqual(ids(["dad"]), ["dad-only", "both", "nobody", "everyone"]);
+  assert.deepEqual(ids(family), rows.map((row) => row.id));
+  assert.deepEqual(ids([]), rows.map((row) => row.id));
 });
 
 test("chore progress counts a shared chore once", () => {
@@ -346,6 +363,33 @@ test("a to-do lands on its day, stays overdue for a week, and a check stays on t
   assert.equal(planTodoRows(rows, [{ choreId: "milk", completedAt: new Date(2026, 9, 1) }], today, today).some((row) => row.id === "milk"), false);
 });
 
+test("an undated inbox to-do leaves Home after two weeks, and one you made stays", () => {
+  const fresh = { id: "fresh", title: "Bring a snack", description: "From: office@school.org\nSent: 2026-09-25T15:00:00.000Z\nPlease bring a snack.", category: "school_email", createdAt: new Date(2026, 9, 1) };
+  const stale = { id: "stale", title: "Old ask", description: "From: office@school.org\nSent: 2026-09-10T15:00:00.000Z\nPlease bring a snack.", category: "school_email", createdAt: new Date(2026, 9, 1) };
+  const saved = { id: "saved", title: "Older ask", description: "From: office@school.org\nPlease bring a snack.", category: "school_email", createdAt: new Date(2026, 8, 15) };
+  const mine = { id: "mine", title: "Buy milk", description: "", category: null, createdAt: new Date(2026, 7, 1) };
+  assert.deepEqual(planTodoRows([fresh, stale, saved, mine], [], today, today).map((row) => row.id), ["fresh", "mine"]);
+});
+
+test("a range read a few days after it ends stays this year, and a range across New Year holds together", () => {
+  const read = new Date(2026, 9, 7, 9, 0);
+  const week = mailSpan("Weekly Review 9/28–10/2", read);
+  assert.equal(week?.start.getFullYear(), 2026);
+  assert.equal(week?.end?.getFullYear(), 2026);
+  assert.equal(planDateLabel(week!.start, week!.end), "Mon, Sep 28 – Fri, Oct 2");
+  const sent = mailSpan("Forms due 10/15 (sent 10/1)", read);
+  assert.equal(sent?.start.getMonth(), 9);
+  assert.equal(sent?.start.getDate(), 1);
+  assert.equal(sent?.end?.getDate(), 15);
+  assert.equal(sent?.start.getFullYear(), 2026);
+  const winter = mailSpan("Winter break Dec 21 – Jan 4", new Date(2026, 11, 1));
+  assert.equal(winter?.start.getFullYear(), 2026);
+  assert.equal(winter?.end?.getFullYear(), 2027);
+  assert.equal(winter?.end?.getMonth(), 0);
+  assert.equal(mailSpan("Back on Jan 5", new Date(2026, 11, 20))?.start.getFullYear(), 2027);
+  assert.equal(mailSpan("It was Sep 20.", read)?.start.getFullYear(), 2027);
+});
+
 test("a mail date that is not on the calendar is a key date, and a range keeps both days", () => {
   const letter = { id: "dance", title: "Homecoming", description: "From: office@school.org\nHomecoming is Oct 3.", category: "school_email" as const };
   const open = mailKeyDates([letter], [], today);
@@ -369,18 +413,51 @@ test("a read letter stays a newsletter, a key date stays a date, and a to-do sta
   const letter = { id: "oak", title: "Oak Weekly", description: "From: news@school.org\nPlan: newsletter\nRef: oak weekly\nPicture day is 10/6/2026. Please sign the form.", category: "school_email" as const, createdAt: today };
   const date = { id: "pic", title: "Picture day", description: "From: news@school.org\nPlan: keydate\nRef: pictures\n10/6/2026\nPlease sign the form.", category: "school_email" as const, createdAt: today };
   const task = { id: "form", title: "Return the form", description: "From: news@school.org\nPlan: todo\nRef: form\nDue 10/6/2026.", category: "school_email" as const, createdAt: today };
-  assert.deepEqual(newsletterIssues([letter, date, task], today).map((issue) => issue.id), ["oak"]);
+  assert.deepEqual([...newsletterRowIds([letter, date, task], today)], ["oak"]);
   assert.deepEqual(mailKeyDates([letter, date, task], [], today).map((row) => row.id), ["pic"]);
   assert.deepEqual(horizonDatedTodos([letter, date, task], [], today).map((row) => row.id), ["form"]);
 });
 
-test("a newsletter is the latest letter from that sender, and a dated note is not one", () => {
+test("every issue of a newsletter stays together, newest first, and a dated note is not one", () => {
   const first = { id: "a", title: "Oak Weekly", description: "From: news@school.org\nHighlights from the week.", category: "school_email" as const, createdAt: new Date(2026, 8, 28) };
   const second = { id: "b", title: "Oak Weekly 2", description: "From: news@school.org\nThe next issue.", category: "school_email" as const, createdAt: new Date(2026, 9, 1) };
   const dated = { id: "c", title: "Picture day", description: "From: news@school.org\nPicture day is Oct 6.", category: "school_email" as const, createdAt: today };
-  const issues = newsletterIssues([first, second, dated], today);
-  assert.deepEqual(issues.map((issue) => issue.id), ["b"]);
+  const groups = newsletterGroups([first, second, dated], today);
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0].issues.map((issue) => issue.id), ["b", "a"]);
+  assert.equal(groups[0].name, "news@school.org");
   assert.equal(sourceChipLabel("news@school.org", "mail"), "Source: news@school.org");
+});
+
+test("newsletters group by name, then sender name, then address, over the last 30 days", () => {
+  const note = (from: string, lines: string) => `From: ${from}\nPlan: newsletter\nRef: x\n${lines}Highlights.`;
+  const room = (id: string, sent: string) => ({ id, title: "Room 12 News", description: note("teacher@school.org", `Name: Room 12 News\nSender: Ms. Park\nSent: ${sent}\n`), category: "school_email" as const });
+  const legacy = { id: "legacy", title: "Room 12 News", description: note("teacher@school.org", ""), category: "school_email" as const, createdAt: new Date(2026, 8, 25) };
+  const pta = { id: "pta", title: "PTA update", description: note("pta@school.org", "Sender: Great Oaks PTA\nSent: 2026-09-30T12:00:00.000Z\n"), category: "school_email" as const };
+  const bare = { id: "bare", title: "District news", description: note("district@school.org", ""), category: "school_email" as const, createdAt: new Date(2026, 8, 29) };
+  const old = room("old", "2026-08-20T12:00:00.000Z");
+  const rows = [room("r1", "2026-09-18T12:00:00.000Z"), room("r3", "2026-10-02T12:00:00.000Z"), room("r2", "2026-09-25T12:00:00.000Z"), legacy, pta, bare, old];
+  const groups = newsletterGroups(rows, today);
+  assert.deepEqual(groups.map((group) => group.name), ["Room 12 News", "Great Oaks PTA", "district@school.org"]);
+  assert.deepEqual(groups[0].issues.map((issue) => issue.id), ["r3", "r2", "legacy", "r1"]);
+  assert.equal(groups[0].issues[0].when.toISOString(), "2026-10-02T12:00:00.000Z");
+  assert.equal(groups[0].muteName, "Room 12 News");
+  assert.equal(groups[2].muteName, "");
+  assert.equal(newsletterRowIds(rows, today).has("old"), true);
+  assert.deepEqual(newsletterGroups(rows, today, ["teacher@school.org|room 12 news"]).map((group) => group.name), ["Great Oaks PTA", "district@school.org"]);
+  assert.equal(issueDateLabel({ title: "Weekly Review 9/28–10/2", when: new Date(2026, 9, 2) }), "Week of Sep 28");
+  assert.equal(issueDateLabel({ title: "Room 12 News", when: new Date(2026, 9, 2) }), "Fri, Oct 2");
+});
+
+test("an old newsletter never falls into To-Dos", () => {
+  const letter = { id: "oak", title: "Oak Weekly", description: "From: news@school.org\nPlan: newsletter\nRef: oak weekly\nHighlights.", category: "school_email" as const, createdAt: new Date(2026, 7, 1) };
+  assert.equal(newsletterRowIds([letter], today).has("oak"), true);
+  assert.equal(newsletterGroups([letter], today).length, 0);
+});
+
+test("the sender's name is not read as a task", () => {
+  const letter = { id: "signup", title: "This week at Oak", description: "From: news@signupgenius.com\nSender: Sign Up Genius\nSent: 2026-10-01T12:00:00.000Z\nHighlights from the week.", category: "school_email" as const };
+  assert.equal(newsletterRowIds([letter], today).has("signup"), true);
 });
 
 test("snooze tonight is 8 PM, and the completed list covers seven days", () => {

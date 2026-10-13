@@ -95,9 +95,18 @@ export interface MailFile {
 export interface InboundMessage {
   subject: string;
   fromAddress?: string;
+  /** The name on the From line, like "Elizabeth Simonovich". */
+  fromName?: string;
   snippet: string;
   body?: string;
   accountId: string;
+  /** Where the original lives, so it can be opened later. The email itself is never stored. */
+  provider?: "gmail" | "outlook";
+  messageId?: string;
+  /** When it arrived, as an ISO string. */
+  receivedAt?: string;
+  /** The adults whose mailbox it came from. Their items are theirs. */
+  ownerProfileIds?: string[];
   /** Earlier messages in the thread, or text pulled from an attachment. */
   extra?: string;
   /** Up to five earlier messages, newest last. */
@@ -127,27 +136,127 @@ export function messageText(payload: GmailPart | undefined): string {
   return decodeEntities(text).replace(/\r\n/g, "\n").replace(/[ \t]+\n/g, "\n").trim();
 }
 
+/** An HTML email as text a person reads: paragraphs and list items keep their breaks. */
+export function readableText(html: string): string {
+  const text = html
+    .replace(/<(script|style|head|title)[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "\n• ")
+    .replace(/<\/(p|h[1-6]|table|ul|ol|blockquote)>/gi, "\n\n")
+    .replace(/<\/(div|tr|section)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ");
+  return decodeEntities(text)
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t\u00a0]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** The whole message for Read full email: plain text when the sender wrote one, else the HTML made readable. */
+export function fullMessageText(payload: GmailPart | undefined): string {
+  const plain: string[] = [];
+  const html: string[] = [];
+  const walk = (part: GmailPart) => {
+    if (part.mimeType === "text/plain") plain.push(decodeBody(part));
+    else if (part.mimeType === "text/html") html.push(decodeBody(part));
+    for (const child of part.parts ?? []) walk(child);
+  };
+  if (payload) walk(payload);
+  const text = plain.join("\n").trim();
+  if (text) return decodeEntities(text).replace(/\r\n/g, "\n").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return html.length ? readableText(html.join("\n")) : "";
+}
+
+export const ORIGINAL_MAX_CHARS = 100_000;
+
+/** Outlook's link to the message, only on Microsoft's own hosts. */
+export function outlookWebLink(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    const microsoft = ["outlook.com", "office.com", "office365.com", "live.com"].some((item) => host === item || host.endsWith(`.${item}`));
+    return url.protocol === "https:" && microsoft ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function gmailWebLink(account: string | null | undefined, messageId: string): string | null {
+  if (!/^[0-9a-f]+$/i.test(messageId)) return null;
+  const who = account?.includes("@") ? `?authuser=${encodeURIComponent(account)}` : "";
+  return `https://mail.google.com/mail/${who}#all/${messageId}`;
+}
+
 export function outlookToInbound(
   row: {
+    id?: string | null;
     subject?: string | null;
     bodyPreview?: string | null;
     body?: { content?: string | null; contentType?: string | null } | null;
-    from?: { emailAddress?: { address?: string | null } | null } | null;
+    from?: { emailAddress?: { address?: string | null; name?: string | null } | null } | null;
+    receivedDateTime?: string | null;
   },
   accountId: string,
 ): InboundMessage {
   const address = row.from?.emailAddress?.address?.trim();
+  const name = senderName(row.from?.emailAddress?.name ?? (address ? parseAddress(address)?.name : undefined), address);
   const raw = row.body?.content?.trim() ?? "";
   const text = !raw ? "" : row.body?.contentType === "text" ? raw : htmlToText(raw).text;
   const body = stripQuotedReply(decodeEntities(text).replace(/\r\n/g, "\n").trim()).slice(0, MAX_BODY_CHARS);
   const snippet = decodeEntities(row.bodyPreview ?? "").trim() || body.slice(0, 240);
+  const received = row.receivedDateTime ? Date.parse(row.receivedDateTime) : NaN;
   return {
     accountId,
     subject: row.subject?.trim() ?? "",
     snippet,
     ...(body ? { body } : {}),
     ...(address ? { fromAddress: normalizeAddress(address) } : {}),
+    ...(name ? { fromName: name } : {}),
+    ...(row.id ? { provider: "outlook" as const, messageId: row.id } : {}),
+    ...(Number.isFinite(received) ? { receivedAt: new Date(received).toISOString() } : {}),
   };
+}
+
+/** A display name worth showing. An address repeated as the name is not one. */
+function senderName(name: string | null | undefined, address: string | null | undefined): string | undefined {
+  const clean = name?.replace(/\s+/g, " ").replace(/^["']|["']$/g, "").trim().slice(0, 80);
+  if (!clean || clean.includes("@") || clean.toLowerCase() === address?.trim().toLowerCase()) return undefined;
+  return clean;
+}
+
+/** Mail sent in by a client. It can't name a mailbox owner or point Read full email at a message. */
+export function clientMessages(raw: unknown): InboundMessage[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const { ownerProfileIds: _owners, provider: _provider, messageId: _messageId, ...rest } = row as InboundMessage;
+    return [rest];
+  });
+}
+
+/**
+ * The same email in two parents' mailboxes is read once and belongs to both.
+ * Matched on sender, exact subject and day, so a reply or next week's issue stays separate.
+ */
+export function mergeMailboxes(messages: InboundMessage[]): InboundMessage[] {
+  const out: InboundMessage[] = [];
+  const byKey = new Map<string, number>();
+  for (const message of messages) {
+    const subject = message.subject.trim().toLowerCase();
+    const key = message.fromAddress && subject ? `${message.fromAddress}|${subject}|${message.receivedAt?.slice(0, 10) ?? ""}` : "";
+    const at = key ? byKey.get(key) : undefined;
+    if (at === undefined) {
+      if (key) byKey.set(key, out.length);
+      out.push(message);
+      continue;
+    }
+    const held = out[at];
+    const owners = [...new Set([...(held.ownerProfileIds ?? []), ...(message.ownerProfileIds ?? [])])];
+    out[at] = { ...held, ownerProfileIds: owners };
+  }
+  return out;
 }
 
 export const INBOX_SCAN_LIMIT = 100;
@@ -269,14 +378,19 @@ export function fileParts(part: GmailPart | undefined): { mimeType: string; file
 
 export function toInbound(msg: GmailMessage, accountId: string): InboundMessage {
   const from = parseAddress(header(msg, "From"));
+  const name = senderName(from?.name, from?.address);
   const body = stripQuotedReply(messageText(msg.payload)).slice(0, MAX_BODY_CHARS);
   const snippet = decodeEntities(msg.snippet ?? "").trim() || body.slice(0, 240);
+  const received = msg.internalDate ? Number(msg.internalDate) : Date.parse(header(msg, "Date") ?? "");
   return {
     accountId,
     ...(from ? { fromAddress: from.address } : {}),
+    ...(name ? { fromName: name } : {}),
     subject: header(msg, "Subject") ?? "",
     snippet,
     ...(body ? { body } : {}),
+    ...(msg.id ? { provider: "gmail" as const, messageId: msg.id } : {}),
+    ...(Number.isFinite(received) && received > 0 ? { receivedAt: new Date(received).toISOString() } : {}),
   };
 }
 

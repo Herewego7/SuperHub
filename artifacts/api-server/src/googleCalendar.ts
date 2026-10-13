@@ -1,5 +1,5 @@
 import { google, calendar_v3 } from 'googleapis';
-import { attachFiles, fileParts, gmailInboxQuery, gmailPayload, header, inboxFetchLimit, INBOX_RECENT_DAYS, messageText, parseAddress, threadLines, toInbound, type InboundMessage } from './ingest/parse';
+import { attachFiles, fileParts, fullMessageText, gmailInboxQuery, gmailPayload, header, inboxFetchLimit, INBOX_RECENT_DAYS, messageText, ORIGINAL_MAX_CHARS, parseAddress, threadLines, toInbound, type InboundMessage } from './ingest/parse';
 import { gmailScopeGranted, inboxFailure, inboxListStopped, inboxMailFailure, inboxTokenExpiry } from './ingest/process';
 
 // Calendar plus read-only mail. No userinfo.email/userinfo.profile. Those
@@ -310,6 +310,20 @@ export class GoogleCalendarService {
     }
   }
 
+  /** One email, read on demand for Read full email. Nothing is kept. */
+  async readMessage(accessToken: string, refreshToken: string | undefined, tokenExpiry: Date | string | null | undefined, messageId: string): Promise<{ subject: string; from: string; sentAt: string | null; text: string }> {
+    const gmail = google.gmail({ version: "v1", auth: this.gmailAuth(accessToken, refreshToken, tokenExpiry) });
+    const full = await gmail.users.messages.get({ userId: "me", id: messageId, format: "full" });
+    const payload = gmailPayload(full.data.payload);
+    const sent = Number(full.data.internalDate ?? 0);
+    return {
+      subject: header({ id: messageId, payload }, "Subject") ?? "",
+      from: header({ id: messageId, payload }, "From") ?? "",
+      sentAt: sent > 0 ? new Date(sent).toISOString() : null,
+      text: fullMessageText(payload).slice(0, ORIGINAL_MAX_CHARS),
+    };
+  }
+
   async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string, tokenExpiry?: Date | string | null, days = INBOX_RECENT_DAYS, scope?: { query: string; limit: number }): Promise<InboundMessage[]> {
     const oauth2Client = this.gmailAuth(accessToken, refreshToken, tokenExpiry);
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
@@ -349,6 +363,7 @@ export class GoogleCalendarService {
         const inbound = toInbound({
           id,
           snippet: full.data.snippet ?? undefined,
+          internalDate: full.data.internalDate ?? undefined,
           payload,
         }, accountId);
         const files = [];

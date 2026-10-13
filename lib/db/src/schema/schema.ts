@@ -363,6 +363,8 @@ export const calendarSettings = pgTable("calendar_settings", {
   shareOriginals: boolean("share_originals").notNull().default(false),
   mealsOnCalendar: boolean("meals_on_calendar").notNull().default(false),
   mutedSenders: jsonb("muted_senders").$type<string[]>().notNull().default([]),
+  // "sender|newsletter name" pairs whose future issues are skipped. Other mail from that sender still comes through.
+  mutedNewsletters: jsonb("muted_newsletters").$type<string[]>().notNull().default([]),
   dismissedSlipKeys: jsonb("dismissed_slip_keys").$type<string[]>().notNull().default([]),
   planSentKeys: jsonb("plan_sent_keys").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at").defaultNow(),

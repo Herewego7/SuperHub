@@ -9,93 +9,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { GripVertical, Calendar, TrendingUp, Clock, Trophy, Settings, MessageSquare, Megaphone, ChevronUp, ChevronDown } from "lucide-react";
-
-export interface CardConfig {
-  id: string;
-  name: string;
-  icon: string;
-  visible: boolean;
-  order: number;
-}
-
-export const DEFAULT_CARD_CONFIG: CardConfig[] = [
-  { id: "events", name: "Events", icon: "calendar", visible: true, order: 0 },
-  { id: "progress", name: "Tasks", icon: "trending-up", visible: true, order: 1 },
-  { id: "points", name: "Stars", icon: "star", visible: true, order: 2 },
-  { id: "activity", name: "Recent Activity", icon: "clock", visible: true, order: 3 },
-  { id: "achievements", name: "Achievements", icon: "trophy", visible: false, order: 4 },
-];
-
-const STORAGE_KEY = "todayPageCardSettings_v5";
-
-export function getCardSettings(): CardConfig[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed: unknown = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        // Migrate: keep only well-formed entries, then append any cards from
-        // defaults missing in stored config so we never lose user customizations
-        // when adding new cards.
-        const defaultById = new Map(DEFAULT_CARD_CONFIG.map(d => [d.id, d]));
-        const merged: CardConfig[] = (parsed as Partial<CardConfig>[])
-          .filter(
-            (c): c is CardConfig =>
-              typeof c?.id === "string" &&
-              typeof c?.name === "string" &&
-              typeof c?.icon === "string" &&
-              typeof c?.visible === "boolean" &&
-              typeof c?.order === "number"
-          )
-          // Drop ids that no longer exist as a default card (e.g. cards removed in a later release)
-          .filter(c => defaultById.has(c.id))
-          .map(c => {
-            // Always use canonical name/icon from defaults to prevent stale/swapped labels
-            const def = defaultById.get(c.id)!;
-            return { ...c, name: def.name, icon: def.icon };
-          });
-        const knownIds = new Set(merged.map(c => c.id));
-        let nextOrder = merged.length;
-        for (const def of DEFAULT_CARD_CONFIG) {
-          if (!knownIds.has(def.id)) {
-            merged.push({ ...def, order: nextOrder++ });
-          }
-        }
-        return merged;
-      }
-    }
-  } catch (e) {
-    console.error("Error reading card settings:", e);
-  }
-  return DEFAULT_CARD_CONFIG;
-}
-
-export function saveCardSettings(settings: CardConfig[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch (e) {
-    console.error("Error saving card settings:", e);
-  }
-}
+import { GripVertical, Settings, ChevronUp, ChevronDown } from "lucide-react";
+import { cardIcon, DEFAULT_CARD_CONFIG, getCardSettings, saveCardSettings, type CardConfig } from "@/components/home/registry";
 
 interface TodayPageSettingsProps {
   isOpen: boolean;
   onClose: () => void;
   onSettingsChange: (settings: CardConfig[]) => void;
 }
-
-const getIconComponent = (iconName: string) => {
-  switch (iconName) {
-    case "calendar":       return <Calendar className="w-4 h-4" />;
-    case "trending-up":    return <TrendingUp className="w-4 h-4" />;
-    case "clock":          return <Clock className="w-4 h-4" />;
-    case "trophy":         return <Trophy className="w-4 h-4" />;
-    case "message-square": return <MessageSquare className="w-4 h-4" />;
-    case "megaphone":      return <Megaphone className="w-4 h-4" />;
-    default:               return <Settings className="w-4 h-4" />;
-  }
-};
 
 export function TodayPageSettings({ isOpen, onClose, onSettingsChange }: TodayPageSettingsProps) {
   const [cardSettings, setCardSettings] = useState<CardConfig[]>(getCardSettings());
@@ -220,11 +141,13 @@ export function TodayPageSettings({ isOpen, onClose, onSettingsChange }: TodayPa
 
         <div className="space-y-2 mt-4 overflow-y-auto overflow-x-hidden flex-1 px-6">
           <p className="text-sm text-muted-foreground mb-4">
-            Toggle cards on/off and drag to reorder them on your Today page.
+            Turn cards on or off, and drag them into the order you want on Home.
           </p>
 
           <div className="space-y-2">
-            {sortedCards.map((card, index) => (
+            {sortedCards.map((card, index) => {
+              const Icon = cardIcon(card.id);
+              return (
               <div
                 key={card.id}
                 ref={(el) => { if (el) cardRowRefs.current.set(card.id, el); else cardRowRefs.current.delete(card.id); }}
@@ -261,13 +184,8 @@ export function TodayPageSettings({ isOpen, onClose, onSettingsChange }: TodayPa
                   </div>
                 </div>
 
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  card.id === "events" ? "bg-gradient-to-r from-blue-500 to-indigo-500" :
-                  card.id === "progress" ? "bg-gradient-to-r from-blue-500 to-indigo-500" :
-                  card.id === "activity" ? "bg-gradient-to-r from-green-500 to-teal-500" :
-                  "bg-gradient-to-r from-yellow-500 to-orange-500"
-                } text-white`}>
-                  {getIconComponent(card.icon)}
+                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-[#E7F1F6] text-[#5E8FAD] dark:bg-[rgba(94,143,173,0.28)] dark:text-[#9ec4d6]">
+                  <Icon className="w-4 h-4" />
                 </div>
 
                 <Label 
@@ -284,7 +202,8 @@ export function TodayPageSettings({ isOpen, onClose, onSettingsChange }: TodayPa
                   data-testid={`toggle-${card.id}`}
                 />
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

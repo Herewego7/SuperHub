@@ -1,6 +1,7 @@
 /** What Home shows for one day. A shared to-do is one chore row, however many people are on it. */
 import { withoutUnwatched, type AssignmentLike } from "./outlookAttribution";
 import { driverIdsOf } from "./eventDrivers";
+import { newsletterMuted, slipHeader, slipSentAt, slipText } from "./slipMail";
 
 export type HomeTodo = {
   id: string;
@@ -86,12 +87,30 @@ export function eventsForDayPlan<T extends {
   return eventsForDrivingQuestion(events, assignments, selectedIds, kidName);
 }
 
-export function todosForHome<T extends HomeTodo>(chores: T[], selectedIds: string[], familyIds: string[]): T[] {
+/**
+ * The one people rule for to-dos and events, on Home and in Calendar. All Family
+ * (or nobody picked) shows everything. Otherwise: their rows, rows for everyone,
+ * rows with nobody on them yet, and drives they're on.
+ */
+export function forPeople<T extends { profileIds?: string[] | null; drivingProfileId?: string | null; drivingProfileIds?: string[] | null }>(
+  rows: T[],
+  selectedIds: string[],
+  familyIds: string[],
+  everyoneId?: string | null,
+): T[] {
+  if (selectedIds.length === 0) return rows;
+  if (familyIds.length > 0 && familyIds.every((id) => selectedIds.includes(id))) return rows;
+  return rows.filter((row) => {
+    const ids = row.profileIds ?? [];
+    if (ids.length === 0) return true;
+    if (everyoneId && ids.includes(everyoneId)) return true;
+    return ids.some((id) => selectedIds.includes(id)) || driverIdsOf(row).some((id) => selectedIds.includes(id));
+  });
+}
+
+export function todosForHome<T extends HomeTodo>(chores: T[], selectedIds: string[], familyIds: string[], everyoneId?: string | null): T[] {
   const todos = chores.filter((chore) => chore.taskType === "todo" && chore.isActive !== false);
-  const allSelected = familyIds.length > 0 && familyIds.every((id) => selectedIds.includes(id));
-  const pool = allSelected
-    ? todos.filter((todo) => todo.profileIds.length !== 1)
-    : todos.filter((todo) => todo.profileIds.length === 0 || todo.profileIds.some((id) => selectedIds.includes(id)));
+  const pool = forPeople(todos, selectedIds, familyIds, everyoneId);
   const seen = new Set<string>();
   return pool.filter((todo) => {
     if (seen.has(todo.id)) return false;
@@ -491,6 +510,9 @@ export const PLAN_HORIZON = 3;
 export const PLAN_NEWSLETTERS = 3;
 export const PLAN_OVERDUE_DAYS = 7;
 export const PLAN_COMPLETED_DAYS = 7;
+/** An inbox to-do with no date leaves Home after two weeks. It stays on the To-Dos tab. */
+export const PLAN_INBOX_DAYS = 14;
+export const NEWSLETTER_DAYS = 30;
 
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 const MONTH_SHORT = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
@@ -512,16 +534,14 @@ function monthIndex(name: string): number {
   return MONTH_SHORT.indexOf(word.slice(0, 3));
 }
 
-function dated(year: number, month: number, date: number, from: Date, explicitYear: boolean): Date | null {
+function dated(year: number, month: number, date: number): Date | null {
   if (month < 0 || month > 11 || date < 1 || date > 31) return null;
   const at = new Date(year, month, date);
   if (at.getMonth() !== month) return null;
-  if (!explicitYear && at < dayStart(from)) {
-    const age = Math.round((dayStart(from).getTime() - at.getTime()) / 86400000);
-    if (age > PLAN_OVERDUE_DAYS) at.setFullYear(from.getFullYear() + 1);
-  }
   return at;
 }
+
+const HALF_YEAR_MS = 183 * 86400000;
 
 /** A month-and-day, or a numeric date, written in an email. A weekday name is not enough. */
 export function mailDate(text: string, from: Date): Date | null {
@@ -531,23 +551,35 @@ export function mailDate(text: string, from: Date): Date | null {
 
 export type MailSpan = { start: Date; end: Date | null; time: string | null };
 
-/** The first date in the text, a second date when the note is a range, and a clock when one is written. */
+/**
+ * The first date in the text, a second date when the note is a range, and a clock when one is written.
+ * A date with no year is this year. A later date written half a year before an earlier one crosses
+ * New Year, and the whole span moves to next year only once its end is more than a week past.
+ */
 export function mailSpan(text: string, from: Date): MailSpan | null {
   const months = [...text.matchAll(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/gi)];
   const numeric = [...text.matchAll(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/g)];
-  const points: Date[] = [];
+  const found: { index: number; at: Date; explicit: boolean }[] = [];
   for (const match of months) {
-    const at = dated(from.getFullYear(), monthIndex(match[1]), Number(match[2]), from, false);
-    if (at) points.push(at);
+    const at = dated(from.getFullYear(), monthIndex(match[1]), Number(match[2]));
+    if (at) found.push({ index: match.index ?? 0, at, explicit: false });
   }
   for (const match of numeric) {
     const rawYear = match[3] ? Number(match[3]) : null;
     const year = rawYear == null ? from.getFullYear() : rawYear < 100 ? 2000 + rawYear : rawYear;
-    const at = dated(year, Number(match[1]) - 1, Number(match[2]), from, rawYear != null);
-    if (at) points.push(at);
+    const at = dated(year, Number(match[1]) - 1, Number(match[2]));
+    if (at) found.push({ index: match.index ?? 0, at, explicit: rawYear != null });
   }
-  if (points.length === 0) return null;
-  points.sort((a, b) => a.getTime() - b.getTime());
+  if (found.length === 0) return null;
+  found.sort((a, b) => a.index - b.index);
+  for (let i = 1; i < found.length; i++) {
+    const point = found[i];
+    if (!point.explicit && found[i - 1].at.getTime() - point.at.getTime() > HALF_YEAR_MS) point.at.setFullYear(point.at.getFullYear() + 1);
+  }
+  const latest = Math.max(...found.map((point) => point.at.getTime()));
+  const stale = (dayStart(from).getTime() - latest) / 86400000 > PLAN_OVERDUE_DAYS;
+  if (stale) for (const point of found) if (!point.explicit) point.at.setFullYear(point.at.getFullYear() + 1);
+  const points = found.map((point) => point.at).sort((a, b) => a.getTime() - b.getTime());
   const start = points[0];
   const end = points.length > 1 && !sameDay(points[0], points[points.length - 1]) ? points[points.length - 1] : null;
   return { start, end, time: mailClock(text) };
@@ -621,8 +653,9 @@ type PlanChore = {
   createdAt?: Date | string | null;
 };
 
+/** The subject and the email's own words. The header lines above them are not read for dates or tasks. */
 function noteOf(row: PlanChore): string {
-  return `${row.title}\n${row.description ?? ""}`;
+  return `${row.title}\n${slipText(row.description)}`;
 }
 
 function mailTask(text: string): boolean {
@@ -630,10 +663,9 @@ function mailTask(text: string): boolean {
 }
 
 /** A row Gemini filed. Older mail has no mark and keeps the keyword rules. */
-function planMark(text: string): "newsletter" | "keydate" | "todo" | null {
-  const match = text.match(/(?:^|\n)Plan: (newsletter|keydate|todo)(?:\n|$)/);
-  if (match?.[1] === "newsletter" || match?.[1] === "keydate" || match?.[1] === "todo") return match[1];
-  return null;
+function planMark(row: PlanChore): "newsletter" | "keydate" | "todo" | null {
+  const mark = slipHeader(row.description).Plan;
+  return mark === "newsletter" || mark === "keydate" || mark === "todo" ? mark : null;
 }
 
 function completionOn<T extends { choreId: string; completedAt?: Date | string | null }>(todoId: string, completions: T[], day: Date): T | null {
@@ -674,7 +706,11 @@ export function planTodoRows<T extends PlanChore>(
       if (age > 0 && age <= PLAN_OVERDUE_DAYS) rows.push({ ...todo, done: false, overdue: true });
       continue;
     }
-    if (!due && onToday) rows.push({ ...todo, done: false, overdue: false });
+    if (!due && onToday) {
+      const age = (today.getTime() - dayStart(mailSentAt(todo, today)).getTime()) / 86400000;
+      if (todo.category === "school_email" && age > PLAN_INBOX_DAYS) continue;
+      rows.push({ ...todo, done: false, overdue: false });
+    }
   }
   return rows.sort((a, b) => Number(b.overdue) - Number(a.overdue));
 }
@@ -693,7 +729,7 @@ export function mailKeyDates<T extends PlanChore>(
   const rows: (T & { start: Date; end: Date | null; time: string | null })[] = [];
   for (const todo of todos) {
     if (todo.category !== "school_email") continue;
-    const mark = planMark(noteOf(todo));
+    const mark = planMark(todo);
     if (mark === "newsletter" || mark === "todo") continue;
     if (mark !== "keydate" && (mailTask(noteOf(todo)) || mailClock(noteOf(todo)))) continue;
     const span = mailSpan(noteOf(todo), today);
@@ -715,7 +751,7 @@ export function mailOffCalendar<T extends PlanChore>(
   const rows: (T & { time: string })[] = [];
   for (const todo of todos) {
     if (todo.category !== "school_email") continue;
-    const mark = planMark(noteOf(todo));
+    const mark = planMark(todo);
     if (mark === "newsletter" || mark === "keydate") continue;
     const time = mailClock(noteOf(todo));
     if (!time) continue;
@@ -741,7 +777,7 @@ export function horizonDatedTodos<T extends PlanChore>(
   const rows: (T & { start: Date })[] = [];
   for (const todo of todos) {
     const note = noteOf(todo);
-    const mark = planMark(note);
+    const mark = planMark(todo);
     if (mark === "newsletter" || mark === "keydate") continue;
     if (mark !== "todo" && (!mailTask(note) || mailClock(note))) continue;
     if (mark === "todo" && mailClock(note)) continue;
@@ -766,7 +802,7 @@ export function horizonMail<T extends PlanChore>(
   const rows: (T & { start: Date; time: string })[] = [];
   for (const todo of todos) {
     if (todo.category !== "school_email") continue;
-    const mark = planMark(noteOf(todo));
+    const mark = planMark(todo);
     if (mark === "newsletter" || mark === "keydate" || mark === "todo") continue;
     const time = mailClock(noteOf(todo));
     const due = mailDate(noteOf(todo), day);
@@ -777,27 +813,89 @@ export function horizonMail<T extends PlanChore>(
   return rows.sort((a, b) => a.start.getTime() - b.start.getTime());
 }
 
-/** The latest school letter from each sender in the last two weeks, when it is not a date to add. */
-export function newsletterIssues<T extends PlanChore>(todos: T[], now: Date): (T & { when: Date })[] {
+/** When the email came: its Sent line, else when the item was saved. */
+export function mailSentAt(row: PlanChore, fallback: Date): Date {
+  return slipSentAt(row.description) ?? (row.createdAt ? new Date(row.createdAt) : fallback);
+}
+
+function newsletterShaped(todo: PlanChore, datedIds: Set<string>): boolean {
+  if (todo.category !== "school_email") return false;
+  const mark = planMark(todo);
+  if (mark === "newsletter") return true;
+  if (mark) return false;
+  return !datedIds.has(todo.id) && !mailTask(noteOf(todo)) && !mailClock(noteOf(todo));
+}
+
+/** Every newsletter row, however old. None of them is a to-do. */
+export function newsletterRowIds<T extends PlanChore>(todos: T[], now: Date): Set<string> {
+  const datedIds = new Set(mailKeyDates(todos, [], now).map((row) => row.id));
+  return new Set(todos.filter((todo) => newsletterShaped(todo, datedIds)).map((todo) => todo.id));
+}
+
+export type NewsletterIssue<T> = T & { when: Date; sender: string | null; senderName: string | null };
+/** muteName is what Stop showing sends: the newsletter's own name, or "" for every newsletter from that sender. */
+export type NewsletterGroup<T> = { key: string; name: string; sender: string | null; muteName: string; issues: NewsletterIssue<T>[] };
+
+function nameKeyOf(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The last 30 days of newsletters, one group per newsletter, newest issue first.
+ * A group is named for the newsletter, else the sender's name, else the address. An older
+ * issue saved before newsletters had names joins its sender's one named newsletter.
+ */
+export function newsletterGroups<T extends PlanChore>(todos: T[], now: Date, muted: readonly string[] = []): NewsletterGroup<T>[] {
   const today = dayStart(now);
   const earliest = new Date(today);
-  earliest.setDate(earliest.getDate() - 13);
-  const datedIds = new Set(mailKeyDates(todos, [], now).map((row) => row.id));
-  const recent = todos.filter((todo) => {
-    const mark = planMark(noteOf(todo));
-    if (todo.category !== "school_email" || mark === "keydate" || mark === "todo") return false;
-    if (mark !== "newsletter" && (datedIds.has(todo.id) || mailTask(noteOf(todo)) || mailClock(noteOf(todo)))) return false;
-    const at = todo.createdAt ? new Date(todo.createdAt) : today;
-    return at >= earliest && at < new Date(today.getTime() + 86400000);
-  });
-  const newest = new Map<string, T & { when: Date }>();
-  for (const todo of recent) {
-    const sender = todo.description?.match(/^From: (\S+)\n/)?.[1]?.toLowerCase() ?? todo.id;
-    const when = todo.createdAt ? new Date(todo.createdAt) : today;
-    const held = newest.get(sender);
-    if (!held || when > held.when) newest.set(sender, { ...todo, when });
+  earliest.setDate(earliest.getDate() - (NEWSLETTER_DAYS - 1));
+  const end = new Date(today);
+  end.setDate(end.getDate() + 1);
+  const ids = newsletterRowIds(todos, now);
+  const issues: (NewsletterIssue<T> & { named: string | null })[] = [];
+  for (const todo of todos) {
+    if (!ids.has(todo.id)) continue;
+    const header = slipHeader(todo.description);
+    const sender = header.From?.toLowerCase() ?? null;
+    const named = header.Name?.trim() || null;
+    if (newsletterMuted(muted, sender, named)) continue;
+    const when = mailSentAt(todo, today);
+    if (when < earliest || when >= end) continue;
+    issues.push({ ...todo, when, sender, senderName: header.Sender || null, named });
   }
-  return [...newest.values()].sort((a, b) => b.when.getTime() - a.when.getTime());
+  const namesBySender = new Map<string, Map<string, string>>();
+  for (const issue of issues) {
+    if (!issue.sender || !issue.named) continue;
+    const names = namesBySender.get(issue.sender) ?? new Map<string, string>();
+    names.set(nameKeyOf(issue.named), issue.named);
+    namesBySender.set(issue.sender, names);
+  }
+  const groups = new Map<string, NewsletterGroup<T>>();
+  for (const { named, ...issue } of issues) {
+    const only = issue.sender ? namesBySender.get(issue.sender) : undefined;
+    const name = named ?? (only?.size === 1 ? [...only.values()][0] : null);
+    const key = issue.sender ? `${issue.sender}|${name ? nameKeyOf(name) : ""}` : `row:${issue.id}`;
+    const group = groups.get(key) ?? {
+      key,
+      name: name || issue.senderName || issue.sender || issue.title,
+      sender: issue.sender,
+      muteName: name ?? "",
+      issues: [],
+    };
+    group.issues.push(issue as NewsletterIssue<T>);
+    groups.set(key, group);
+  }
+  for (const group of groups.values()) group.issues.sort((a, b) => b.when.getTime() - a.when.getTime());
+  return [...groups.values()].sort((a, b) => b.issues[0].when.getTime() - a.issues[0].when.getTime());
+}
+
+/** "Week of Sep 28" when the issue covers a range, else the day it names, else the day it came. */
+export function issueDateLabel(issue: { title: string; when: Date }): string {
+  const span = mailSpan(issue.title, issue.when);
+  const short = (at: Date) => at.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (span?.end) return `Week of ${short(span.start)}`;
+  if (span) return short(span.start);
+  return issue.when.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
 function inCompletedWindow(at: Date, now: Date): boolean {

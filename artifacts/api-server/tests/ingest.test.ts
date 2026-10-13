@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, graphNextLink, holdSchoolEvent, inboxBlockReason, inboxFailure, inboxListStopped, inboxMailFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
-import { fileParts, gmailInboxQuery, gmailNewsletterQuery, gmailPayload, inboxFetchLimit, inboxSinceIso, latestPerSender, outlookAttachments, outlookToInbound, toInbound } from "../src/ingest/parse.ts";
+import { clientMessages, fileParts, gmailInboxQuery, gmailNewsletterQuery, gmailPayload, gmailWebLink, inboxFetchLimit, inboxSinceIso, latestPerSender, mergeMailboxes, outlookAttachments, outlookToInbound, outlookWebLink, readableText, toInbound } from "../src/ingest/parse.ts";
+import { muteNewsletter, newsletterMuted, openLettersFrom, openMailFrom, slipHeader, unmuteNewsletter, unmuteSender } from "../src/ingest/process.ts";
+import { inboxOwnerFixes } from "../src/ingest/owners.ts";
 
 test("a catch-up scan reads 30 days, and the regular check stays at 2", () => {
   assert.match(gmailInboxQuery(30), /^newer_than:30d /);
@@ -53,6 +55,121 @@ test("a gmail message becomes a slip with the subject and sender", () => {
   assert.equal(message.subject, "Permission slip");
   assert.equal(message.fromAddress, "office@school.edu");
   assert.equal(message.snippet, "Please sign & return.");
+});
+
+test("a gmail and an outlook message keep the sender's name, when it came, and where it lives", () => {
+  const gmail = toInbound({
+    id: "18f2a",
+    internalDate: String(Date.UTC(2026, 9, 2, 14, 3)),
+    payload: { mimeType: "text/plain", headers: [{ name: "Subject", value: "Weekly" }, { name: "From", value: "\"Elizabeth Simonovich\" <es@school.edu>" }] },
+  }, "chad@gmail.com");
+  assert.equal(gmail.fromName, "Elizabeth Simonovich");
+  assert.equal(gmail.provider, "gmail");
+  assert.equal(gmail.messageId, "18f2a");
+  assert.equal(gmail.receivedAt, "2026-10-02T14:03:00.000Z");
+  const bare = toInbound({ id: "1", payload: { mimeType: "text/plain", headers: [{ name: "From", value: "es@school.edu" }] } }, "chad");
+  assert.equal(bare.fromName, undefined);
+  const outlook = outlookToInbound({
+    id: "AAMkAD=",
+    subject: "Weekly",
+    from: { emailAddress: { address: "es@school.edu", name: "Elizabeth Simonovich" } },
+    receivedDateTime: "2026-10-02T14:03:00Z",
+  }, "alex");
+  assert.equal(outlook.fromName, "Elizabeth Simonovich");
+  assert.equal(outlook.provider, "outlook");
+  assert.equal(outlook.messageId, "AAMkAD=");
+  assert.equal(outlook.receivedAt, "2026-10-02T14:03:00.000Z");
+});
+
+test("one email in both parents' mailboxes is read once and belongs to both", () => {
+  const letter = { subject: "Oak Weekly", fromAddress: "news@school.org", snippet: "", accountId: "a", receivedAt: "2026-10-02T14:03:00.000Z" };
+  const merged = mergeMailboxes([
+    { ...letter, ownerProfileIds: ["dad"], messageId: "g1" },
+    { ...letter, receivedAt: "2026-10-02T14:04:10.000Z", ownerProfileIds: ["mom"], messageId: "o1" },
+    { ...letter, receivedAt: "2026-10-09T14:03:00.000Z", ownerProfileIds: ["dad"] },
+    { ...letter, subject: "Re: Oak Weekly", ownerProfileIds: ["mom"] },
+  ]);
+  assert.equal(merged.length, 3);
+  assert.deepEqual(merged[0].ownerProfileIds, ["dad", "mom"]);
+  assert.equal(merged[0].messageId, "g1");
+  assert.deepEqual(merged[1].ownerProfileIds, ["dad"]);
+  assert.deepEqual(merged[2].ownerProfileIds, ["mom"]);
+});
+
+test("mail sent in by the app cannot name a mailbox or a message", () => {
+  const [row] = clientMessages([{ subject: "Hi", snippet: "", accountId: "x", ownerProfileIds: ["someone"], provider: "gmail", messageId: "theirs" }]);
+  assert.equal(row.subject, "Hi");
+  assert.equal("ownerProfileIds" in row || "provider" in row || "messageId" in row, false);
+  assert.deepEqual(clientMessages("nope"), []);
+});
+
+test("stop emails picks the sender's open inbox items and nothing else, and undo lets mail back in", () => {
+  const rows = [
+    { id: "todo", category: "school_email", description: "From: office@school.edu\nPlan: todo\nRef: a\nSign it." },
+    { id: "letter", category: "school_email", description: "From: Office@School.edu\nPlan: newsletter\nRef: b\nNews." },
+    { id: "done", category: "school_email", description: "From: office@school.edu\nPlan: todo\nRef: c\nDone." },
+    { id: "other", category: "school_email", description: "From: coach@club.org\nPlan: todo\nRef: d\nPractice." },
+    { id: "mine", category: null, description: "From: office@school.edu\nA note I wrote." },
+  ];
+  assert.deepEqual(openMailFrom(rows, " OFFICE@school.edu ", new Set(["done"])), ["todo", "letter"]);
+  const muted = muteSender({ mutedSenders: [], dismissedSlipKeys: [] }, "office@school.edu");
+  assert.deepEqual(unmuteSender(muted, "Office@School.edu").mutedSenders, []);
+});
+
+test("hiding a newsletter skips its issues, keeps the sender's other mail, and clears older nameless issues", () => {
+  const keys = muteNewsletter([], "News@School.org", "Room 12 News");
+  assert.deepEqual(keys, ["news@school.org|room 12 news"]);
+  assert.equal(newsletterMuted(keys, "news@school.org", "Room 12  news"), true);
+  assert.equal(newsletterMuted(keys, "news@school.org", "PTA Notes"), false);
+  assert.equal(newsletterMuted(keys, "news@school.org", ""), true);
+  assert.equal(newsletterMuted(keys, "other@school.org", "Room 12 News"), false);
+  assert.equal(newsletterMuted(muteNewsletter([], "news@school.org", ""), "news@school.org", "PTA Notes"), true);
+  assert.deepEqual(unmuteNewsletter(keys, "news@school.org|room 12 news"), []);
+  const rows = [
+    { id: "named", category: "school_email", description: "From: news@school.org\nPlan: newsletter\nRef: a\nName: Room 12 News\nNews." },
+    { id: "legacy", category: "school_email", description: "From: news@school.org\nPlan: newsletter\nRef: b\nNews." },
+    { id: "pta", category: "school_email", description: "From: news@school.org\nPlan: newsletter\nRef: c\nName: PTA Notes\nNews." },
+    { id: "todo", category: "school_email", description: "From: news@school.org\nPlan: todo\nRef: d\nName: Room 12 News\nSign it." },
+    { id: "body", category: "school_email", description: "From: news@school.org\nPlan: newsletter\nRef: e\nWelcome back.\nName: Room 12 News" },
+  ];
+  assert.deepEqual(openLettersFrom(rows, "news@school.org", "Room 12 News", new Set()), ["named", "legacy", "body"]);
+  assert.equal(slipHeader(rows[4].description).Name, undefined);
+  const planned = ingestMessages(
+    [
+      { subject: "Room 12 weekly newsletter", fromAddress: "news@school.org", snippet: "Picture day Thursday.", accountId: "dad" },
+      { subject: "Permission slip for the field trip", fromAddress: "news@school.org", snippet: "Please sign.", accountId: "dad" },
+    ],
+    { mutedSenders: [], dismissedSlipKeys: [], mutedNewsletters: keys },
+    [],
+    ["dad"],
+  );
+  assert.deepEqual(planned.todos.map((todo) => todo.title), ["Permission slip for the field trip"]);
+});
+
+test("read full email keeps paragraphs and only links to the mail provider", () => {
+  assert.equal(readableText("<style>p{}</style><p>Hello &amp; welcome</p><ul><li>Bring a jacket</li><li>Lunch</li></ul>Bye<br>Ms. S"), "Hello & welcome\n\n• Bring a jacket\n• Lunch\n\nBye\nMs. S");
+  assert.equal(outlookWebLink("https://outlook.office365.com/owa/?ItemID=abc"), "https://outlook.office365.com/owa/?ItemID=abc");
+  assert.equal(outlookWebLink("https://evil.example/owa"), null);
+  assert.equal(outlookWebLink("javascript:alert(1)"), null);
+  assert.equal(gmailWebLink("chad@gmail.com", "18f2a"), "https://mail.google.com/mail/?authuser=chad%40gmail.com#all/18f2a");
+  assert.equal(gmailWebLink("chad@gmail.com", "../x"), null);
+});
+
+test("inbox to-dos that went to everyone move to the mailbox owner, once", () => {
+  const audience = ["mom", "dad", "liam"];
+  const rows = [
+    { id: "all", category: "school_email", profileIds: ["liam", "dad", "mom"] },
+    { id: "gone", category: "school_email", profileIds: ["mom", "dad", "liam", "old-kid"] },
+    { id: "handed", category: "school_email", profileIds: ["liam"] },
+    { id: "chore", category: "chores", profileIds: ["mom", "dad", "liam"] },
+  ];
+  const fixes = inboxOwnerFixes(rows, audience, ["dad"]);
+  assert.deepEqual(fixes, [{ id: "all", profileIds: ["dad"] }, { id: "gone", profileIds: ["dad"] }]);
+  const after = rows.map((row) => ({ ...row, profileIds: fixes.find((fix) => fix.id === row.id)?.profileIds ?? row.profileIds }));
+  assert.deepEqual(inboxOwnerFixes(after, audience, ["dad"]), []);
+  assert.deepEqual(inboxOwnerFixes(rows, audience, []), []);
+  assert.deepEqual(inboxOwnerFixes(rows, ["mom", "dad"], ["mom", "dad"]), []);
+  assert.deepEqual(inboxOwnerFixes(rows, ["dad"], ["dad"]), []);
 });
 
 test("an outlook next page is only followed on Microsoft's host", () => {
@@ -274,6 +391,20 @@ test("two copies of the same slip from two adults become one to-do", () => {
   assert.equal(planned.todos[0]?.category, "school_email");
   assert.equal(slipSender(planned.todos[0]?.description), "office@school.edu");
   assert.equal(planned.events.length, 0);
+  const owned = ingestMessages(
+    [
+      { subject: "Picture day", fromAddress: "office@school.edu", fromName: "Front Office", snippet: "Thursday at 9:00 AM.", accountId: "chad", ownerProfileIds: ["dad"], provider: "gmail", messageId: "m1" },
+      { subject: "Re: Picture day", fromAddress: "office@school.edu", snippet: "Thursday at 9:00 AM.", accountId: "alex", ownerProfileIds: ["mom"] },
+    ],
+    { mutedSenders: [], dismissedSlipKeys: [] },
+    [],
+    ["mom", "dad", "liam"],
+  );
+  assert.deepEqual(owned.todos[0]?.profileIds, ["dad", "mom"]);
+  assert.deepEqual(owned.events[0]?.profileIds, ["dad", "mom"]);
+  assert.equal(slipSender(owned.todos[0]?.description), "office@school.edu");
+  assert.match(owned.todos[0]?.description ?? "", /\nSender: Front Office\n/);
+  assert.match(owned.todos[0]?.description ?? "", /\nMail: gmail:dad:m1\n/);
 });
 
 test("accepting a school twice leaves one name on the person", () => {

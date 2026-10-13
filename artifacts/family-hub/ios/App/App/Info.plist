@@ -2,12 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CAPACITOR_DEBUG</key>
+	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>SuperHub</string>
+	<string>SuperHub</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -20,10 +20,37 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.herewego7.superhub</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>superhub</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>SuperHub uses the camera to let you add a photo to your profile.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SuperHub can use your location to show local weather on the home screen.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>SuperHub saves photos to your library when you export content.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>SuperHub reads your photo library so you can choose a profile picture.</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>SuperHub sends reminders for chores, health events, and family announcements.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -32,6 +59,8 @@
 	<array>
 		<string>armv7</string>
 	</array>
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -47,39 +76,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<key>UIRequiresFullScreen</key>
-	<true/>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>com.herewego7.superhub</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>superhub</string>
-			</array>
-		</dict>
-	</array>
-	<key>NSCameraUsageDescription</key>
-	<string>SuperHub uses the camera to let you add a photo to your profile.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>SuperHub reads your photo library so you can choose a profile picture.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>SuperHub saves photos to your library when you export content.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>SuperHub can use your location to show local weather on the home screen.</string>
-	<key>NSUserNotificationsUsageDescription</key>
-	<string>SuperHub sends reminders for chores, health events, and family announcements.</string>
-	<!-- The app uses only HTTPS/TLS provided by the operating system, which is
-	     exempt under the US export regulations Apple asks about. Declaring it
-	     here answers the question once, at build time; without this key Xcode
-	     and App Store Connect prompt about encryption on EVERY upload, and an
-	     unanswered prompt blocks the build from reaching TestFlight. -->
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 </dict>
 </plist>
