@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonEvents, horizonMail, horizonWithoutChecked, issueDateLabel, mailDate, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, notesForHome, praiseForHome, newsletterGroups, newsletterRowIds, openTodos, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, clearedTodos, choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonEvents, horizonMail, horizonWithoutChecked, issueDateLabel, mailDate, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, notesForHome, praiseForHome, newsletterGroups, newsletterRowIds, openTodos, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -519,4 +519,18 @@ test("notes on Home are the week's notes for or by the person, and a family note
     notesForHome(notes, assignments, [], true, "all", today).map((n) => n.id).sort(),
     ["by-dad", "family", "for-ava", "for-dad", "unassigned"],
   );
+});
+
+test("a to-do due last week leaves Today's To-dos and is counted as cleared", () => {
+  const monday = new Date(2026, 9, 12, 9, 0);
+  const todos = [
+    { id: "pics", title: "Picture day", description: "Due 10/6/2026", category: "school_email" },
+    { id: "lunch", title: "Sack lunch", description: "Due 10/9/2026", category: "school_email" },
+    { id: "late", title: "Sign form", description: "Due 10/11/2026", category: "school_email" },
+    { id: "today", title: "Return library book", description: "Due 10/12/2026", category: "school_email" },
+  ];
+  const rows = planTodoRows(todos, [], monday, monday);
+  assert.deepEqual(rows.map((row) => [row.id, row.overdue]), [["late", true], ["today", false]]);
+  assert.deepEqual(clearedTodos(todos, [], monday).map((row) => row.id), ["lunch", "pics"]);
+  assert.deepEqual(clearedTodos(todos, [{ choreId: "lunch" }], monday).map((row) => row.id), ["pics"]);
 });

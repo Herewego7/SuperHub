@@ -1212,7 +1212,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
     const known = ["upcoming", "day", "workweek", "week", "month"] as ViewMode[];
     const phone = window.innerWidth < 768;
     if (phone) {
-      if (saved === "upcoming" || saved === "week" || saved === "month") return saved;
+      if (saved === "upcoming" || saved === "day" || saved === "week" || saved === "month") return saved;
       return "upcoming";
     }
     if (saved && known.includes(saved)) return saved;
@@ -1829,6 +1829,9 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
       (e) => e.localId === pendingOpenEventId || e.id === pendingOpenEventId
     );
     if (ev) {
+      // Arriving from an event on Home lands on that event's day, in Day view.
+      setCurrentDate(new Date(ev.startTime));
+      setViewMode("day");
       handleEventClick(ev);
       onPendingEventOpened?.();
     }
@@ -2189,12 +2192,12 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
             </div>
             <div className="flex items-center gap-2 px-3 py-2">
               <div className="flex items-center rounded-lg border border-[#b0bec8] dark:border-border overflow-hidden bg-[#dce8f2] dark:bg-[#1e2633] shrink-0">
-                {(["upcoming", "week", "month"] as ViewMode[]).map(v => (
+                {(["upcoming", "day", "week", "month"] as ViewMode[]).map(v => (
                   <button
                     key={v}
                     onClick={() => setViewModePersisted(v)}
                     aria-pressed={viewMode === v}
-                    className={`px-2.5 py-1.5 text-xs border-r border-[#b0bec8] dark:border-border last:border-0 transition-colors ${
+                    className={`px-2 py-1.5 text-xs border-r border-[#b0bec8] dark:border-border last:border-0 transition-colors ${
                       viewMode === v
                         ? "bg-primary text-primary-foreground font-bold shadow-sm"
                         : "font-medium hover:bg-accent text-muted-foreground hover:text-foreground"
@@ -2527,7 +2530,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
                       <h3 className="sticky top-0 z-[1] bg-white px-1 pb-1 pt-3 text-xs font-semibold text-muted-foreground dark:bg-card">{upcomingDayLabel(day, new Date())}</h3>
                       <ul className="flex flex-col gap-1">
                         {rows.map((event) => {
-                          const chip = eventSourceChip(event.source);
+                          const chip = eventSourceChip(event.source, "description" in event ? event.description : null);
                           return (
                             <li key={event.id}>
                               <EventRow

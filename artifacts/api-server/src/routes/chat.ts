@@ -42,7 +42,7 @@ type DinnerRow = { id: string; date: string; slot: string; name: string; notes?:
 type SavedDinner = DinnerRow;
 type SavedIngredient = { savedMealId: string; item: string; quantity?: string | null; displayOrder?: number | null };
 
-async function placeDinners(userId: string, dinners: { date: string; name: string }[]): Promise<{ meals: PlacedDinner[]; added: string[] }> {
+async function placeDinners(userId: string, dinners: DinnerNight[]): Promise<{ meals: PlacedDinner[]; added: string[] }> {
   const [settings, location, events] = await Promise.all([
     storage.getCalendarSettingsByUser(userId),
     storage.getLocationSettingsByUser(userId),
@@ -55,6 +55,7 @@ async function placeDinners(userId: string, dinners: { date: string; name: strin
     : [];
   const timeZone = location?.timezone || "America/Chicago";
   const enabled = settings?.mealsOnCalendar === true;
+  // Dinner replaces that night's dinner. Breakfast and lunch are added beside what is there.
   const byDate = new Map(existing.filter((meal) => meal.slot === "dinner").map((meal) => [meal.date, meal]));
   const placed: PlacedDinner[] = [];
   for (const dinner of dinners) {
@@ -71,10 +72,11 @@ async function placeDinners(userId: string, dinners: { date: string; name: strin
       sourceName: idea?.sourceName ?? null,
       importedAt: idea ? new Date() : null,
     };
-    const previous = byDate.get(dinner.date);
+    const slot = dinner.slot ?? "dinner";
+    const previous = slot === "dinner" ? byDate.get(dinner.date) : undefined;
     const meal = (previous
       ? await storage.updateMeal(previous.id, fields, userId)
-      : await storage.createMeal({ userId, date: dinner.date, slot: "dinner", ...fields })) as DinnerRow | undefined;
+      : await storage.createMeal({ userId, date: dinner.date, slot, ...fields })) as DinnerRow | undefined;
     if (!meal) continue;
     const savedIngredients = await storage.replaceMealIngredients(meal.id, ingredients);
     if (previous) {
@@ -99,7 +101,7 @@ async function placeDinners(userId: string, dinners: { date: string; name: strin
         if (dinnerLeavesTheApp(created)) void syncEventCreate(created).catch(() => undefined);
       }
     }
-    byDate.set(dinner.date, meal);
+    if (slot === "dinner") byDate.set(dinner.date, meal);
     placed.push({ id: meal.id, name: meal.name, date: meal.date, slot: meal.slot, ingredients: savedIngredients });
   }
   const existingGroceries = await storage.getGroceryItemsByUser(userId);

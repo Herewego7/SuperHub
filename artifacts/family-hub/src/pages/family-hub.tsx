@@ -942,10 +942,19 @@ export default function FamilyHub() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Chat's panel is sized to the screen under the sticky header, so the page
+  // has to sit scrolled to its end, with the weather bar tucked away. Scrolling
+  // to the top instead brought the weather bar back and pushed the chat box
+  // and the newest messages down behind the tab bar.
   useEffect(() => {
     if (activeTab !== "chat") return;
-    document.getElementById("app-scroll-container")?.scrollTo({ top: 0, behavior: "auto" });
-  }, [activeTab]);
+    const scroller = document.getElementById("app-scroll-container");
+    if (!scroller) return;
+    const settle = () => scroller.scrollTo({ top: scroller.scrollHeight, behavior: "auto" });
+    settle();
+    const frame = requestAnimationFrame(settle);
+    return () => cancelAnimationFrame(frame);
+  }, [activeTab, stickyHeaderH]);
 
   useEffect(() => {
     const sync = () => {
@@ -1337,7 +1346,7 @@ export default function FamilyHub() {
               whatever's already centered on top; the group below has been
               trimmed (label/gaps) so it stays clear of both buttons even
               when they show together on a typical phone width. */}
-          <div ref={dateNavRowRef} className={`relative flex items-center ${activeTab === "home" && navHistory.length === 0 && isToday(selectedDate) ? "h-0 overflow-hidden" : "mb-1 h-9"}`}>
+          <div ref={dateNavRowRef} className="relative mb-1 flex h-9 items-center">
             {/* Back — no longer paired with a "Customize" gear here (that's
                 now a "Customize Page" card at the bottom of the Home/Chores
                 card stack instead, matching the requested pattern). Back is
@@ -1369,7 +1378,7 @@ export default function FamilyHub() {
               </Button>
             )}
 
-            <div ref={dateNavMiddleRef} className={`absolute left-1/2 -translate-x-1/2 flex items-center gap-0.5 sm:gap-3 ${activeTab === "home" ? "invisible pointer-events-none" : ""}`}>
+            <div ref={dateNavMiddleRef} className="absolute left-1/2 -translate-x-1/2 flex items-center gap-0.5 sm:gap-3">
               <Button
                 variant="ghost"
                 size="sm"
@@ -2063,7 +2072,9 @@ export default function FamilyHub() {
           CSS selector to match — without it, bg-primary/ring-primary here
           resolve to hearth-theme's bare "H S% L%" var and render invisible in
           dark mode. See index.css's "hearth-theme opaque-vars fix" comment. */}
-      <div className="hearth-theme opaque-vars fixed right-5 z-[41]" style={{ bottom: "calc(6.25rem + env(safe-area-inset-bottom, 0px))" }}>
+      {/* Hidden on Chat: it sat right on top of the chat box's Send button,
+          and Chat's own box already takes anything you want to add. */}
+      <div className={`hearth-theme opaque-vars fixed right-5 z-[41] ${activeTab === "chat" ? "hidden" : ""}`} style={{ bottom: "calc(6.25rem + env(safe-area-inset-bottom, 0px))" }}>
         <DropdownMenu open={plusOpen} onOpenChange={setPlusOpen}>
           <DropdownMenuTrigger asChild>
             <Button

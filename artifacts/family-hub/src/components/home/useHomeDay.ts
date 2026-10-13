@@ -5,7 +5,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Meal } from "@workspace/shared-types";
 import type { FamilyEvent } from "@/lib/familyEvents";
 import { recentShoutoutsQuery, type DailyContentAssignment, type DailyContentItem, type Shoutout } from "@/components/recent-shoutouts-card";
-import { type NewsletterGroup, choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonMail, horizonWithoutChecked, mailClockParts, mailKeyDates, mailOffCalendar, mailVisibleToKid, newsletterGroups, newsletterRowIds, notesForHome, PLAN_KEY_DATES, PLAN_NEWSLETTERS, PLAN_TODO_FOLD, planTodoRows, plainEventDetail, praiseForHome, schoolEmailNames, schoolSlipsHeldOnHome, todosForHome } from "@/lib/homeDay";
+import { type NewsletterGroup, choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonMail, horizonWithoutChecked, mailClockParts, mailKeyDates, mailOffCalendar, mailVisibleToKid, clearedTodos, newsletterGroups, newsletterRowIds, notesForHome, PLAN_KEY_DATES, PLAN_NEWSLETTERS, PLAN_TODO_FOLD, planTodoRows, plainEventDetail, praiseForHome, schoolEmailNames, schoolSlipsHeldOnHome, todosForHome } from "@/lib/homeDay";
 import { pointsProfileId } from "@/lib/chatTools";
 import { confirmDialog } from "@/lib/confirmDialog";
 import { hapticLight } from "@/lib/haptics";
@@ -392,6 +392,19 @@ export function useHomeDay(props: HomeDayProps) {
       .reduce((latest, completion) => Math.max(latest, new Date(completion.completedAt ?? 0).getTime()), 0);
     return at(b.id) - at(a.id);
   });
+  // To-dos past due before yesterday leave the list. The ones the person
+  // hasn't been told about yet are counted in a note at the top of the card.
+  const [clearedSeen, setClearedSeen] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(CLEARED_SEEN_KEY) ?? "[]") as string[]; } catch { return []; }
+  });
+  const cleared = daysOut === 0
+    ? clearedTodos(visibleChores.filter((todo) => !heldIds.has(todo.id)), completions, now).filter((todo) => !hidden(todo.id) && !clearedSeen.includes(todo.id))
+    : [];
+  const ackCleared = () => {
+    const next = [...new Set([...clearedSeen, ...cleared.map((todo) => todo.id)])].slice(-200);
+    setClearedSeen(next);
+    try { localStorage.setItem(CLEARED_SEEN_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+  };
   const folded = !showAllTodos && openTodos.length > PLAN_TODO_FOLD;
   const visibleTodos = folded ? openTodos.slice(0, PLAN_TODO_FOLD) : openTodos;
   const dayStamp = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
@@ -495,6 +508,7 @@ export function useHomeDay(props: HomeDayProps) {
     newsletters, visibleNewsletters, hideLetters, askHideLetters,
     keyDates, visibleKeys,
     openTodos, doneTodos, folded, visibleTodos,
+    cleared, ackCleared,
     progress,
     dinner, birthday,
     todayEvents, offCalendar,
@@ -507,3 +521,5 @@ export function useHomeDay(props: HomeDayProps) {
 }
 
 export type HomeModel = ReturnType<typeof useHomeDay>;
+
+const CLEARED_SEEN_KEY = "superhub_cleared_todos_seen";

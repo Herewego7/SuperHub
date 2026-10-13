@@ -3,12 +3,12 @@ export type ChatBubble = { id: string; role: "user" | "assistant"; text: string 
 export type PendingConfirm =
   | { kind: "delete"; id: string; path?: string }
   | { kind: "move"; id: string; start: string; end: string }
-  | { kind: "meals"; dinners: { date: string; name: string }[] };
+  | { kind: "meals"; dinners: { date: string; name: string; slot?: "breakfast" | "lunch" | "dinner" }[] };
 
 export function pendingConfirmFrom(raw: string | null): PendingConfirm | null {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as { kind?: string; id?: string; path?: string; start?: string; end?: string; dinners?: { date?: string; name?: string }[] };
+    const parsed = JSON.parse(raw) as { kind?: string; id?: string; path?: string; start?: string; end?: string; dinners?: { date?: string; name?: string; slot?: string }[] };
     if (parsed.kind === "delete" && parsed.id) {
       const path = typeof parsed.path === "string" && (parsed.path.startsWith("/api/google-calendar/events/") || parsed.path.startsWith("/api/outlook-calendar/events/")) ? parsed.path : undefined;
       return path ? { kind: "delete", id: parsed.id, path } : { kind: "delete", id: parsed.id };
@@ -19,7 +19,8 @@ export function pendingConfirmFrom(raw: string | null): PendingConfirm | null {
     if (parsed.kind === "meals" && Array.isArray(parsed.dinners)) {
       const dinners = parsed.dinners.flatMap((row) => {
         if (!row?.date || !/^\d{4}-\d{2}-\d{2}$/.test(row.date) || !row.name?.trim()) return [];
-        return [{ date: row.date, name: row.name.trim() }];
+        const slot: "breakfast" | "lunch" | undefined = row.slot === "breakfast" || row.slot === "lunch" ? row.slot : undefined;
+        return [slot ? { date: row.date, name: row.name.trim(), slot } : { date: row.date, name: row.name.trim() }];
       });
       if (dinners.length > 0) return { kind: "meals", dinners };
     }

@@ -107,7 +107,48 @@ function nextDay(day: Date): Date {
   return tomorrow;
 }
 
-export type DinnerPick = { date: string; name: string; replaces?: string };
+export type MealSlot = "breakfast" | "lunch" | "dinner";
+/** A meal to put on the plan. No slot means dinner, the slot chat has always filled. */
+export type DinnerPick = { date: string; name: string; slot?: MealSlot; replaces?: string };
+
+const SLOT_WORD = "breakfast|brunch|lunch|dinner|supper";
+
+function slotOf(word: string): MealSlot {
+  const key = word.toLowerCase();
+  if (key === "breakfast" || key === "brunch") return "breakfast";
+  if (key === "lunch") return "lunch";
+  return "dinner";
+}
+
+export function mealSlotLabel(slot: MealSlot | undefined): string {
+  const key = slot ?? "dinner";
+  return key[0].toUpperCase() + key.slice(1);
+}
+
+/**
+ * "Add eggs for breakfast" is the meal "Eggs" at breakfast. The verb and the
+ * slot are instructions, not part of the meal's name.
+ */
+export function mealRequest(raw: string): { name: string; slot?: MealSlot } | null {
+  let text = raw.trim().replace(/[.!?]+$/g, "");
+  let slot: MealSlot | undefined;
+  const slotted = text.match(new RegExp(`\\b(?:for|at|to|as)\\s+(?:the\\s+)?(${SLOT_WORD})\\b`, "i"))
+    ?? text.match(new RegExp(`^(${SLOT_WORD})\\s*(?::|is|will be|-)\\s*`, "i"));
+  if (slotted) {
+    slot = slotOf(slotted[1]);
+    text = text.replace(slotted[0], " ");
+  }
+  text = text
+    .replace(/\b(?:to|on|onto|into)\s+(?:the\s+)?(?:meal\s+plan|meals?(?:\s+tab)?|menu|calendar)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const name = mealName(text.replace(/^(?:can you\s+|could you\s+|please\s+)*(?:add|put|schedule|plan|make|cook|set)\s+/i, ""));
+  if (!name) return null;
+  const tidy = name.replace(/\s+(?:for|on|at|to)$/i, "").trim();
+  if (!tidy) return null;
+  const titled = tidy[0].toUpperCase() + tidy.slice(1);
+  return slot && slot !== "dinner" ? { name: titled, slot } : { name: titled };
+}
 
 const DINNER_DAY = "today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday";
 
@@ -149,14 +190,14 @@ function dayFromWord(word: string, today: Date): Date | null {
  * "Let's do tacos on Wednesday" names a dinner to save now.
  * A proposed week ("does this sound good?") does not match.
  */
-export function assignedDinners(text: string, today: Date): { date: string; name: string }[] {
-  const found = new Map<string, { date: string; name: string }>();
+export function assignedDinners(text: string, today: Date): DinnerPick[] {
+  const found = new Map<string, DinnerPick>();
   const re = new RegExp(`\\b(?:let's|lets|let us|add|put)\\s+(.+?)\\s+(?:on|for)\\s+(${DINNER_DAY})\\b`, "gi");
   for (const match of text.matchAll(re)) {
-    const name = mealName(match[1] ?? "");
+    const meal = mealRequest(match[1] ?? "");
     const day = dayFromWord(match[2] ?? "", today);
-    if (!name || !day) continue;
-    found.set(dayKey(day), { date: dayKey(day), name });
+    if (!meal || !day) continue;
+    found.set(`${dayKey(day)}|${meal.slot ?? "dinner"}`, { date: dayKey(day), ...meal });
   }
   return [...found.values()];
 }
@@ -167,16 +208,18 @@ const PROPOSAL_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
  * A suggested week from chat: "Wednesday: Tacos" or "Wed, Oct 7: Tacos".
  * A dinner already saved ("On the meal plan.") is not asked again.
  */
-export function proposedDinners(text: string, today: Date): { date: string; name: string }[] {
+export function proposedDinners(text: string, today: Date): DinnerPick[] {
   if (/^On the meal plan\./i.test(text.trim())) return [];
-  const found = new Map<string, { date: string; name: string }>();
+  const found = new Map<string, DinnerPick>();
   const current = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   for (const line of text.split("\n")) {
-    const dated = line.match(/^\s*(?:[-*•]\s*)?(Sun|Mon|Tue|Wed|Thu|Fri|Sat),\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}):\s*(.+)$/i);
+    const dated = line.match(/^\s*(?:[-*•]\s*)?(Sun|Mon|Tue|Wed|Thu|Fri|Sat),\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?:\s+·\s+(Breakfast|Lunch|Dinner))?:\s*(.+)$/i);
     const named = line.match(new RegExp(`^\\s*(?:[-*•]\\s*)?(${DINNER_DAY})\\s*:\\s*(.+)$`, "i"));
-    const raw = dated?.[4] ?? named?.[2] ?? "";
+    const raw = dated?.[5] ?? named?.[2] ?? "";
     const name = mealName(raw.replace(/\s*\(replaces [^)]+\)\s*$/i, ""));
     if (!name) continue;
+    const slot = dated?.[4] ? slotOf(dated[4]) : "dinner";
+    const pick = (date: string): DinnerPick => (slot === "dinner" ? { date, name } : { date, name, slot });
     if (dated) {
       const month = PROPOSAL_MONTHS.findIndex((item) => item.toLowerCase() === dated[2].toLowerCase());
       const day = Number(dated[3]);
@@ -185,15 +228,15 @@ export function proposedDinners(text: string, today: Date): { date: string; name
       const stamp = new Date(year, month, day);
       if (stamp.getTime() < current.getTime() - 2 * 86400000) year += 1;
       const date = dayKey(new Date(year, month, day));
-      found.set(date, { date, name });
+      found.set(`${date}|${slot}`, pick(date));
       continue;
     }
     const day = dayFromWord(named?.[1] ?? "", current);
     if (!day) continue;
     const date = dayKey(day);
-    found.set(date, { date, name });
+    found.set(`${date}|${slot}`, pick(date));
   }
-  const asking = /Reply yes to put these on the meal plan/i.test(text);
+  const asking = /Reply yes to put (?:these|it) on the meal plan/i.test(text);
   const suggesting = /\b(meal plan|dinners|menu|dinner ideas)\b/i.test(text);
   if (asking && found.size > 0) return [...found.values()];
   if (suggesting && found.size >= 2) return [...found.values()];
@@ -201,8 +244,8 @@ export function proposedDinners(text: string, today: Date): { date: string; name
 }
 
 /** "Tacos tonight and pasta tomorrow", or "Monday tacos, Wednesday soup". */
-export function statedDinners(text: string, today: Date): { date: string; name: string }[] {
-  const found = new Map<string, { date: string; name: string }>();
+export function statedDinners(text: string, today: Date): DinnerPick[] {
+  const found = new Map<string, DinnerPick>();
   for (const chunk of text.split(/\s*(?:,|\band\b)\s*/i)) {
     const lead = chunk.match(new RegExp(`(?:^|\\b)(${DINNER_DAY})\\s+(?:is\\s+|as\\s+|:\\s*)?(.+)$`, "i"));
     const trail = chunk.match(new RegExp(`^(.+?)\\s+(?:on\\s+|for\\s+)?(${DINNER_DAY})\\s*$`, "i"));
@@ -210,10 +253,10 @@ export function statedDinners(text: string, today: Date): { date: string; name: 
     const raw = lead?.[2] || trail?.[1];
     if (!word || !raw) continue;
     const day = dayFromWord(word, today);
-    const name = mealName(raw);
-    if (!day || !name) continue;
+    const meal = mealRequest(raw);
+    if (!day || !meal) continue;
     const date = dayKey(day);
-    found.set(date, { date, name });
+    found.set(`${date}|${meal.slot ?? "dinner"}`, { date, ...meal });
   }
   return [...found.values()];
 }
@@ -263,26 +306,29 @@ export function dinnersForTheWeek(
 }
 
 export function withSavedMeals(
-  picks: { date: string; name: string }[],
+  picks: DinnerPick[],
   saved: { name: string }[],
   existing: { date: string; slot?: string | null; name: string }[],
 ): DinnerPick[] {
   return picks.map((pick) => {
     const idea = saved.find((meal) => meal.name.trim().toLowerCase() === pick.name.trim().toLowerCase());
-    const current = existing.find((meal) => meal.date === pick.date && (meal.slot === "dinner" || !meal.slot));
     const name = idea?.name ?? pick.name;
+    // Only dinner swaps out what is there. Breakfast and lunch can hold more than one thing.
+    if (pick.slot && pick.slot !== "dinner") return { date: pick.date, name, slot: pick.slot };
+    const current = existing.find((meal) => meal.date === pick.date && (meal.slot === "dinner" || !meal.slot));
     const replaces = current && current.name.trim().toLowerCase() !== name.trim().toLowerCase() ? current.name : undefined;
     return { date: pick.date, name, replaces };
   });
 }
 
+/** "Tue, Oct 13 · Breakfast: Eggs", one line per meal, then the question. */
 export function dinnerPlanReply(picks: DinnerPick[]): string {
   const lines = picks.map((pick) => {
     const [year, month, day] = pick.date.split("-").map(Number);
-    const label = new Date(year, month - 1, day).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    const label = `${new Date(year, month - 1, day).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · ${mealSlotLabel(pick.slot)}`;
     return pick.replaces ? `${label}: ${pick.name} (replaces ${pick.replaces})` : `${label}: ${pick.name}`;
   });
-  return `${lines.join("\n")}\nReply yes to put these on the meal plan.`;
+  return `${lines.join("\n")}\nReply yes to put ${picks.length === 1 ? "it" : "these"} on the meal plan.`;
 }
 
 export const GROCERY_PROMPT_KEY = "superhub_grocery_prompt_queue";

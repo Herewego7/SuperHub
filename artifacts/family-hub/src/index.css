@@ -594,12 +594,15 @@
   color: #5e8fad;
 }
 
+/* One plain 1px border and no blurred shadow. A soft shadow stacked on the
+   edge darkens the corners and the bottom more than the middle of each side,
+   which reads as a line that fades out partway along. Bot Life's cards have no
+   shadow either, only a flat edge against the page. */
 .hearth-theme .plan-card {
   background: #ffffff;
-  border: 0;
+  border: 1px solid #d6d6de;
   border-radius: 20px;
-  /* The edge is a ring, not a border, so it adds no width to the card. */
-  box-shadow: 0 0 0 1px #c5c5ce, 0 2px 12px rgba(42, 24, 80, 0.07);
+  box-shadow: none;
   padding: 16px;
 }
 
@@ -652,7 +655,8 @@
 
 .dark .hearth-theme .plan-card {
   background: #1c1c21;
-  box-shadow: 0 0 0 1px #45454f, 0 2px 12px rgba(0, 0, 0, 0.35);
+  border-color: #3a3a43;
+  box-shadow: none;
 }
 
 /* ── hearth-theme opaque-vars fix ──

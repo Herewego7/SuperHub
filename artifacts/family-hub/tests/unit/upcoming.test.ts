@@ -190,3 +190,9 @@ test("Upcoming day headers read Today, Tomorrow, then the short date", () => {
   assert.equal(upcomingDayLabel(new Date(2026, 9, 9), now), "Fri Oct 9");
   assert.equal(upcomingDayLabel(new Date(2026, 10, 2), now), "Mon Nov 2", "a day across the clock change is still one day");
 });
+
+test("an event read from an email names the sender's domain, not school", () => {
+  assert.equal(eventSourceChip("school", "From: Alarm.com <notify@alarm.com>\n12:26 AM"), "Email · alarm.com");
+  assert.equal(eventSourceChip("school", "From: office@greatoaksacademy.org\nPicture day"), "Email · greatoaksacademy.org");
+  assert.equal(eventSourceChip("school", null), "Email");
+});

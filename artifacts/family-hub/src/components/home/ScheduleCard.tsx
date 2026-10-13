@@ -72,7 +72,7 @@ export function ScheduleCard({ home }: { home: HomeModel }) {
       ) : (
         <ul className="flex flex-col gap-2">
           {todayEvents.map((event) => {
-            const chip = eventSourceChip(event.source);
+            const chip = eventSourceChip(event.source, event.description);
             return (
               <li key={event.id}>
                 <EventRow

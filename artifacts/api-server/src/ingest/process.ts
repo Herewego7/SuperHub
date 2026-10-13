@@ -470,6 +470,39 @@ export function isSchoolDomain(domain: string): boolean {
   return /(^|\.)k12\.[a-z]{2}\.us$/.test(domain) || /(^|\.)k12\./.test(domain) || /(school|academy|usd|isd)[a-z0-9-]*\.(org|net|edu|us)$/.test(domain);
 }
 
+/** Home security, smart-home, and account alert senders. Their mail reports what already happened. */
+const ALERT_SENDERS = [
+  "alarm.com",
+  "ring.com",
+  "simplisafe.com",
+  "adt.com",
+  "vivint.com",
+  "brinkshome.com",
+  "frontpointsecurity.com",
+  "cove.com",
+  "abode.com",
+  "arlo.com",
+  "wyze.com",
+  "nest.com",
+  "myq.com",
+  "chamberlain.com",
+  "august.com",
+  "eufylife.com",
+  "blinkforhome.com",
+];
+
+const ALERT_SUBJECT = /\b(?:left open|was (?:opened|closed|unlocked|locked|armed|disarmed)|(?:door|window|garage)\s+(?:opened|closed|open|alert)|motion (?:detected|alert)|alarm (?:alert|triggered|activated)|(?:security|system|sensor|camera|doorbell) (?:alert|event|notification)|(?:armed|disarmed) (?:away|stay|home)|new sign-?in|sign-?in attempt|login (?:alert|attempt))\b/i;
+
+/**
+ * A device or account alert: it reports something that already happened, so
+ * it is never an event or a to-do, even when it carries a time.
+ */
+export function deviceAlert(message: { subject: string; fromAddress?: string }): boolean {
+  const domain = senderDomain(message.fromAddress);
+  if (domain && domainIs(domain, ALERT_SENDERS)) return true;
+  return ALERT_SUBJECT.test(message.subject);
+}
+
 export function mailWorthSaving(message: { subject: string; snippet?: string; body?: string; fromAddress?: string }): boolean {
   const domain = senderDomain(message.fromAddress);
   if (domain && (domainIs(domain, FAMILY_PLATFORMS) || isSchoolDomain(domain))) return true;
@@ -511,7 +544,7 @@ export function ingestMessages(
   for (const message of messages) {
     if (message.fromAddress && muted.has(message.fromAddress.toLowerCase())) continue;
     if (newsletterShaped(message) && newsletterMuted(state.mutedNewsletters, message.fromAddress)) continue;
-    if (!mailWorthSaving(message)) continue;
+    if (deviceAlert(message) || !mailWorthSaving(message)) continue;
     const key = slipKey(message.subject);
     if (!key) continue;
     const owners = mailOwners(message, profileIds);

@@ -40,6 +40,7 @@ export function TodosCard({ home }: { home: HomeModel }) {
         </button>
       )}
     >
+      <ClearedNote home={home} />
       <ul key={scope} className="flex flex-col">
         <AnimatePresence initial={false}>
           {visibleTodos.map((todo) => <TodoRow key={todo.id} home={home} todo={todo} />)}
@@ -240,5 +241,38 @@ function DoneList({ home }: { home: HomeModel }) {
         );
       })}
     </ul>
+  );
+}
+
+/** "Cleared 3 past-due to-dos" so old items never vanish without a word. */
+function ClearedNote({ home }: { home: HomeModel }) {
+  const { cleared, ackCleared, setSheet } = home;
+  const [open, setOpen] = useState(false);
+  if (cleared.length === 0) return null;
+  const count = cleared.length === 1 ? "1 past-due to-do" : `${cleared.length} past-due to-dos`;
+  const day = (at: Date) => at.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return (
+    <div data-testid="home-cleared-todos" className="mb-2 rounded-xl bg-[#F1F1F4] px-3 py-2 text-sm">
+      <div className="flex items-center gap-2">
+        <Check className="h-4 w-4 shrink-0 text-[#5E8FAD]" aria-hidden="true" />
+        <span className="min-w-0 flex-1">Cleared {count} that {cleared.length === 1 ? "was" : "were"} due before yesterday.</span>
+        <button type="button" className="shrink-0 font-semibold text-[#5E8FAD]" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+          {open ? "Hide" : "Show"}
+        </button>
+        <button type="button" data-testid="home-cleared-ok" className="shrink-0 font-semibold text-[#5E8FAD]" onClick={ackCleared}>OK</button>
+      </div>
+      {open && (
+        <ul className="mt-2 flex flex-col gap-1 border-t border-[#e3e3e8] pt-2">
+          {cleared.map((todo) => (
+            <li key={todo.id}>
+              <button type="button" className="flex w-full items-baseline gap-2 text-left" onClick={() => setSheet({ chore: todo as Chore, mode: "source" })}>
+                <span className="min-w-0 flex-1 truncate">{todo.title}</span>
+                <span className="shrink-0 text-xs text-[#6e6e78]">Due {day(todo.due)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

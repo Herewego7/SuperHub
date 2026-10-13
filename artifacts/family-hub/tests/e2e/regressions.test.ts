@@ -6592,7 +6592,7 @@ test("Today's Schedule: Open in Calendar lands on the day Home is showing", asyn
   const page = await openScenario("homeSchedule");
   try {
     await page.getByTestId("profile-all family").click({ timeout: 15_000 });
-    await page.getByRole("button", { name: "Next day" }).click();
+    await page.getByTestId("next-date-button").click();
     await page.getByTestId("home-today-events").getByTestId("home-event").filter({ hasText: "Dentist" }).waitFor({ timeout: 5000 });
     await page.getByTestId("home-open-calendar").click();
     const days = page.getByTestId("upcoming-day");

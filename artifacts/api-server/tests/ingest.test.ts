@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptSchool, choresDismissedBySlip, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, graphNextLink, holdSchoolEvent, inboxBlockReason, inboxFailure, inboxListStopped, inboxMailFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, deviceAlert, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, graphNextLink, holdSchoolEvent, inboxBlockReason, inboxFailure, inboxListStopped, inboxMailFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
 import { clientMessages, fileParts, gmailInboxQuery, gmailNewsletterQuery, gmailPayload, gmailWebLink, inboxFetchLimit, inboxSinceIso, latestPerSender, mergeMailboxes, outlookAttachments, outlookToInbound, outlookWebLink, readableText, toInbound } from "../src/ingest/parse.ts";
 import { muteNewsletter, newsletterMuted, openLettersFrom, openMailFrom, slipHeader, unmuteNewsletter, unmuteSender } from "../src/ingest/process.ts";
 import { inboxOwnerFixes } from "../src/ingest/owners.ts";
@@ -536,4 +536,12 @@ test("not relevant drops the slip already on Home", () => {
     ["permission slip for the field trip"],
   );
   assert.deepEqual(choresLeft.map((chore) => chore.title), ["Feed the dog"]);
+});
+
+test("a security or device alert is never a to-do or an event, even with a time in it", () => {
+  assert.equal(deviceAlert({ subject: "Front Door Left Open Alert", fromAddress: "notifications@alarm.com" }), true);
+  assert.equal(deviceAlert({ subject: "Front Door Left Open", fromAddress: "someone@gmail.com" }), true);
+  assert.equal(deviceAlert({ subject: "Motion detected at Front Porch", fromAddress: "no-reply@ring.com" }), true);
+  assert.equal(deviceAlert({ subject: "Picture day is Tuesday at 8:30 AM", fromAddress: "office@greatoaksacademy.org" }), false);
+  assert.equal(deviceAlert({ subject: "Soccer practice opened up a 5:30 PM slot", fromAddress: "coach@teamsnap.com" }), false);
 });

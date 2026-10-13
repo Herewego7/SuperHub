@@ -69,10 +69,17 @@ export function upcomingClock(row: { startTime: Date | string; kind?: string | n
   return eventClockLine("", row.startTime) || null;
 }
 
-export function eventSourceChip(source: string | null | undefined): string | null {
+/**
+ * The chip on an event the app made from something else. Every event read
+ * out of an email is stored with source "school", whoever sent it, so the
+ * chip names the sender's domain when the note has one instead of calling
+ * it a school email.
+ */
+export function eventSourceChip(source: string | null | undefined, description?: string | null): string | null {
   if (source === "scan") return "Scan";
-  if (source === "school") return "School email";
-  return null;
+  if (source !== "school") return null;
+  const domain = description?.match(/^From:\s*(?:.*<)?[^@\s<>]+@([^\s>]+)/im)?.[1]?.toLowerCase();
+  return domain ? `Email · ${domain}` : "Email";
 }
 
 /** A school email already checked off leaves the Upcoming list. A place or a driver does not keep it. */

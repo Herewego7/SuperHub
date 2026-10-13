@@ -26,7 +26,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(storedConfirm?.kind === "delete" ? storedConfirm.id : null);
   const [pendingDeletePath, setPendingDeletePath] = useState<string | null>(storedConfirm?.kind === "delete" ? storedConfirm.path ?? null : null);
   const [pendingMove, setPendingMove] = useState<Extract<PendingConfirm, { kind: "move" }> | null>(storedConfirm?.kind === "move" ? storedConfirm : null);
-  const [pendingMeals, setPendingMeals] = useState<{ date: string; name: string }[] | null>(storedConfirm?.kind === "meals" ? storedConfirm.dinners : null);
+  const [pendingMeals, setPendingMeals] = useState<Extract<PendingConfirm, { kind: "meals" }>["dinners"] | null>(storedConfirm?.kind === "meals" ? storedConfirm.dinners : null);
   const storePending = (pending: PendingConfirm | null) => {
     savePendingConfirm(profileKey, pending);
     setPendingDeleteId(pending?.kind === "delete" ? pending.id : null);
@@ -36,14 +36,31 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   };
   const [bubbles, setBubbles] = useState<ChatBubble[]>(() => readThread(profileKey));
   const logRef = useRef<HTMLDivElement>(null);
+  // Chat opens on the newest message and stays there while it fills in. The
+  // tab mounts fresh each visit, and the log keeps growing after the first
+  // paint (fonts, long replies wrapping, the box settling into place), so a
+  // single scroll on mount landed partway up. Follow the bottom until the
+  // person scrolls up themselves.
+  const stuck = useRef(true);
   useEffect(() => {
     const log = logRef.current;
     if (!log) return;
-    const pin = () => { log.scrollTop = log.scrollHeight; };
-    pin();
-    const frame = requestAnimationFrame(pin);
-    return () => cancelAnimationFrame(frame);
-  }, [bubbles, thinking]);
+    const pin = () => { if (stuck.current) log.scrollTop = log.scrollHeight; };
+    const onScroll = () => { stuck.current = log.scrollHeight - log.scrollTop - log.clientHeight < 48; };
+    const resized = new ResizeObserver(pin);
+    const watch = () => { resized.disconnect(); resized.observe(log); Array.from(log.children).forEach((child) => resized.observe(child)); pin(); };
+    const changed = new MutationObserver(watch);
+    watch();
+    changed.observe(log, { childList: true, subtree: true, characterData: true });
+    log.addEventListener("scroll", onScroll, { passive: true });
+    return () => { resized.disconnect(); changed.disconnect(); log.removeEventListener("scroll", onScroll); };
+  }, []);
+  useEffect(() => {
+    // A new message always brings the view back down.
+    stuck.current = true;
+    const log = logRef.current;
+    if (log) log.scrollTop = log.scrollHeight;
+  }, [bubbles.length, thinking]);
   const sentPending = useRef(false);
   useEffect(() => {
     if (!profileReady || typeof sessionStorage === "undefined") return;
@@ -206,7 +223,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       say(next, "This week already has a dinner every night. Name a night to replace one.");
       return true;
     }
-    storePending({ kind: "meals", dinners: picks.map((pick) => ({ date: pick.date, name: pick.name })) });
+    storePending({ kind: "meals", dinners: picks.map((pick) => (pick.slot ? { date: pick.date, name: pick.name, slot: pick.slot } : { date: pick.date, name: pick.name })) });
     say(next, dinnerPlanReply(picks));
     return true;
   }

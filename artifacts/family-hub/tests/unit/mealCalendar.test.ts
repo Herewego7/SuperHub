@@ -75,17 +75,17 @@ test("chat names tonight's dinner and does not mention the inbox", () => {
 test("named nights become dinners, and a question does not", () => {
   const friday = new Date(2026, 9, 2);
   assert.deepEqual(statedDinners("tacos tonight and pasta tomorrow", friday), [
-    { date: "2026-10-02", name: "tacos" },
-    { date: "2026-10-03", name: "pasta" },
+    { date: "2026-10-02", name: "Tacos" },
+    { date: "2026-10-03", name: "Pasta" },
   ]);
   assert.deepEqual(statedDinners("Monday tacos, Wednesday soup", friday), [
-    { date: "2026-10-05", name: "tacos" },
-    { date: "2026-10-07", name: "soup" },
+    { date: "2026-10-05", name: "Tacos" },
+    { date: "2026-10-07", name: "Soup" },
   ]);
   assert.deepEqual(statedDinners("what's for dinner tonight", friday), []);
   assert.deepEqual(
     assignedDinners("Let's do tacos on wednesday for sure. Let me think about the other options", new Date(2026, 9, 5)),
-    [{ date: "2026-10-07", name: "tacos" }],
+    [{ date: "2026-10-07", name: "Tacos" }],
   );
   assert.deepEqual(assignedDinners("Does this sound good?", new Date(2026, 9, 5)), []);
   const monday = new Date(2026, 9, 5);
@@ -119,7 +119,7 @@ test("a week of dinners uses saved meals and skips a night that already has one"
   const named = withSavedMeals([{ date: "2026-10-02", name: "pasta" }], [{ name: "Pasta" }], [{ date: "2026-10-02", slot: "dinner", name: "Soup" }]);
   assert.equal(named[0].name, "Pasta");
   assert.equal(named[0].replaces, "Soup");
-  assert.match(dinnerPlanReply(named), /Reply yes to put these on the meal plan/);
+  assert.match(dinnerPlanReply(named), /Reply yes to put it on the meal plan/);
   const ideas = MEAL_IDEAS.filter((idea) => idea.mealType === "dinner");
   const week = dinnersForTheWeek([], [], new Date(2026, 9, 5));
   assert.equal(week.length, 7);
@@ -128,4 +128,14 @@ test("a week of dinners uses saved meals and skips a night that already has one"
   const withSaved = dinnersForTheWeek([{ id: "a", name: "Pasta" }], [], new Date(2026, 9, 5));
   assert.equal(withSaved[0].name, "Pasta");
   assert.equal(withSaved.length, 7);
+});
+
+test("add eggs for breakfast tomorrow is eggs at breakfast, and the question says so", () => {
+  const monday = new Date(2026, 9, 12, 9, 0);
+  const picks = statedDinners("Add eggs for breakfast tomorrow", monday);
+  assert.deepEqual(picks, [{ date: "2026-10-13", name: "Eggs", slot: "breakfast" }]);
+  const ask = dinnerPlanReply(withSavedMeals(picks, [], [{ date: "2026-10-13", slot: "dinner", name: "Tacos" }]));
+  assert.equal(ask, "Tue, Oct 13 · Breakfast: Eggs\nReply yes to put it on the meal plan.");
+  assert.deepEqual(proposedDinners(ask, monday), [{ date: "2026-10-13", name: "Eggs", slot: "breakfast" }]);
+  assert.deepEqual(statedDinners("put soup on the meal plan for lunch friday", monday), [{ date: "2026-10-16", name: "Soup", slot: "lunch" }]);
 });

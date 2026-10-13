@@ -1,10 +1,10 @@
 import { useRef } from "react";
-import { ChevronLeft, ChevronRight, Cloud, CloudRain, Snowflake, Sun } from "lucide-react";
+import { Cloud, CloudRain, Snowflake, Sun } from "lucide-react";
 import type { HomeModel } from "./useHomeDay";
 
 export function DayHeader({ home }: { home: HomeModel }) {
   const { day, onShiftDay } = home.props;
-  const { daysOut, forecast } = home;
+  const { forecast } = home;
   const drag = useRef<{ x: number; y: number } | null>(null);
   const onDaySwipe = (event: React.PointerEvent) => {
     if (!drag.current) return;
@@ -14,27 +14,21 @@ export function DayHeader({ home }: { home: HomeModel }) {
     if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy)) return;
     onShiftDay?.(dx < 0 ? 1 : -1);
   };
+  // The day arrows and Today live in the date row under the profiles, the same
+  // as every other tab, so they stay on screen when Home is scrolled. This card
+  // keeps the day's name and weather, and a sideways swipe still changes the day.
   return (
     <section
-      className="plan-card flex items-center gap-1"
+      className="plan-card flex touch-pan-y items-center gap-3"
       onPointerDown={(event) => { drag.current = { x: event.clientX, y: event.clientY }; }}
       onPointerUp={onDaySwipe}
       onPointerCancel={() => { drag.current = null; }}
     >
-      <button type="button" aria-label="Previous day" className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[#6e6e78]" onClick={() => onShiftDay?.(-1)}>
-        <ChevronLeft className="h-5 w-5" />
-      </button>
       <div className="min-w-0 flex-1">
         <div className="text-[22px] font-semibold leading-tight tracking-tight">{day.toLocaleDateString("en-US", { weekday: "long" })}</div>
         <div className="text-sm text-[#6e6e78]">{day.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
-        {daysOut !== 0 && (
-          <button type="button" className="mt-1 text-xs font-semibold text-[#5E8FAD]" onClick={() => onShiftDay?.(-daysOut)}>Today</button>
-        )}
       </div>
       {forecast && <ForecastMark high={forecast.high} low={forecast.low} condition={forecast.condition} />}
-      <button type="button" aria-label="Next day" className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[#6e6e78]" onClick={() => onShiftDay?.(1)}>
-        <ChevronRight className="h-5 w-5" />
-      </button>
     </section>
   );
 }

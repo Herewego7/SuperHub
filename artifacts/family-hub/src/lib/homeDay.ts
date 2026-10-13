@@ -510,6 +510,8 @@ export const PLAN_HORIZON = 3;
 export const PLAN_NEWSLETTERS = 3;
 export const PLAN_OVERDUE_DAYS = 7;
 export const PLAN_COMPLETED_DAYS = 7;
+/** A to-do stays on Today's To-dos, marked late, for this many days past its due date. Older ones are cleared with a note. */
+export const PLAN_TODO_LATE_DAYS = 1;
 /** An inbox to-do with no date leaves Home after two weeks. It stays on the To-Dos tab. */
 export const PLAN_INBOX_DAYS = 14;
 export const NEWSLETTER_DAYS = 30;
@@ -611,7 +613,7 @@ export function planDateLabel(start: Date, end: Date | null): string {
 
 export function sourceChipLabel(sender: string | null, kind: "mail" | "todo"): string {
   if (sender) return `Source: ${sender}`;
-  return kind === "mail" ? "Source: School email" : "To-do";
+  return kind === "mail" ? "Source: Email" : "To-do";
 }
 
 export function newsletterInitials(title: string): string {
@@ -703,7 +705,7 @@ export function planTodoRows<T extends PlanChore>(
     }
     if (onToday && due) {
       const age = Math.round((today.getTime() - dayStart(due).getTime()) / 86400000);
-      if (age > 0 && age <= PLAN_OVERDUE_DAYS) rows.push({ ...todo, done: false, overdue: true });
+      if (age > 0 && age <= PLAN_TODO_LATE_DAYS) rows.push({ ...todo, done: false, overdue: true });
       continue;
     }
     if (!due && onToday) {
@@ -713,6 +715,28 @@ export function planTodoRows<T extends PlanChore>(
     }
   }
   return rows.sort((a, b) => Number(b.overdue) - Number(a.overdue));
+}
+
+/**
+ * Open to-dos whose due date passed before yesterday. They leave Today's
+ * To-dos, and Home says how many went so nothing disappears without a word.
+ * Only the last two weeks count, so the note doesn't grow forever.
+ */
+export function clearedTodos<T extends PlanChore>(
+  todos: T[],
+  completions: { choreId: string }[],
+  now: Date,
+): (T & { due: Date })[] {
+  const today = dayStart(now);
+  const rows: (T & { due: Date })[] = [];
+  for (const todo of todos) {
+    if (completions.some((completion) => completion.choreId === todo.id)) continue;
+    const due = mailDate(noteOf(todo), today);
+    if (!due) continue;
+    const age = Math.round((today.getTime() - dayStart(due).getTime()) / 86400000);
+    if (age > PLAN_TODO_LATE_DAYS && age <= PLAN_INBOX_DAYS) rows.push({ ...todo, due });
+  }
+  return rows.sort((a, b) => b.due.getTime() - a.due.getTime());
 }
 
 function titlesMatch(eventTitle: string, mailTitle: string): boolean {

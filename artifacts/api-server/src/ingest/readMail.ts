@@ -7,7 +7,7 @@ import { GoogleGenAI } from "@google/genai";
 import { askJson, BOTLIFE_MODELS } from "../geminiClient";
 import { chunkText, familyGrades, forOtherGrades, shouldRead } from "../ai/parity";
 import { MAX_BODY_CHARS, MAX_THREAD_CHARS, slipKey, type InboundMessage, type MailFile } from "./parse";
-import { mailLines, mailOwners, newsletterMuted, newsletterShaped, slipClock, type HouseholdMail, type PlannedEvent, type PlannedTodo } from "./process";
+import { deviceAlert, mailLines, mailOwners, newsletterMuted, newsletterShaped, slipClock, type HouseholdMail, type PlannedEvent, type PlannedTodo } from "./process";
 
 export type MailPerson = { name: string; school?: string | null; facts?: string[] | null; isChild?: boolean | null };
 
@@ -36,6 +36,7 @@ const SYSTEM = [
   "You read one email for a household assistant.",
   "Pull out a newsletter, to-dos, backpack items (something a kid brings or wears), decisions, all-day dates, events with a clock time, and changes to an existing event.",
   "changeOf names the existing event a change updates. Skip ads, receipts, and other grades or teams.",
+  "An event is something planned ahead. Skip alerts and notices about something that already happened, like a door left open, an alarm, motion, a package delivered, or a login, even when they give a time.",
   "who uses names from the family list only. profileFacts are facts the message states about a person.",
   "date is yyyy-MM-dd or null. time is like 3:30 PM or null.",
   "A newsletter's highlights are 3 to 7 short sentences for this family.",
@@ -322,6 +323,7 @@ export function plansFromRead(
   const empty = { todos: [] as PlannedTodo[], events: [] as PlannedEvent[], changes: [] as { title: string; changeOf: string; when: string | null; time: string | null }[] };
   const muted = new Set(state.mutedSenders.map((address) => address.toLowerCase()));
   if (message.fromAddress && muted.has(message.fromAddress.toLowerCase())) return empty;
+  if (deviceAlert(message)) return empty;
   const profileIds = mailOwners(message, fallbackOwners);
   const dismissed = new Set(state.dismissedSlipKeys);
   const seen = new Set([...dismissed, ...existingKeys]);
