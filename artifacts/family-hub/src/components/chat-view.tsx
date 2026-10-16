@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
 import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
 import { chatGoogleEvents, chatIcalEvents, chatOutlookEvents, googleChatWrite, googleDeleteChoice, googleMoveBody, outlookChatWrite, outlookDeleteChoice, outlookMoveBody } from "@/lib/chatGoogle";
 import type { Chore } from "@workspace/shared-types";
-import { anniversaryReply, assignChange, birthdayReply, chatSuggestions, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, feedbackNotesFrom, feedbackStored, FEEDBACK_KEY, forgetFact, forgetSchool, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
+import { anniversaryReply, asksYesNo, assignChange, birthdayReply, chatSuggestions, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, feedbackNotesFrom, feedbackStored, FEEDBACK_KEY, forgetFact, forgetSchool, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { assignedDinners, dinnerPlanReply, savedMealsReply, dinnerReply, dinnersForTheWeek, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, proposedDinners, queueGroceryPrompts, statedDinners, wantsDinnerPlan, withSavedMeals, type GroceryPromptMeal } from "@/lib/mealCalendar";
@@ -1062,6 +1062,11 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   const hour = new Date().getHours();
   const part = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
   const suggestions = chatSuggestions(isChild);
+  // A question waiting on yes or no gets Yes and No buttons in place of the
+  // suggestions, so nobody has to type it.
+  const lastBubble = shown[shown.length - 1];
+  const askingYesNo = !thinking && lastBubble?.role === "assistant"
+    && (!!pendingDeleteId || !!pendingMove || !!pendingMeals || asksYesNo(lastBubble.text));
 
   function clearThread() {
     localStorage.removeItem(`superhub_chat_thread_${profileKey}`);
@@ -1111,6 +1116,16 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       </div>
       {/* Suggested questions sit right above the box and swipe sideways for more.
           data-edge-swipe-ignore keeps a swipe here from flipping the date. */}
+      {askingYesNo ? (
+        <div data-testid="chat-yes-no" className="flex shrink-0 gap-2 pt-2 pb-1">
+          <button type="button" data-testid="chat-yes" className="flex-1 rounded-full bg-[#5E8FAD] py-2 text-sm font-semibold text-white" onClick={() => send("Yes")}>
+            Yes
+          </button>
+          <button type="button" data-testid="chat-no" className="flex-1 rounded-full bg-[#E7F1F6] py-2 text-sm font-semibold text-[#5E8FAD]" onClick={() => send("No")}>
+            No
+          </button>
+        </div>
+      ) : (
       <div
         data-testid="chat-suggestions"
         data-edge-swipe-ignore=""
@@ -1130,6 +1145,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
           </button>
         ))}
       </div>
+      )}
       <form
         className="flex shrink-0 items-end gap-2 pt-1"
         onSubmit={(event) => {

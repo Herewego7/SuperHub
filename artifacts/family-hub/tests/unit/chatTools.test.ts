@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anniversaryReply, assignChange, birthdayReply, chatSuggestions, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, planForOthers, planWho, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, feedbackStored, feedbackList, forgetSchool, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
+import { anniversaryReply, asksYesNo, assignChange, birthdayReply, chatSuggestions, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventClockLine, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, forgetFact, importedEventNeedsConfirm, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, placeReply, titleChange, planForOthers, planWho, pointsProfileId, rememberedFacts, reminderRequest, feedbackNote, feedbackStored, feedbackList, forgetSchool, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "../../src/lib/chatTools";
 
 test("an unrecognized sentence gets a short reply", () => {
   assert.match(unknownReply(true), /plan/);
@@ -566,4 +566,16 @@ test("chat offers more questions than fit on screen, with fewer for a child", ()
   assert.ok(kid.length > 3);
   assert.equal(new Set(grown).size, grown.length);
   assert.ok(!kid.some((question) => /newsletter|school email/i.test(question)));
+});
+
+test("a question waiting on yes or no gets buttons, and an open question does not", () => {
+  assert.equal(asksYesNo("Fri, Oct 16 · Breakfast: Eggs\nReply yes to put it on the meal plan."), true);
+  assert.equal(asksYesNo("Looking ahead to tomorrow, you have practice.\n\nWould you like me to check off any of those to-dos or chores?"), true);
+  assert.equal(asksYesNo("I don't have any birthdays saved right now. Would you like me to add one for someone?"), true);
+  assert.equal(asksYesNo("Should I add it to the family calendar?"), true);
+  assert.equal(asksYesNo("What time does it start?"), false);
+  assert.equal(asksYesNo("Who is this for?"), false);
+  assert.equal(asksYesNo("Added Soccer to the calendar."), false);
+  assert.equal(confirmedReply("Yes"), true);
+  assert.equal(declinedReply("No"), true);
 });

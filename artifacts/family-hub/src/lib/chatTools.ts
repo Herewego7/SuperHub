@@ -959,6 +959,21 @@ export function moveDay(dayPart: string, from: Date): Date | undefined {
 const CONFIRM_YES = /^\s*(yes|yep|yeah|yup|sure|ok|okay|confirm|confirmed|do it|go ahead|please do|sounds good|correct|that's right)(?:\s+please)?[.!]?$/i;
 const CONFIRM_NO = /^\s*(no|nope|nah|cancel|don't|do not)(?:\s+thanks)?[.!]?$/i;
 
+/**
+ * A chat reply that waits on a yes or no: "Reply yes to put it on the meal
+ * plan.", "Should I add it?", "Would you like me to check those off?". An
+ * open question ("What time does it start?") is not one; it needs typing.
+ */
+export function asksYesNo(text: string): boolean {
+  const said = text.trim();
+  if (/\b(?:reply|say|type|tap|answer) yes\b/i.test(said)) return true;
+  const last = said.split(/(?<=[.!?])\s+|\n+/).filter(Boolean).pop() ?? "";
+  if (!last.endsWith("?")) return false;
+  if (/^(?:what|when|where|which|who|whom|whose|why|how)\b/i.test(last)) return false;
+  return /^(?:should i|shall i|do you want|would you like|want me to|can i|may i|is that|does that|sound good|okay|ok|confirm|are you sure|ready)\b/i.test(last)
+    || /\b(?:should i|shall i|do you want me to|would you like me to|want me to)\b/i.test(last);
+}
+
 export function confirmedReply(text: string): boolean {
   return CONFIRM_YES.test(text.trim());
 }
