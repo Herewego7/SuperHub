@@ -41,8 +41,8 @@ export function answerLimitMs(job: ModelJob): number {
 export function retryReason(err: unknown): "busy" | "noAnswer" | undefined {
   if (typeof err !== "object" || err === null) return undefined;
   const { status, code, name, message } = err as { status?: unknown; code?: unknown; name?: unknown; message?: unknown };
-  if (status === "RESOURCE_EXHAUSTED" || status === "UNAVAILABLE" || status === 429 || status === 503) return "busy";
-  if (code === 429 || code === 503) return "busy";
+  if (status === "RESOURCE_EXHAUSTED" || status === "UNAVAILABLE" || status === "INTERNAL" || status === 429 || status === 500 || status === 503) return "busy";
+  if (code === 429 || code === 500 || code === 503) return "busy";
   if (name === "AbortError" || name === "TimeoutError") return "noAnswer";
   if (typeof message === "string" && message.startsWith("Failed to fetch from ")) return "noAnswer";
   return undefined;

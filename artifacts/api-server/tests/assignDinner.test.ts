@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptedMealPlan, assignedDinners, dinnerConfirmText, mealRequest, proposedDinners } from "../src/meals/assignDinner.ts";
+import { acceptedMealPlan, assignedDinners, dinnerConfirmText, eventNotMeal, mealRequest, proposedDinners } from "../src/meals/assignDinner.ts";
 
 const monday = new Date("2026-10-05T15:00:00Z");
 const week = `Here is a proposed meal plan for the rest of the week:
@@ -53,4 +53,10 @@ test("a breakfast confirmation names the slot, and yes writes it to breakfast", 
   const ask = dinnerConfirmText([{ date: "2026-10-06", name: "Eggs", slot: "breakfast" }]);
   assert.equal(ask, "Tue, Oct 6 · Breakfast: Eggs\nReply yes to put it on the meal plan.");
   assert.deepEqual(proposedDinners(ask, monday, "America/Chicago"), [{ date: "2026-10-06", name: "Eggs", slot: "breakfast" }]);
+});
+
+test("an event request with a time is never saved as a dinner", () => {
+  assert.deepEqual(assignedDinners("Add a dentist appointment for tomorrow at noon", monday, "America/Chicago"), []);
+  assert.deepEqual(assignedDinners("Put soccer practice on Wednesday", monday, "America/Chicago"), []);
+  assert.equal(eventNotMeal("Add pancakes for breakfast on Friday"), false);
 });

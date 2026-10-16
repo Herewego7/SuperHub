@@ -71,6 +71,8 @@ export const BOTLIFE_MODELS = {
   dedupe: "gemini-3.1-flash-lite",
   digest: "gemini-3.5-flash",
   chat: "gemini-3.1-pro-preview",
+  /** Chat's second try. The preview model is often busy; a stable model answers instead of an error. */
+  chatFallback: "gemini-3.5-flash",
   draft: "gemini-3.5-flash",
   embed: "gemini-embedding-001",
 } as const;

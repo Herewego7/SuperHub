@@ -83,10 +83,22 @@ function dinnerName(raw: string): string | null {
 }
 
 /**
+ * A request that reads as a calendar event, not a meal: a clock time or an
+ * appointment word, and no meal slot. Matches eventNotMeal in
+ * family-hub/src/lib/mealCalendar.ts.
+ */
+export function eventNotMeal(text: string): boolean {
+  if (/\b(?:breakfast|brunch|lunch|dinner|supper|meal plan|menu)\b/i.test(text) && !/\b(?:with|meeting|appointment)\b/i.test(text)) return false;
+  return /\b(?:\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)|noon|midnight|o'clock)\b/i.test(text)
+    || /\b(?:event|calendar|appointment|meeting|practice|game|party|call|dentist|doctor|lesson|class|reminder)\b/i.test(text);
+}
+
+/**
  * "Let's do tacos on Wednesday" names a dinner to save now.
  * A proposed week does not match. The day is the family's, not the server's.
  */
 export function assignedDinners(text: string, now: Date, timeZone: string): DinnerNight[] {
+  if (eventNotMeal(text)) return [];
   const today = familyDay(now, timeZone);
   if (!today) return [];
   const { year, month, day, weekday } = today;

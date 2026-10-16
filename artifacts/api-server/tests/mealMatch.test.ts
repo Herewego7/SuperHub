@@ -38,3 +38,9 @@ test("grocery sentences read, add, remove, and pull a meal's ingredients", () =>
   assert.equal(groceryRequest("add the ingredients for fajitas to the grocery list")?.kind, "ingredients");
   assert.equal(groceryRequest("let's do tacos on wednesday"), null);
 });
+
+test("asking what we need from the store reads the grocery list", () => {
+  assert.equal(groceryRequest("What do we need from the store?")?.kind, "list");
+  assert.equal(groceryRequest("what should I pick up at the store")?.kind, "list");
+  assert.equal(groceryRequest("grocery list?")?.kind, "list");
+});

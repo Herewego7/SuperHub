@@ -1881,7 +1881,21 @@ export function CalendarConnectionsSection({
       // No redirect URL is sent any more — `native` is a flag and the server
       // derives the superhub:// target itself, so nothing a client sends can
       // steer where the callback sends the browser.
-      const res = await apiRequest("POST", "/api/auth/calendar/state", { profileId, provider, native });
+      //
+      // A request that never reached the server ("Load failed" on iPhone,
+      // "Failed to fetch" elsewhere) is tried twice more. It happens when the
+      // phone's connection blips or the server is waking up, and the second
+      // tap always worked (2026-10-15).
+      let res: Response | null = null;
+      for (let attempt = 1; ; attempt++) {
+        try {
+          res = await apiRequest("POST", "/api/auth/calendar/state", { profileId, provider, native });
+          break;
+        } catch (err) {
+          if (!networkFailure(err) || attempt >= 3) throw err;
+          await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+        }
+      }
       const { state } = await res.json();
       if (typeof state === "string" && state) return state;
       throw new Error("No state returned");
@@ -1889,7 +1903,7 @@ export function CalendarConnectionsSection({
       // apiRequest already unwraps the server's own sentence (it cannot see
       // the status code), so show that when there is one — a rejected
       // profile says why, rather than "try again", which would never work.
-      const reason = typeof err?.message === "string" ? err.message.trim() : "";
+      const reason = networkFailure(err) ? "Couldn't reach SuperHub. Check your connection and try again." : typeof err?.message === "string" ? err.message.trim() : "";
       toast({
         title: "Couldn't start connecting your calendar",
         description: reason && !reason.startsWith("{") ? reason : "Please try again in a moment.",
@@ -4996,4 +5010,10 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
     {kbOpen && <KbPanel onClose={() => setKbOpen(false)} />}
     </>
   );
+}
+
+/** A request that never reached the server: Safari says "Load failed", Chrome "Failed to fetch". */
+function networkFailure(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  return err instanceof TypeError || /^(?:load failed|failed to fetch|networkerror|network request failed|the network connection was lost)/i.test(message.trim());
 }

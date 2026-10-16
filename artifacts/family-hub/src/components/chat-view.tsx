@@ -6,7 +6,7 @@ import type { Chore } from "@workspace/shared-types";
 import { anniversaryReply, assignChange, birthdayReply, chatSuggestions, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, feedbackNotesFrom, feedbackStored, FEEDBACK_KEY, forgetFact, forgetSchool, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
-import { assignedDinners, dinnerPlanReply, dinnerReply, dinnersForTheWeek, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, proposedDinners, queueGroceryPrompts, statedDinners, wantsDinnerPlan, withSavedMeals, type GroceryPromptMeal } from "@/lib/mealCalendar";
+import { assignedDinners, dinnerPlanReply, savedMealsReply, dinnerReply, dinnersForTheWeek, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, proposedDinners, queueGroceryPrompts, statedDinners, wantsDinnerPlan, withSavedMeals, type GroceryPromptMeal } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, pendingAfterPlan, readPendingConfirm, readThread, savePendingConfirm, threadWithPlan, type ChatBubble, type PendingConfirm } from "@/lib/chatThread";
 import { PENDING_KEY, PLAN_KEY, PLAN_REPLY_KEY } from "@/lib/chatStaging";
@@ -208,7 +208,23 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       say(next, "Left the meal plan as it is.");
       return true;
     }
-    if (pendingMeals && confirmedReply(text)) return false;
+    if (pendingMeals && confirmedReply(text)) {
+      // Breakfast and lunch go straight onto the plan, in their own slot. Only
+      // dinner goes through the server, which also handles its groceries and
+      // its calendar entry.
+      if (!pendingMeals.every((meal) => meal.slot === "breakfast" || meal.slot === "lunch")) return false;
+      const meals = pendingMeals;
+      storePending(null);
+      setThinking(true);
+      void Promise.all(meals.map((meal) => apiRequest("POST", "/api/meals", { date: meal.date, slot: meal.slot, name: meal.name })))
+        .then(() => {
+          void queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
+          say(next, savedMealsReply(meals));
+        })
+        .catch(() => say(next, "I couldn't save that to the meal plan. Please try again."))
+        .finally(() => setThinking(false));
+      return true;
+    }
     if (dinnerReply(text, meals, today)) return false;
     const assigned = assignedDinners(text, today);
     if (assigned.length > 0) {

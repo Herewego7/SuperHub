@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MEAL_IDEAS } from "../../src/lib/mealIdeasDatabase";
-import { assignedDinners, dinnerCopyRange, dinnerPlanReply, dinnerReply, dinnersForTheWeek, dinnersFromSaved, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, groceryListAfterHave, mealEvents, proposedDinners, statedDinners, wantsDinnerPlan, withSavedMeals } from "../../src/lib/mealCalendar";
+import { assignedDinners, savedMealsReply, dinnerCopyRange, dinnerPlanReply, dinnerReply, dinnersForTheWeek, dinnersFromSaved, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, groceryListAfterHave, mealEvents, proposedDinners, statedDinners, wantsDinnerPlan, withSavedMeals } from "../../src/lib/mealCalendar";
 
 test("turning dinners on copies the weeks ahead, not only the week on screen", () => {
   const range = dinnerCopyRange("2026-10-05", "2026-10-11", new Date(2026, 9, 1));
@@ -138,4 +138,16 @@ test("add eggs for breakfast tomorrow is eggs at breakfast, and the question say
   assert.equal(ask, "Tue, Oct 13 · Breakfast: Eggs\nReply yes to put it on the meal plan.");
   assert.deepEqual(proposedDinners(ask, monday), [{ date: "2026-10-13", name: "Eggs", slot: "breakfast" }]);
   assert.deepEqual(statedDinners("put soup on the meal plan for lunch friday", monday), [{ date: "2026-10-16", name: "Soup", slot: "lunch" }]);
+});
+
+test("pancakes and sausage is one breakfast, and a time makes it an event, not a meal", () => {
+  const thursday = new Date(2026, 9, 15, 8, 0);
+  const picks = statedDinners("Add pancakes and sausage to breakfast tomorrow", thursday);
+  assert.deepEqual(picks, [{ date: "2026-10-16", name: "Pancakes and sausage", slot: "breakfast" }]);
+  assert.equal(savedMealsReply(picks), "On the meal plan.\nFri, Oct 16 · Breakfast: Pancakes and sausage");
+  assert.deepEqual(statedDinners("tacos tonight and pasta tomorrow", thursday).map((pick) => pick.name), ["Tacos", "Pasta"]);
+  assert.deepEqual(statedDinners("Add a dentist appointment tomorrow at noon", thursday), []);
+  assert.deepEqual(statedDinners("Add lunch with Sam tomorrow at noon", thursday), []);
+  assert.deepEqual(assignedDinners("Can you add an event to my calendar for tomorrow?", thursday), []);
+  assert.deepEqual(statedDinners("soup for lunch tomorrow", thursday), [{ date: "2026-10-16", name: "Soup", slot: "lunch" }]);
 });

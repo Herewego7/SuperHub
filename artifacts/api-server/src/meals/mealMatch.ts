@@ -106,7 +106,12 @@ function itemList(raw: string): { name: string; quantity: string | null }[] {
 /** A direct grocery sentence. Dinner plans ("tacos on Wednesday") do not match. */
 export function groceryRequest(text: string): GroceryRequest | null {
   const said = text.trim();
-  if (/what(?:'s| is) on (?:the )?(?:grocery|shopping) list\b/i.test(said) || /^(?:show|read|open) (?:me )?(?:the )?(?:grocery|shopping) list\b/i.test(said)) {
+  if (
+    /what(?:'s| is) on (?:the )?(?:grocery|shopping) list\b/i.test(said)
+    || /^(?:show|read|open) (?:me )?(?:the )?(?:grocery|shopping) list\b/i.test(said)
+    || /^what (?:do|should) (?:we|i) (?:need|get|buy|pick up)(?: (?:from|at) the (?:store|grocery store|market))?\??$/i.test(said)
+    || /^(?:what(?:'s| is) on )?(?:the |our )?(?:grocery|shopping) list\??$/i.test(said)
+  ) {
     return { kind: "list" };
   }
   const ingredients = said.match(/^(?:please\s+)?add (?:the )?ingredients for (.+?) (?:on|to) (?:the )?(?:grocery|shopping) list\b/i);

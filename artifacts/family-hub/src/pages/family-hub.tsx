@@ -607,6 +607,21 @@ export default function FamilyHub() {
   // screen went away), which meant every render tore down and rebuilt the
   // ResizeObserver and called setStickyHeaderH again.
   const [stickyHeaderEl, setStickyHeaderEl] = useState<HTMLElement | null>(null);
+  // The weather bar above the header, measured the same way. Chat subtracts it
+  // too, so its panel fits on screen without the page scrolling.
+  const [weatherBarEl, setWeatherBarEl] = useState<HTMLElement | null>(null);
+  const [weatherBarH, setWeatherBarH] = useState(0);
+  useLayoutEffect(() => {
+    if (!weatherBarEl) return;
+    const measure = () => {
+      const h = Math.round(weatherBarEl.getBoundingClientRect().height);
+      setWeatherBarH((prev) => (prev === h ? prev : h));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(weatherBarEl);
+    return () => ro.disconnect();
+  }, [weatherBarEl]);
   useLayoutEffect(() => {
     if (!stickyHeaderEl) return;
     // ROUNDED, and only committed when it actually changes. This value feeds
@@ -650,6 +665,9 @@ export default function FamilyHub() {
   // itself — iOS WKWebView may use any of these as the actual scroll source).
   const pageContainerRef = useRef<HTMLDivElement>(null);
   const [headerCondensed, setHeaderCondensed] = useState(false);
+  // Read by the scroll listener below, which is set up once.
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
   useEffect(() => {
     const getScrollTop = () =>
       pageContainerRef.current?.scrollTop ||
@@ -657,7 +675,7 @@ export default function FamilyHub() {
       document.body.scrollTop ||
       window.scrollY ||
       0;
-    const onScroll = () => setHeaderCondensed(getScrollTop() > 10);
+    const onScroll = () => setHeaderCondensed(activeTabRef.current !== "chat" && getScrollTop() > 10);
     const container = pageContainerRef.current;
     // iOS fires touchmove during scroll before scroll events arrive
     const onTouch = () => requestAnimationFrame(onScroll);
@@ -942,19 +960,16 @@ export default function FamilyHub() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Chat's panel is sized to the screen under the sticky header, so the page
-  // has to sit scrolled to its end, with the weather bar tucked away. Scrolling
-  // to the top instead brought the weather bar back and pushed the chat box
-  // and the newest messages down behind the tab bar.
+  // Chat's panel fills exactly the screen left under the weather bar and the
+  // header (see <main>'s height), so the page has nothing to scroll and sits
+  // at the top. Scrolling the page instead shrank the profile circles, which
+  // changed the header's height and the panel's, which scrolled again: the
+  // circles pulsed big and small (2026-10-15).
   useEffect(() => {
     if (activeTab !== "chat") return;
-    const scroller = document.getElementById("app-scroll-container");
-    if (!scroller) return;
-    const settle = () => scroller.scrollTo({ top: scroller.scrollHeight, behavior: "auto" });
-    settle();
-    const frame = requestAnimationFrame(settle);
-    return () => cancelAnimationFrame(frame);
-  }, [activeTab, stickyHeaderH]);
+    document.getElementById("app-scroll-container")?.scrollTo({ top: 0, behavior: "auto" });
+    setHeaderCondensed(false);
+  }, [activeTab]);
 
   useEffect(() => {
     const sync = () => {
@@ -1118,7 +1133,7 @@ export default function FamilyHub() {
       {/* Weather/time bar — topmost element at rest; its wrapper's
           safe-area-inset-top padding drops it just below the notch cover so
           its content isn't clipped behind the island. */}
-      <div style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+      <div ref={setWeatherBarEl} style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <WeatherWidget />
       </div>
 
@@ -1535,7 +1550,7 @@ export default function FamilyHub() {
           ...(activeTab === "calendar"
             ? {}
             : activeTab === "chat"
-              ? { height: `calc(100svh - ${stickyHeaderH}px)`, overflow: "hidden" }
+              ? { height: `calc(100svh - ${stickyHeaderH + weatherBarH}px)`, overflow: "hidden" }
               : { minHeight: `calc(100vh - ${stickyHeaderH}px)` }),
         }}
       >

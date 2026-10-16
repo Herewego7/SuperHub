@@ -74,7 +74,7 @@ export type ChatAction =
   | { kind: "grocery_check"; name: string; checked: boolean }
   | { kind: "mute_sender"; address: string }
   | { kind: "not_relevant"; title: string }
-  | { kind: "plan_dinners"; dinners: { date: string; name: string }[] }
+  | { kind: "plan_dinners"; dinners: { date: string; name: string; slot?: "breakfast" | "lunch" }[] }
   | { kind: "feedback"; text: string };
 
 const ADULT_ONLY = new Set(["mute_sender", "mark_not_relevant", "search", "get_newsletters"]);
@@ -196,7 +196,7 @@ export function chatSystemPrompt(snap: ChatSnapshot): string {
     "- Change the calendar, to-dos, chores, meals, or groceries only when they ask in this conversation.",
     "- A chore is not a to-do. create_chore adds a chore only after you know the days, who it is for, and how many stars it is worth. If any of those is missing, ask. Do not invent the person or the stars. create_task adds a to-do. Never say you added either unless that tool returns ok.",
     "- create_event needs a title, a day, a start time, and who it is for. If any of those is missing, ask for it. Do not invent the day, the time, or the person. After it is saved, the app asks once about a driver, a place, a repeat, and a description. Never say an event was added or removed unless create_event or delete_event returns ok.",
-    "- To plan dinners, call plan_dinners with a date (YYYY-MM-DD) and a name for each night. Use a saved meal name when one fits, otherwise a Browse Meal Ideas name, exactly. A week you are suggesting is also a list, one line each, like Wednesday: Tacos. Stop there. The app asks them to confirm, and only that yes writes the Meals tab and adds that meal's ingredients to the grocery list. Say a dinner is on the plan only after plan_dinners returns ok. Never say you added a dinner or a grocery when that tool did not.",
+    "- To add a breakfast or lunch, call plan_dinners with that slot; \"add pancakes and sausage to breakfast tomorrow\" is one meal, Pancakes and sausage, at breakfast. To plan dinners, call plan_dinners with a date (YYYY-MM-DD) and a name for each night. Use a saved meal name when one fits, otherwise a Browse Meal Ideas name, exactly. A week you are suggesting is also a list, one line each, like Wednesday: Tacos. Stop there. The app asks them to confirm, and only that yes writes the Meals tab and adds that meal's ingredients to the grocery list. Say a dinner is on the plan only after plan_dinners returns ok. Never say you added a dinner or a grocery when that tool did not.",
     "- The Groceries section is the current list. add_grocery, remove_grocery, and check_grocery change it. get_meal reads ingredients from a saved meal or Browse Meal Ideas. Say what changed only after the tool returns ok.",
     "- Before delete_event, remember_fact, forget_school, mute_sender, mark_not_relevant, or plan_dinners, ask first. Call the tool with confirmed=true only after they say yes.",
     "- Events that live on Google, Outlook, or an iCal feed cannot be deleted or moved here. The tool will say to hand that off.",
@@ -235,7 +235,7 @@ export function toolDeclarations(isChild: boolean): { name: string; description:
     { name: "get_meal", description: "Ingredients for one saved meal or Browse Meal Ideas dish.", parameters: obj({ name: str }, ["name"]) },
     { name: "mute_sender", description: "Stop mail from an address after they say yes.", parameters: obj({ address: str, confirmed: { type: "boolean" } }, ["address"]) },
     { name: "mark_not_relevant", description: "Remove a school-email to-do after they say yes.", parameters: obj({ title: str, confirmed: { type: "boolean" } }, ["title"]) },
-    { name: "plan_dinners", description: "Put dinners on the meal plan after they say yes. Use a saved meal or a Browse Meal Ideas name. Saving adds the ingredients to the grocery list.", parameters: obj({ meals: { type: "array", items: obj({ date: str, name: str }, ["date", "name"]) }, confirmed: { type: "boolean" } }, ["meals"]) },
+    { name: "plan_dinners", description: "Put meals on the meal plan after they say yes. slot is breakfast, lunch, or dinner (dinner when they don't say). name is only the food, like Pancakes and sausage, never the request words. Use a saved meal or a Browse Meal Ideas name for a dinner when one fits. Saving a dinner adds its ingredients to the grocery list.", parameters: obj({ meals: { type: "array", items: obj({ date: str, name: str, slot: { type: "string", enum: ["breakfast", "lunch", "dinner"] } }, ["date", "name"]) }, confirmed: { type: "boolean" } }, ["meals"]) },
     { name: "search", description: "Search to-dos, events, newsletters, and saved mail. Cite the source.", parameters: obj({ query: str }, ["query"]) },
     { name: "get_newsletters", description: "Recent school newsletters and their highlights.", parameters: obj({}, []) },
     { name: "get_plan", description: "The schedule and to-dos for one day, yyyy-MM-dd.", parameters: obj({ date: str }, ["date"]) },
@@ -414,10 +414,13 @@ export function handleToolCall(
       const date = typeof (row as { date?: unknown }).date === "string" ? (row as { date: string }).date.trim() : "";
       const meal = typeof (row as { name?: unknown }).name === "string" ? (row as { name: string }).name.trim() : "";
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !meal) return [];
-      return [{ date, name: meal.slice(0, 80) }];
+      const raw = (row as { slot?: unknown }).slot;
+      const slot: "breakfast" | "lunch" | null = raw === "breakfast" || raw === "lunch" ? raw : null;
+      const name = meal.slice(0, 80);
+      return [slot ? { date, name, slot } : { date, name }];
     }).slice(0, 14);
     if (dinners.length === 0) return { output: { error: "Name a date and a dinner." }, action: null, handoff: false };
-    if (!confirmed) return { output: { needsConfirmation: true, dinners, ask: `Ask the user to confirm first: ${dinners.map((dinner) => `${dinner.date}: ${dinner.name}`).join(", ")}. Call again with confirmed=true only after they say yes.` }, action: null, handoff: false };
+    if (!confirmed) return { output: { needsConfirmation: true, dinners, ask: `Ask the user to confirm first: ${dinners.map((dinner) => `${dinner.date} ${"slot" in dinner ? dinner.slot : "dinner"}: ${dinner.name}`).join(", ")}. Call again with confirmed=true only after they say yes.` }, action: null, handoff: false };
     return { output: { ok: true }, action: { kind: "plan_dinners", dinners }, handoff: false };
   }
   if (name === "search") {

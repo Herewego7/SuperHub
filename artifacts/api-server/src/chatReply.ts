@@ -28,14 +28,17 @@ type ModelTurn = { text: string; calls: ModelCall[]; modelParts: unknown[] };
 
 export const MAX_ROUNDS = 5;
 
-function dinnersFrom(output: unknown): { date: string; name: string }[] {
+function dinnersFrom(output: unknown): { date: string; name: string; slot?: "breakfast" | "lunch" }[] {
   const dinners = output && typeof output === "object" && "dinners" in output ? (output as { dinners?: unknown }).dinners : null;
   if (!Array.isArray(dinners)) return [];
   return dinners.flatMap((row) => {
     if (!row || typeof row !== "object") return [];
     const date = typeof (row as { date?: unknown }).date === "string" ? (row as { date: string }).date : "";
     const name = typeof (row as { name?: unknown }).name === "string" ? (row as { name: string }).name : "";
-    return /^\d{4}-\d{2}-\d{2}$/.test(date) && name ? [{ date, name }] : [];
+    const raw = (row as { slot?: unknown }).slot;
+    const slot: "breakfast" | "lunch" | null = raw === "breakfast" || raw === "lunch" ? raw : null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !name) return [];
+    return [slot ? { date, name, slot } : { date, name }];
   });
 }
 
@@ -46,10 +49,23 @@ function configured(): GoogleGenAI | null {
   return geminiClient();
 }
 
+/**
+ * One model turn. The chat model is a preview and is often busy or
+ * rate-limited; when it fails after its retries, the stable fallback model
+ * answers instead, so the person gets a reply rather than CHAT_PROBLEM.
+ */
 async function generate(ai: GoogleGenAI, system: string, contents: unknown[], tools: ReturnType<typeof toolDeclarations>): Promise<ModelTurn | null> {
+  for (const model of [BOTLIFE_MODELS.chat, BOTLIFE_MODELS.chatFallback]) {
+    const turn = await generateWith(ai, model, system, contents, tools);
+    if (turn) return turn;
+  }
+  return null;
+}
+
+async function generateWith(ai: GoogleGenAI, model: string, system: string, contents: unknown[], tools: ReturnType<typeof toolDeclarations>): Promise<ModelTurn | null> {
   try {
     const response = await withModelRetry("chat", (signal) => ai.models.generateContent({
-      model: BOTLIFE_MODELS.chat,
+      model,
       contents: contents as never,
       config: {
         systemInstruction: system,
@@ -63,7 +79,8 @@ async function generate(ai: GoogleGenAI, system: string, contents: unknown[], to
     const text = (response.text?.trim() || parts.map((part) => part.text || "").join("")).trim();
     return { text, calls, modelParts: parts };
   } catch (err) {
-    console.warn("Chat model failed:", err instanceof Error ? err.message : err);
+    const detail = err && typeof err === "object" ? err as { status?: unknown; code?: unknown; message?: unknown } : {};
+    console.warn("Chat model failed:", { model, status: detail.status, code: detail.code, message: typeof detail.message === "string" ? detail.message.slice(0, 300) : String(err) });
     return null;
   }
 }

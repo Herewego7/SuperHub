@@ -152,6 +152,17 @@ export function mealRequest(raw: string): { name: string; slot?: MealSlot } | nu
 
 const DINNER_DAY = "today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday";
 
+/**
+ * A request that reads as a calendar event, not a meal: it names a clock time
+ * ("at noon", "6pm") or an appointment word, and no meal slot. "Add lunch with
+ * Sam tomorrow at noon" is an event; "Add soup for lunch tomorrow" is a meal.
+ */
+export function eventNotMeal(text: string): boolean {
+  if (/\b(?:breakfast|brunch|lunch|dinner|supper|meal plan|menu)\b/i.test(text) && !/\b(?:with|meeting|appointment)\b/i.test(text)) return false;
+  return /\b(?:\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)|noon|midnight|o'clock)\b/i.test(text)
+    || /\b(?:event|calendar|appointment|meeting|practice|game|party|call|dentist|doctor|lesson|class|reminder)\b/i.test(text);
+}
+
 /** "Plan dinners" or "meals for the week", not "what's for dinner". */
 export function wantsDinnerPlan(text: string): boolean {
   return /\b(?:plan|pick|choose)\b[\s\S]{0,48}\b(?:dinners?|meals?)\b/i.test(text)
@@ -191,6 +202,7 @@ function dayFromWord(word: string, today: Date): Date | null {
  * A proposed week ("does this sound good?") does not match.
  */
 export function assignedDinners(text: string, today: Date): DinnerPick[] {
+  if (eventNotMeal(text)) return [];
   const found = new Map<string, DinnerPick>();
   const re = new RegExp(`\\b(?:let's|lets|let us|add|put)\\s+(.+?)\\s+(?:on|for)\\s+(${DINNER_DAY})\\b`, "gi");
   for (const match of text.matchAll(re)) {
@@ -245,8 +257,23 @@ export function proposedDinners(text: string, today: Date): DinnerPick[] {
 
 /** "Tacos tonight and pasta tomorrow", or "Monday tacos, Wednesday soup". */
 export function statedDinners(text: string, today: Date): DinnerPick[] {
+  if (eventNotMeal(text)) return [];
   const found = new Map<string, DinnerPick>();
-  for (const chunk of text.split(/\s*(?:,|\band\b)\s*/i)) {
+  // "Tacos tonight and pasta tomorrow" is two meals, but "pancakes and sausage
+  // for breakfast tomorrow" is one: a piece with no day joins the next piece.
+  const pieces = text.split(/(\s*(?:,|\band\b)\s*)/i);
+  const chunks: string[] = [];
+  let carry = "";
+  for (let at = 0; at < pieces.length; at += 2) {
+    const piece = carry + pieces[at];
+    if (new RegExp(`\\b(?:${DINNER_DAY})\\b`, "i").test(piece) || at + 2 >= pieces.length) {
+      chunks.push(piece);
+      carry = "";
+    } else {
+      carry = piece + (pieces[at + 1] ?? " ");
+    }
+  }
+  for (const chunk of chunks) {
     const lead = chunk.match(new RegExp(`(?:^|\\b)(${DINNER_DAY})\\s+(?:is\\s+|as\\s+|:\\s*)?(.+)$`, "i"));
     const trail = chunk.match(new RegExp(`^(.+?)\\s+(?:on\\s+|for\\s+)?(${DINNER_DAY})\\s*$`, "i"));
     const word = lead?.[1] || trail?.[2];
@@ -319,6 +346,11 @@ export function withSavedMeals(
     const replaces = current && current.name.trim().toLowerCase() !== name.trim().toLowerCase() ? current.name : undefined;
     return { date: pick.date, name, replaces };
   });
+}
+
+/** What chat says once meals are saved: the same lines it asked about. */
+export function savedMealsReply(picks: DinnerPick[]): string {
+  return `On the meal plan.\n${dinnerPlanReply(picks).split("\n").slice(0, -1).join("\n")}`;
 }
 
 /** "Tue, Oct 13 · Breakfast: Eggs", one line per meal, then the question. */
