@@ -17,6 +17,7 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		AA0001000000000000000002 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001000000000000000001 /* ViewController.swift */; };
 		AA0001000000000000000004 /* WebAuthPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001000000000000000003 /* WebAuthPlugin.swift */; };
+		AA0001000000000000000006 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0001000000000000000005 /* SceneDelegate.swift */; };
 		AA0002000000000000000002 /* AppleSignInPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000001 /* AppleSignInPlugin.swift */; };
 		AA0003000000000000000002 /* StoreKitPurchasePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0003000000000000000001 /* StoreKitPurchasePlugin.swift */; };
 /* End PBXBuildFile section */
@@ -35,6 +36,7 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		AA0001000000000000000001 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		AA0001000000000000000003 /* WebAuthPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebAuthPlugin.swift; sourceTree = "<group>"; };
+		AA0001000000000000000005 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		AA0002000000000000000001 /* AppleSignInPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInPlugin.swift; sourceTree = "<group>"; };
 		AA0003000000000000000001 /* StoreKitPurchasePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreKitPurchasePlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -76,6 +78,7 @@
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				AA0001000000000000000001 /* ViewController.swift */,
 				AA0001000000000000000003 /* WebAuthPlugin.swift */,
+				AA0001000000000000000005 /* SceneDelegate.swift */,
 				AA0002000000000000000001 /* AppleSignInPlugin.swift */,
 				AA0003000000000000000001 /* StoreKitPurchasePlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -171,6 +174,7 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				AA0001000000000000000002 /* ViewController.swift in Sources */,
 				AA0001000000000000000004 /* WebAuthPlugin.swift in Sources */,
+				AA0001000000000000000006 /* SceneDelegate.swift in Sources */,
 				AA0002000000000000000002 /* AppleSignInPlugin.swift in Sources */,
 				AA0003000000000000000002 /* StoreKitPurchasePlugin.swift in Sources */,
 			);

@@ -292,34 +292,34 @@ importers:
     dependencies:
       '@capacitor-community/in-app-review':
         specifier: 8.0.0
-        version: 8.0.0(@capacitor/core@8.4.0)
+        version: 8.0.0(@capacitor/core@8.5.3)
       '@capacitor/app':
         specifier: 8.1.0
-        version: 8.1.0(@capacitor/core@8.4.0)
+        version: 8.1.0(@capacitor/core@8.5.3)
       '@capacitor/browser':
         specifier: 8.0.3
-        version: 8.0.3(@capacitor/core@8.4.0)
+        version: 8.0.3(@capacitor/core@8.5.3)
       '@capacitor/core':
-        specifier: 8.4.0
-        version: 8.4.0
+        specifier: 8.5.3
+        version: 8.5.3
       '@capacitor/haptics':
         specifier: 8.0.2
-        version: 8.0.2(@capacitor/core@8.4.0)
+        version: 8.0.2(@capacitor/core@8.5.3)
       '@capacitor/ios':
-        specifier: 8.4.0
-        version: 8.4.0(@capacitor/core@8.4.0)
+        specifier: 8.5.3
+        version: 8.5.3(@capacitor/core@8.5.3)
       '@capacitor/keyboard':
         specifier: ^8.0.5
-        version: 8.0.5(@capacitor/core@8.4.0)
+        version: 8.0.5(@capacitor/core@8.5.3)
       '@capacitor/local-notifications':
         specifier: 8.2.0
-        version: 8.2.0(@capacitor/core@8.4.0)
+        version: 8.2.0(@capacitor/core@8.5.3)
       '@capacitor/preferences':
         specifier: 8.0.1
-        version: 8.0.1(@capacitor/core@8.4.0)
+        version: 8.0.1(@capacitor/core@8.5.3)
       '@capacitor/push-notifications':
         specifier: 8.1.1
-        version: 8.1.1(@capacitor/core@8.4.0)
+        version: 8.1.1(@capacitor/core@8.5.3)
       '@emoji-mart/data':
         specifier: ^1.2.1
         version: 1.2.1
@@ -346,8 +346,8 @@ importers:
         version: 11.0.10(react@19.1.0)
     devDependencies:
       '@capacitor/cli':
-        specifier: 8.4.0
-        version: 8.4.0
+        specifier: 8.5.3
+        version: 8.5.3
       '@hookform/resolvers':
         specifier: ^3.10.0
         version: 3.10.0(react-hook-form@7.71.2(react@19.1.0))
@@ -733,23 +733,23 @@ packages:
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
-  '@capacitor/cli@8.4.0':
-    resolution: {integrity: sha512-5Z9RKHxiqJYRTLrfMeZmzR4qrlg5B85MxsWZ5goyXsLkO3bgpW9a1qV/6fR1SX9s5gwLza5y7PZVwITl/hDJ7g==}
+  '@capacitor/cli@8.5.3':
+    resolution: {integrity: sha512-/G6xwna+p4GS3lthSdWN3OThCH2F85O0Ukdy8rv3oAXvgEMeyFgPEIA3PMAS++IkHwUuBYBAKOQJnZfcrh1n0w==}
     engines: {node: '>=22.0.0'}
     hasBin: true
 
-  '@capacitor/core@8.4.0':
-    resolution: {integrity: sha512-LrS1xPIrqLtJABBIPDGXxxKmI9OyesrzWw8DiHbxhSC9JoiLUleUAJlX1a0LWIVLRbuY4Szgf9huFeRqYH2SAQ==}
+  '@capacitor/core@8.5.3':
+    resolution: {integrity: sha512-oBE1oGuYE4ZzYYrulC75OuHdSsD6zLUy7d5o1tFwDLG4govGoubY15cxpiI5l0+q87Lm5p0bhbehMdzJg4aFag==}
 
   '@capacitor/haptics@8.0.2':
     resolution: {integrity: sha512-c2hZzRR5Fk1tbTvhG1jhh2XBAf3EhnIerMIb2sl7Mt41Gxx1fhBJFDa0/BI1IbY4loVepyyuqNC9820/GZuoWQ==}
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
-  '@capacitor/ios@8.4.0':
-    resolution: {integrity: sha512-tnwstEdbTJ2nHAfoAwnurXgYRscWeLY+IIGdz69o24gN2Crfj9Xc0TWo8L5uFLF1LmpbUywH1IT0U1oHV8c+CA==}
+  '@capacitor/ios@8.5.3':
+    resolution: {integrity: sha512-HnnV92Jl8+3x0JUloXUMjFcUsQI8wHFVsKwkLn72DfRZXYGZW11tQbmNOWOnRTljaU18FdI1b9ipT09SzzPDNw==}
     peerDependencies:
-      '@capacitor/core': ^8.4.0
+      '@capacitor/core': ^8.5.0
 
   '@capacitor/keyboard@8.0.5':
     resolution: {integrity: sha512-oFXygC4eKYA5l2MdpTR06L2M/4x6e2SLD5yS1T9+UBDKTkzyvhWKEhbYLUaTIBPpLKqlfGudJw1X73S1H9eUzQ==}
@@ -2382,6 +2382,13 @@ packages:
   body-parser@2.2.2:
     resolution: {integrity: sha512-oP5VkATKlNwcgvxi0vM0p/D3n2C3EReYVX+DNYs5TjZFn/oQt2j+4sVJtSMr18pdRr8wjTcBl6LoV+FUwzPmNA==}
     engines: {node: '>=18'}
+
+  bplist-creator@0.1.0:
+    resolution: {integrity: sha512-sXaHZicyEEmY86WyueLTQesbeoH/mquvarJaQNbjuOQO+7gbFcDEWqKmcWA4cOTLzFlfgvkiVxolk1k5bBIpmg==}
+
+  bplist-parser@0.3.1:
+    resolution: {integrity: sha512-PyJxiNtA5T2PlLIeBot4lbp7rj4OadzjnMZD/G5zuBNt8ei/yCU7+wW0h2bag9vr8c+/WuRWmSxbqAl9hL1rBA==}
+    engines: {node: '>= 5.10.0'}
 
   bplist-parser@0.3.2:
     resolution: {integrity: sha512-apC2+fspHGI3mMKj+dGevkGo/tCqVB8jMb6i+OX+E29p0Iposz07fABkRIfVUPNd5A5VbuOz1bZbnmkKLYF+wQ==}
@@ -4285,6 +4292,9 @@ packages:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
 
+  simple-plist@1.3.1:
+    resolution: {integrity: sha512-iMSw5i0XseMnrhtIzRb7XpQEXepa9xhWxGUojHBL43SIpQuDQkh3Wpy67ZbDzZVr6EKxvwVChnVpdl8hEVLDiw==}
+
   sisteransi@1.0.5:
     resolution: {integrity: sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg==}
 
@@ -4316,6 +4326,10 @@ packages:
   statuses@2.0.2:
     resolution: {integrity: sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw==}
     engines: {node: '>= 0.8'}
+
+  stream-buffers@2.2.0:
+    resolution: {integrity: sha512-uyQK/mx5QjHun80FLJTfaWE7JtwfRMKBLkMne6udYOmvH0CawotVa7TfgYHzAnpphn4+TweIx1QKMnRIbipmUg==}
+    engines: {node: '>= 0.10.0'}
 
   stream-events@1.0.5:
     resolution: {integrity: sha512-E1GUzBSgvct8Jsb3v2X15pjzN1tYebtbLaMg+eBOUOAxgbLoSbT2NS91ckc5lJD1KfLjId+jXJRgo0qnV5Nerg==}
@@ -4567,6 +4581,11 @@ packages:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
 
+  uuid@7.0.3:
+    resolution: {integrity: sha512-DPSke0pXhTZgoF/d+WSt2QaKMCFSfx7QegxEWT+JOuHF5aWrKEn0G+ztjuJg/gG8/ItK+rbPCD/yNv8yyih6Cg==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+    hasBin: true
+
   uuid@8.3.2:
     resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
     deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
@@ -4679,6 +4698,10 @@ packages:
         optional: true
       utf-8-validate:
         optional: true
+
+  xcode@3.0.1:
+    resolution: {integrity: sha512-kCz5k7J7XbJtjABOvkc5lJmkiDh8VhjVCGNiqdKCscmVpdVUpEAyXv1xmCLkQJ5dsHqx3IPO4XW+NTDhU/fatA==}
+    engines: {node: '>=10.0.0'}
 
   xhr@2.6.0:
     resolution: {integrity: sha512-/eCGLb5rxjx5e3mF1A7s+pLlR6CGyqWN91fv1JgER5mVWg1MZmlhBvy9kjcsOdRk8RrIujotWyJamfyrp+WIcA==}
@@ -4890,19 +4913,19 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
 
-  '@capacitor-community/in-app-review@8.0.0(@capacitor/core@8.4.0)':
+  '@capacitor-community/in-app-review@8.0.0(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.4.0
+      '@capacitor/core': 8.5.3
 
-  '@capacitor/app@8.1.0(@capacitor/core@8.4.0)':
+  '@capacitor/app@8.1.0(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.4.0
+      '@capacitor/core': 8.5.3
 
-  '@capacitor/browser@8.0.3(@capacitor/core@8.4.0)':
+  '@capacitor/browser@8.0.3(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.4.0
+      '@capacitor/core': 8.5.3
 
-  '@capacitor/cli@8.4.0':
+  '@capacitor/cli@8.5.3':
     dependencies:
       '@ionic/cli-framework-output': 2.2.8
       '@ionic/utils-subprocess': 3.0.1
@@ -4920,37 +4943,38 @@ snapshots:
       semver: 7.7.4
       tar: 7.5.22
       tslib: 2.8.1
+      xcode: 3.0.1
       xml2js: 0.6.2
     transitivePeerDependencies:
       - supports-color
 
-  '@capacitor/core@8.4.0':
+  '@capacitor/core@8.5.3':
     dependencies:
       tslib: 2.8.1
 
-  '@capacitor/haptics@8.0.2(@capacitor/core@8.4.0)':
+  '@capacitor/haptics@8.0.2(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.4.0
+      '@capacitor/core': 8.5.3
 
-  '@capacitor/ios@8.4.0(@capacitor/core@8.4.0)':
+  '@capacitor/ios@8.5.3(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.4.0
+      '@capacitor/core': 8.5.3
 
-  '@capacitor/keyboard@8.0.5(@capacitor/core@8.4.0)':
+  '@capacitor/keyboard@8.0.5(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.4.0
+      '@capacitor/core': 8.5.3
 
-  '@capacitor/local-notifications@8.2.0(@capacitor/core@8.4.0)':
+  '@capacitor/local-notifications@8.2.0(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.4.0
+      '@capacitor/core': 8.5.3
 
-  '@capacitor/preferences@8.0.1(@capacitor/core@8.4.0)':
+  '@capacitor/preferences@8.0.1(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.4.0
+      '@capacitor/core': 8.5.3
 
-  '@capacitor/push-notifications@8.1.1(@capacitor/core@8.4.0)':
+  '@capacitor/push-notifications@8.1.1(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.4.0
+      '@capacitor/core': 8.5.3
 
   '@commander-js/extra-typings@15.0.0(commander@15.0.0)':
     dependencies:
@@ -6444,7 +6468,7 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 25.3.5
+      '@types/node': 25.9.5
 
   '@types/caseless@0.12.5': {}
 
@@ -6456,7 +6480,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 25.3.5
+      '@types/node': 25.9.5
 
   '@types/cookie-parser@1.4.10(@types/express@5.0.6)':
     dependencies:
@@ -6494,7 +6518,7 @@ snapshots:
 
   '@types/express-serve-static-core@5.1.1':
     dependencies:
-      '@types/node': 25.3.5
+      '@types/node': 25.9.5
       '@types/qs': 6.15.0
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
@@ -6511,7 +6535,7 @@ snapshots:
 
   '@types/fs-extra@8.1.5':
     dependencies:
-      '@types/node': 25.3.5
+      '@types/node': 25.9.5
 
   '@types/http-errors@2.0.5': {}
 
@@ -6574,7 +6598,7 @@ snapshots:
   '@types/request@2.48.13':
     dependencies:
       '@types/caseless': 0.12.5
-      '@types/node': 25.3.5
+      '@types/node': 25.9.5
       '@types/tough-cookie': 4.0.5
       form-data: 2.5.5
 
@@ -6582,12 +6606,12 @@ snapshots:
 
   '@types/send@1.2.1':
     dependencies:
-      '@types/node': 25.3.5
+      '@types/node': 25.9.5
 
   '@types/serve-static@2.2.0':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 25.3.5
+      '@types/node': 25.9.5
 
   '@types/slice-ansi@4.0.0': {}
 
@@ -6743,6 +6767,14 @@ snapshots:
       type-is: 2.0.1
     transitivePeerDependencies:
       - supports-color
+
+  bplist-creator@0.1.0:
+    dependencies:
+      stream-buffers: 2.2.0
+
+  bplist-parser@0.3.1:
+    dependencies:
+      big-integer: 1.6.52
 
   bplist-parser@0.3.2:
     dependencies:
@@ -8287,7 +8319,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.1
-      '@types/node': 25.3.5
+      '@types/node': 25.9.5
       long: 5.3.2
 
   proxy-addr@2.0.7:
@@ -8633,6 +8665,12 @@ snapshots:
 
   signal-exit@4.1.0: {}
 
+  simple-plist@1.3.1:
+    dependencies:
+      bplist-creator: 0.1.0
+      bplist-parser: 0.3.1
+      plist: 3.1.1
+
   sisteransi@1.0.5: {}
 
   slice-ansi@4.0.0:
@@ -8657,6 +8695,8 @@ snapshots:
   split2@4.2.0: {}
 
   statuses@2.0.2: {}
+
+  stream-buffers@2.2.0: {}
 
   stream-events@1.0.5:
     dependencies:
@@ -8911,6 +8951,8 @@ snapshots:
 
   utils-merge@1.0.1: {}
 
+  uuid@7.0.3: {}
+
   uuid@8.3.2: {}
 
   uuid@9.0.1: {}
@@ -9003,6 +9045,11 @@ snapshots:
   wrappy@1.0.2: {}
 
   ws@8.20.0: {}
+
+  xcode@3.0.1:
+    dependencies:
+      simple-plist: 1.3.1
+      uuid: 7.0.3
 
   xhr@2.6.0:
     dependencies:
