@@ -179,7 +179,67 @@ function mealName(raw: string): string | null {
   if (!name || name.length > 80 || name.split(/\s+/).length > 8) return null;
   if (/\b(?:what|when|who|where|why|how)\b/i.test(name)) return null;
   if (/^(?:plan|pick|choose|week|the week|dinners?|meals?)$/i.test(name)) return null;
+  // A name has to be food: letters, and not a word that points back at
+  // something already said ("it", "that one").
+  if (!/[a-z]/i.test(name)) return null;
+  if (/^(?:it|that|this|them|those|these|that one|this one|one)$/i.test(name)) return null;
+  if (/^(?:move|switch|change|swap|push|shift|cancel|remove|delete|undo|replace|reschedule)\b/i.test(name)) return null;
   return name;
+}
+
+/**
+ * Not a new meal, whatever days it names: a question, or a change to
+ * something already planned ("Move it to Saturday", "Cancel Sunday's
+ * dinner"). Those go to the chat model, which sees the conversation.
+ */
+export function notANewMeal(text: string): boolean {
+  const said = text.trim();
+  if (said.endsWith("?")) return true;
+  if (/^(?:what|when|where|who|which|why|how|is|are|was|were|do|does|did|can|could|will|would|should|any|anything)\b/i.test(said)) return true;
+  return /^(?:please\s+|can you\s+|could you\s+)?(?:move|switch|change|swap|push|shift|cancel|remove|delete|undo|replace|reschedule|take)\b/i.test(said);
+}
+
+const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const MONTH_NAMES = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/** Every "Sun, Oct 18 · Dinner: Culver's" (or "Sun, Oct 18: Culver's") line chat wrote, newest last. */
+export function mealLinesIn(text: string, today: Date): { date: string; slot: MealSlot; name: string }[] {
+  const current = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const rows: { date: string; slot: MealSlot; name: string }[] = [];
+  for (const line of text.split("\n")) {
+    const match = line.match(/^\s*(?:[-*•]\s*)?(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat),\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?:\s+·\s+(Breakfast|Lunch|Dinner))?:\s*(.+)$/i);
+    if (!match) continue;
+    const name = mealName(match[4].replace(/\s*\(replaces [^)]+\)\s*$/i, ""));
+    if (!name) continue;
+    const month = MONTH_NAMES.indexOf(match[1].toLowerCase());
+    let year = current.getFullYear();
+    if (new Date(year, month, Number(match[2])).getTime() < current.getTime() - 180 * 86400000) year += 1;
+    rows.push({ date: dayKey(new Date(year, month, Number(match[2]))), slot: match[3] ? slotOf(match[3]) : "dinner", name });
+  }
+  return rows;
+}
+
+/** A meal name to compare: case, apostrophes ("Culver’s" and "Culver's"), and spacing don't count. */
+export function sameMealName(a: string, b: string): boolean {
+  const key = (name: string) => name.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, " ").trim();
+  return key(a) === key(b);
+}
+
+/**
+ * "Move it to Saturday", "Move Culver's to Saturday", "Switch breakfast to
+ * Friday". `meal` is null when it points back ("it", "that"), so the caller
+ * looks at what chat just said.
+ */
+export function mealMove(text: string, today: Date): { meal: string | null; slot?: MealSlot; date: string } | null {
+  const match = text.trim().replace(/[.!]+$/, "").match(new RegExp(`^(?:please\\s+|can you\\s+|could you\\s+)?(?:move|switch|change|push|shift|reschedule)\\s+(.+?)\\s+to\\s+(${DAY_NAMES.join("|")}|today|tonight|tomorrow)(?:\\s+(?:for\\s+)?(breakfast|brunch|lunch|dinner|supper))?$`, "i"));
+  if (!match) return null;
+  const day = dayFromWord(match[2], today);
+  if (!day) return null;
+  const ref = match[1].trim().replace(/^(?:the|our|my)\s+/i, "");
+  const slotRef = ref.match(/^(?:(?:\w+['’]s\s+)?(breakfast|brunch|lunch|dinner|supper))$/i)?.[1];
+  const pointsBack = /^(?:it|that|this|that one|this one|that meal|this meal)$/i.test(ref) || !!slotRef;
+  const slot = match[3] ? slotOf(match[3]) : slotRef ? slotOf(slotRef) : undefined;
+  return { meal: pointsBack ? null : ref, ...(slot ? { slot } : {}), date: dayKey(day) };
 }
 
 function dayFromWord(word: string, today: Date): Date | null {
@@ -202,7 +262,7 @@ function dayFromWord(word: string, today: Date): Date | null {
  * A proposed week ("does this sound good?") does not match.
  */
 export function assignedDinners(text: string, today: Date): DinnerPick[] {
-  if (eventNotMeal(text)) return [];
+  if (eventNotMeal(text) || notANewMeal(text)) return [];
   const found = new Map<string, DinnerPick>();
   const re = new RegExp(`\\b(?:let's|lets|let us|add|put)\\s+(.+?)\\s+(?:on|for)\\s+(${DINNER_DAY})\\b`, "gi");
   for (const match of text.matchAll(re)) {
@@ -257,7 +317,7 @@ export function proposedDinners(text: string, today: Date): DinnerPick[] {
 
 /** "Tacos tonight and pasta tomorrow", or "Monday tacos, Wednesday soup". */
 export function statedDinners(text: string, today: Date): DinnerPick[] {
-  if (eventNotMeal(text)) return [];
+  if (eventNotMeal(text) || notANewMeal(text)) return [];
   const found = new Map<string, DinnerPick>();
   // "Tacos tonight and pasta tomorrow" is two meals, but "pancakes and sausage
   // for breakfast tomorrow" is one: a piece with no day joins the next piece.

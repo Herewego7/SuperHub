@@ -60,3 +60,9 @@ test("an event request with a time is never saved as a dinner", () => {
   assert.deepEqual(assignedDinners("Put soccer practice on Wednesday", monday, "America/Chicago"), []);
   assert.equal(eventNotMeal("Add pancakes for breakfast on Friday"), false);
 });
+
+test("a pronoun is never a meal name", () => {
+  assert.equal(mealRequest("it"), null);
+  assert.equal(mealRequest("that one"), null);
+  assert.deepEqual(assignedDinners("Put it on Saturday", monday, "America/Chicago"), []);
+});

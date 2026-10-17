@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MEAL_IDEAS } from "../../src/lib/mealIdeasDatabase";
-import { assignedDinners, savedMealsReply, dinnerCopyRange, dinnerPlanReply, dinnerReply, dinnersForTheWeek, dinnersFromSaved, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, groceryListAfterHave, mealEvents, proposedDinners, statedDinners, wantsDinnerPlan, withSavedMeals } from "../../src/lib/mealCalendar";
+import { assignedDinners, mealLinesIn, mealMove, sameMealName, savedMealsReply, dinnerCopyRange, dinnerPlanReply, dinnerReply, dinnersForTheWeek, dinnersFromSaved, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, groceryListAfterHave, mealEvents, proposedDinners, statedDinners, wantsDinnerPlan, withSavedMeals } from "../../src/lib/mealCalendar";
 
 test("turning dinners on copies the weeks ahead, not only the week on screen", () => {
   const range = dinnerCopyRange("2026-10-05", "2026-10-11", new Date(2026, 9, 1));
@@ -150,4 +150,20 @@ test("pancakes and sausage is one breakfast, and a time makes it an event, not a
   assert.deepEqual(statedDinners("Add lunch with Sam tomorrow at noon", thursday), []);
   assert.deepEqual(assignedDinners("Can you add an event to my calendar for tomorrow?", thursday), []);
   assert.deepEqual(statedDinners("soup for lunch tomorrow", thursday), [{ date: "2026-10-16", name: "Soup", slot: "lunch" }]);
+});
+
+test("move it to Saturday points back at the meal chat just named, and a question is never a meal", () => {
+  const saturday = new Date(2026, 9, 17, 9, 42);
+  assert.deepEqual(statedDinners("Move it to Saturday", saturday), []);
+  assert.deepEqual(statedDinners("What's going on tomorrow — and later this week?", saturday), []);
+  assert.deepEqual(statedDinners("Is anyone's birthday coming up?", saturday), []);
+  assert.deepEqual(mealMove("Move it to Saturday", saturday), { meal: null, date: "2026-10-17" });
+  assert.deepEqual(mealMove("Move Culver's to Saturday", saturday), { meal: "Culver's", date: "2026-10-17" });
+  assert.deepEqual(mealMove("switch breakfast to tomorrow", saturday), { meal: null, slot: "breakfast", date: "2026-10-18" });
+  assert.equal(mealMove("Add tacos on Saturday", saturday), null);
+  assert.equal(sameMealName("Culver's", "Culver’s"), true);
+  assert.equal(sameMealName("Culver's", "Culvers Burgers"), false);
+  assert.deepEqual(mealLinesIn("On the meal plan.\nSun, Oct 18 · Dinner: Culver’s", saturday), [{ date: "2026-10-18", slot: "dinner", name: "Culver’s" }]);
+  assert.deepEqual(mealLinesIn("Tue, Oct 13: Add eggs for breakfast", saturday)[0]?.slot, "dinner");
+  assert.deepEqual(statedDinners("Culver's on Sunday", saturday), [{ date: "2026-10-18", name: "Culver's" }]);
 });

@@ -6,7 +6,7 @@ import type { Chore } from "@workspace/shared-types";
 import { anniversaryReply, asksYesNo, assignChange, birthdayReply, chatSuggestions, checkOffTitle, confirmedReply, createEventCast, createEventClock, createEventPlace, createEventTitle, createTodoTitle, dayReply, todoCreate, declinedReply, deleteEventAction, deleteEventTitle, driverChange, drivingReply, eventPeople, eventStaysPut, familyCalendarOffer, familyReply, feedbackNote, feedbackNotesFrom, feedbackStored, FEEDBACK_KEY, forgetFact, forgetSchool, memoryFact, memoryReply, moveEventAction, moveEventWhen, muteAddress, newsletterTitles, notRelevantTitle, placeAnswer, placeChange, planForOthers, pointsProfileId, titleChange, rememberedFacts, reminderRequest, schoolFact, schoolReply, searchHits, selectedProfileIds, toolsForRole, unknownReply, weatherReply } from "@/lib/chatTools";
 import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodos, schoolEmailNames } from "@/lib/homeDay";
 import { withoutUnwatched } from "@/lib/outlookAttribution";
-import { assignedDinners, dinnerPlanReply, savedMealsReply, dinnerReply, dinnersForTheWeek, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, proposedDinners, queueGroceryPrompts, statedDinners, wantsDinnerPlan, withSavedMeals, type GroceryPromptMeal } from "@/lib/mealCalendar";
+import { assignedDinners, dinnerPlanReply, mealLinesIn, mealMove, sameMealName, mealSlotLabel, savedMealsReply, dinnerReply, dinnersForTheWeek, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, proposedDinners, queueGroceryPrompts, statedDinners, wantsDinnerPlan, withSavedMeals, type GroceryPromptMeal } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
 import { appendUserMessage, pendingAfterPlan, readPendingConfirm, readThread, savePendingConfirm, threadWithPlan, type ChatBubble, type PendingConfirm } from "@/lib/chatThread";
 import { PENDING_KEY, PLAN_KEY, PLAN_REPLY_KEY } from "@/lib/chatStaging";
@@ -201,8 +201,50 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     setDraft("");
   }
 
+  /**
+   * "Move it to Saturday" right after chat put Culver's on Sunday moves that
+   * meal. "It" is the last meal chat named; a named meal is looked up on the
+   * plan. When it can't tell which meal, the model gets the message instead,
+   * with the conversation, so nothing new is invented.
+   */
+  function moveMeal(text: string, next: ChatBubble[], today: Date): boolean {
+    const asked = mealMove(text, today);
+    if (!asked) return false;
+    const label = (date: string, slot: string) => {
+      const [year, month, day] = date.split("-").map(Number);
+      return `${new Date(year, month - 1, day).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · ${mealSlotLabel(slot as "breakfast" | "lunch" | "dinner")}`;
+    };
+    const said = next.filter((bubble) => bubble.role === "assistant").flatMap((bubble) => mealLinesIn(bubble.text, today));
+    const named = asked.meal;
+    const target = named
+      ? meals.find((meal) => sameMealName(meal.name, named) && (!asked.slot || meal.slot === asked.slot))
+      : (() => {
+        const last = [...said].reverse().find((row) => !asked.slot || row.slot === asked.slot);
+        return last ? meals.find((meal) => meal.date === last.date && meal.slot === last.slot && sameMealName(meal.name, last.name)) : undefined;
+      })();
+    if (!target) return false;
+    const slot = asked.slot ?? (target.slot as "breakfast" | "lunch" | "dinner");
+    if (target.date === asked.date && target.slot === slot) {
+      say(next, `${target.name} is already on ${label(asked.date, slot)}.`);
+      return true;
+    }
+    setThinking(true);
+    void apiRequest("PATCH", `/api/meals/${target.id}`, { date: asked.date, slot })
+      .then(() => {
+        void queryClient.invalidateQueries({ queryKey: ["/api/meals"] });
+        void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        say(next, `Moved ${target.name}.\n${label(asked.date, slot)}: ${target.name} (was ${label(target.date, target.slot)})`);
+      })
+      .catch(() => say(next, `I couldn't move ${target.name}. Please try again.`))
+      .finally(() => setThinking(false));
+    return true;
+  }
+
   function handleDinnerPlan(text: string, next: ChatBubble[]): boolean {
     const today = new Date();
+    // A meal question left unanswered doesn't linger: anything other than a
+    // yes or a no moves on, so a later "yes" can't save that old meal.
+    if (pendingMeals && !confirmedReply(text) && !declinedReply(text)) storePending(null);
     if (pendingMeals && declinedReply(text)) {
       storePending(null);
       say(next, "Left the meal plan as it is.");
@@ -225,6 +267,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         .finally(() => setThinking(false));
       return true;
     }
+    if (moveMeal(text, next, today)) return true;
     if (dinnerReply(text, meals, today)) return false;
     const assigned = assignedDinners(text, today);
     if (assigned.length > 0) {
@@ -269,12 +312,13 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     if (nights.length > 0) storePending({ kind: "meals", dinners: nights });
   }
 
-  function send(text: string, alreadyAppended = false) {
+  /** `general` is a suggested question: it always goes to the model, never the meal shortcuts. */
+  function send(text: string, alreadyAppended = false, general = false) {
     const next = alreadyAppended ? readThread(profileKey) : appendUserMessage(profileKey, text);
     if (!next || thinking) return;
     setBubbles(next);
     setDraft("");
-    if (handleDinnerPlan(text, next)) return;
+    if (!general && handleDinnerPlan(text, next)) return;
     setThinking(true);
     void apiRequest("POST", "/api/chat", {
       text,
@@ -1066,7 +1110,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
   // suggestions, so nobody has to type it.
   const lastBubble = shown[shown.length - 1];
   const askingYesNo = !thinking && lastBubble?.role === "assistant"
-    && (!!pendingDeleteId || !!pendingMove || !!pendingMeals || asksYesNo(lastBubble.text));
+    && asksYesNo(lastBubble.text);
 
   function clearThread() {
     localStorage.removeItem(`superhub_chat_thread_${profileKey}`);
@@ -1139,7 +1183,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
             data-testid="chat-suggestion"
             disabled={thinking}
             className="shrink-0 snap-start whitespace-nowrap rounded-full bg-[#E7F1F6] px-3 py-1.5 text-sm font-medium text-[#5E8FAD] disabled:opacity-50"
-            onClick={() => send(prompt)}
+            onClick={() => send(prompt, false, true)}
           >
             {prompt}
           </button>

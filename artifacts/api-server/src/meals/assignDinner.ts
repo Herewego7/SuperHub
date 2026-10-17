@@ -45,6 +45,8 @@ export function mealRequest(raw: string): { name: string; slot?: MealSlot } | nu
     .trim();
   if (!name || name.length > 60 || name.split(/\s+/).length > 6) return null;
   if (/\b(?:what|when|who|where|why|how)\b/i.test(name)) return null;
+  // Food, not a word pointing back at something already said ("it", "that").
+  if (!/[a-z]/i.test(name) || /^(?:it|that|this|them|those|these|that one|this one|one)$/i.test(name)) return null;
   const titled = name[0].toUpperCase() + name.slice(1);
   return slot && slot !== "dinner" ? { name: titled, slot } : { name: titled };
 }
