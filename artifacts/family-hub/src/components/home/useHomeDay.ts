@@ -67,8 +67,23 @@ function readSnooze(): Record<string, number> {
 }
 
 export function useHomeDay(props: HomeDayProps) {
-  const { chores, completions, events, selectedIds, familyIds, day, kidName, people = [], familyProfileId = null, familyColor = null, openEarlierKey = 0, onDeleteTodo } = props;
+  const { chores: allChores, completions, events, selectedIds, familyIds, day, kidName, people = [], familyProfileId = null, familyColor = null, openEarlierKey = 0, onDeleteTodo } = props;
   const reduced = useReducedMotion() === true;
+  // Rows removed here, and senders stopped here, stay gone even when a refresh
+  // that started before the server finished brings them back for a moment —
+  // removed cards used to vanish, reappear, then vanish again (2026-10-19).
+  const [gone, setGone] = useState<ReadonlySet<string>>(() => new Set());
+  const [stopping, setStopping] = useState<string[]>([]);
+  // Senders stopped on this phone when the server couldn't save them. Home
+  // hides their mail either way, and saving is tried again on the next visit.
+  const [localSenders, setLocalSenders] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(LOCAL_SENDERS_KEY) ?? "[]") as string[]; } catch { return []; }
+  });
+  const keepLocalSenders = (next: string[]) => {
+    setLocalSenders(next);
+    try { localStorage.setItem(LOCAL_SENDERS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+  };
+  const chores = gone.size === 0 ? allChores : allChores.filter((chore) => !gone.has(chore.id));
   const [earlierOpen, setEarlierOpen] = useState(false);
   useEffect(() => {
     if (openEarlierKey) setEarlierOpen(true);
@@ -146,13 +161,24 @@ export function useHomeDay(props: HomeDayProps) {
   // Rows leave the list the moment they're acted on, so they can slide away;
   // the server's answer then confirms it, or the list is put back.
   const dropChores = async (keep: (chore: Chore) => boolean) => {
+    const dropped = (queryClient.getQueryData<Chore[]>(CHORES_KEY) ?? allChores).filter((chore) => !keep(chore)).map((chore) => chore.id);
+    setGone((current) => new Set([...current, ...dropped]));
     await queryClient.cancelQueries({ queryKey: CHORES_KEY });
     const prev = queryClient.getQueryData<Chore[]>(CHORES_KEY);
     queryClient.setQueryData<Chore[]>(CHORES_KEY, (old = []) => old.filter(keep));
-    return { prev };
+    return { prev, dropped };
   };
-  const restoreChores = (context?: { prev?: Chore[] }) => {
+  const restoreChores = (context?: { prev?: Chore[]; dropped?: string[] }) => {
+    if (context?.dropped?.length) {
+      const back = new Set(context.dropped);
+      setGone((current) => new Set([...current].filter((id) => !back.has(id))));
+    }
     if (context?.prev) queryClient.setQueryData(CHORES_KEY, context.prev);
+  };
+  /** When the server only skipped future mail, delete the open rows that already left Home. */
+  const removeLeftovers = async (removedByServer: boolean, context?: { dropped?: string[] }) => {
+    if (removedByServer || !context?.dropped?.length) return;
+    await Promise.all(context.dropped.map((id) => apiRequest("DELETE", `/api/chores/${id}`).catch(() => null)));
   };
   const settleInbox = async () => {
     await queryClient.invalidateQueries({ queryKey: CHORES_KEY });
@@ -160,28 +186,55 @@ export function useHomeDay(props: HomeDayProps) {
   };
   const stopEmails = useMutation({
     mutationFn: async (address: string) => {
-      const res = await apiRequest("POST", "/api/ingest/mute", { address });
-      const body = await res.json().catch(() => ({})) as { removed?: number };
+      let body: { removed?: number } = {};
+      try {
+        const res = await apiRequest("POST", "/api/ingest/mute", { address });
+        body = await res.json().catch(() => ({})) as { removed?: number };
+      } catch {
+        // A failed save used to put every item straight back (2026-10-19).
+        const from = address.toLowerCase();
+        setLocalSenders((current) => {
+          const next = current.includes(from) ? current : [...current, from];
+          try { localStorage.setItem(LOCAL_SENDERS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+          return next;
+        });
+      }
       // A server that only skips future mail leaves the open items behind,
       // and they came straight back on the next refresh (2026-10-19). When it
       // doesn't say it removed them, remove them here.
-      if (typeof body.removed === "number") return;
-      const from = address.toLowerCase();
-      const done = new Set(completions.map((completion) => completion.choreId));
-      const left = chores.filter((chore) => chore.category === "school_email" && !done.has(chore.id) && slipSender(chore.description)?.toLowerCase() === from);
-      await Promise.all(left.map((chore) => apiRequest("DELETE", `/api/chores/${chore.id}`).catch(() => null)));
+      return typeof body.removed === "number";
     },
     onMutate: (address) => {
       const from = address.toLowerCase();
+      setStopping((current) => current.includes(from) ? current : [...current, from]);
       const done = new Set(completions.map((completion) => completion.choreId));
       return dropChores((chore) => !(chore.category === "school_email" && !done.has(chore.id) && slipSender(chore.description)?.toLowerCase() === from));
     },
-    onError: (_error, _address, context) => restoreChores(context),
+    // The rows to delete come from the list as it was before they left Home.
+    onSuccess: (removedByServer, _address, context) => removeLeftovers(removedByServer, context),
+    onError: (_error, address, context) => {
+      setStopping((current) => current.filter((item) => item !== address.toLowerCase()));
+      restoreChores(context);
+    },
     onSettled: async () => {
       await settleInbox();
       await queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
     },
   });
+  const savedSenders = calendarSettings?.mutedSenders;
+  useEffect(() => {
+    if (!savedSenders || localSenders.length === 0) return;
+    const saved = new Set(savedSenders.map((address) => address.toLowerCase()));
+    const unsaved = localSenders.filter((address) => !saved.has(address));
+    if (unsaved.length < localSenders.length) keepLocalSenders(unsaved);
+    if (unsaved.length === 0) return;
+    void Promise.all(unsaved.map((address) => apiRequest("POST", "/api/ingest/mute", { address }).then(() => address, () => null)))
+      .then((done) => {
+        if (done.some(Boolean)) void queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+      });
+  // Once per visit to Home, when the saved list first arrives.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!savedSenders]);
   // Kinds of email turned off on this phone when the server couldn't save
   // them (one from before kinds existed). Home hides them either way.
   const [localKinds, setLocalKinds] = useState<MailKindId[]>(() => {
@@ -204,15 +257,13 @@ export function useHomeDay(props: HomeDayProps) {
           });
         }
       }
-      if (removedByServer) return;
-      const done = new Set(completions.map((completion) => completion.choreId));
-      const left = chores.filter((chore) => chore.category === "school_email" && !done.has(chore.id) && kindsOfChore(chore).some((kind) => kinds.includes(kind)));
-      await Promise.all(left.map((chore) => apiRequest("DELETE", `/api/chores/${chore.id}`).catch(() => null)));
+      return removedByServer;
     },
     onMutate: (kinds) => {
       const done = new Set(completions.map((completion) => completion.choreId));
       return dropChores((chore) => !(chore.category === "school_email" && !done.has(chore.id) && kindsOfChore(chore).some((kind) => kinds.includes(kind))));
     },
+    onSuccess: (removedByServer, _kinds, context) => removeLeftovers(removedByServer, context),
     onSettled: async () => {
       await settleInbox();
       await queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
@@ -411,7 +462,7 @@ export function useHomeDay(props: HomeDayProps) {
     },
   });
 
-  const stoppedSenders = calendarSettings?.mutedSenders ?? [];
+  const stoppedSenders = [...(calendarSettings?.mutedSenders ?? []), ...stopping, ...localSenders];
   const kindsOff = [...new Set([...stoppedKinds(calendarSettings?.dismissedSlipKeys), ...localKinds])];
   const visibleChores = todosForHome(chores, selectedIds, familyIds, familyProfileId)
     .filter((todo) => !kidName || schoolEmailNames(todo, kidName))
@@ -618,6 +669,7 @@ export type HomeModel = ReturnType<typeof useHomeDay>;
 const CLEARED_SEEN_KEY = "superhub_cleared_todos_seen";
 const HAND_PICKED_KEY = "superhub_todo_hand_picked";
 const LOCAL_KINDS_KEY = "superhub_stopped_mail_kinds";
+const LOCAL_SENDERS_KEY = "superhub_stopped_senders";
 
 /** The kinds an inbox item's email was, read from its title and note. */
 export function kindsOfChore(chore: { title: string; description?: string | null }): MailKindId[] {

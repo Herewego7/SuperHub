@@ -61,6 +61,10 @@ export function setup(): void {
       // Like a server from before kinds existed: no such route.
       "/api/ingest/mute-kind": () => new Response(JSON.stringify({ message: "Not found" }), { status: 404, headers: { "content-type": "application/json" } }),
       "/api/ingest/mute": (_url: string, opts?: RequestInit) => {
+        // A test can make the save fail, like a server having a bad moment.
+        if ((window as unknown as { muteFails?: boolean }).muteFails) {
+          return new Response(JSON.stringify({ error: "Failed to mute sender" }), { status: 500, headers: { "content-type": "application/json" } });
+        }
         const { address } = JSON.parse(opts?.body as string);
         stopped = [...stopped, address];
         return ok({ shareOriginals: false, mutedSenders: stopped });

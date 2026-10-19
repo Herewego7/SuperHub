@@ -6853,6 +6853,30 @@ test("Stop emails removes the sender's open items for good, even from a server t
   }
 });
 
+// When the server couldn't save a stopped sender, the app put every item
+// straight back (2026-10-19). Now the phone keeps the stop and removes them.
+test("Stop emails keeps the sender's items gone even when the server can't save it", async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  try {
+    await page.addInitScript("window.muteFails = true");
+    await page.goto(`${BASE_URL}?scenario=homeInbox`);
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    const slip = page.getByTestId("home-todo-slip");
+    await slip.waitFor({ timeout: 10_000 });
+    await page.getByRole("button", { name: /More actions for Sign the zoo trip form/ }).click();
+    await page.getByTestId("home-todo-stop-emails").click();
+    await page.getByRole("button", { name: "Stop emails" }).click();
+    await slip.waitFor({ state: "detached", timeout: 5000 });
+    await page.waitForTimeout(2500);
+    assert.equal(await slip.count(), 0, "the item stays gone after the failed save");
+    assert.equal(await page.getByTestId("home-todo-planner").count(), 1, "another sender's item stays");
+    const kept = await page.evaluate(() => localStorage.getItem("superhub_stopped_senders"));
+    assert.match(kept ?? "", /@/, "the phone remembers the sender to save later");
+  } finally {
+    await page.close();
+  }
+});
+
 test("Key Dates: ticking dates brings up Add to calendar and Remove, and a swipe left removes one", async () => {
   const page = await openScenarioTouch("homeInbox", { width: 390, height: 844 });
   try {
@@ -6878,6 +6902,47 @@ test("Key Dates: ticking dates brings up Add to calendar and Remove, and a swipe
     for (let step = 1; step <= 12; step++) await page.mouse.move(box.x + box.width - 30 - step * 22, box.y + box.height / 2);
     await page.mouse.up();
     await conf.waitFor({ state: "detached", timeout: 5000 });
+  } finally {
+    await page.close();
+  }
+});
+
+// A refresh that started before the server finished removing a swiped Key
+// Date put the card back for a second, then it folded away again (2026-10-19).
+test("Key Dates: a swiped card stays gone while a refresh lands mid-removal", async () => {
+  const page = await openScenarioTouch("homeInbox", { width: 390, height: 844 });
+  try {
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    const conf = page.getByTestId("home-key-date-conf");
+    await conf.waitFor({ timeout: 10_000 });
+    await conf.scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollBy(0, 150));
+    await page.waitForTimeout(300);
+    const box = await conf.boundingBox();
+    assert.ok(box);
+    await page.mouse.move(box.x + box.width - 30, box.y + box.height / 2);
+    await page.mouse.down();
+    for (let step = 1; step <= 12; step++) await page.mouse.move(box.x + box.width - 30 - step * 22, box.y + box.height / 2);
+    await page.mouse.up();
+    // Watch the row's height while the server is still removing it.
+    const heights = page.evaluate(async () => {
+      const seen: number[] = [];
+      const start = performance.now();
+      while (performance.now() - start < 3000) {
+        seen.push(document.querySelector("[data-testid='home-key-date-conf']")?.getBoundingClientRect().height ?? 0);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return seen;
+    });
+    await page.waitForTimeout(400);
+    await page.evaluate(async () => {
+      const { queryClient } = await import("/src/lib/queryClient.ts");
+      void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+    });
+    const seen = await heights;
+    const low = seen.findIndex((height) => height < 5);
+    assert.ok(low >= 0, `the card folds away (${seen.map(Math.round).join(",")})`);
+    assert.ok(seen.slice(low).every((height) => height < 5), `the card never comes back (${seen.map(Math.round).join(",")})`);
   } finally {
     await page.close();
   }
