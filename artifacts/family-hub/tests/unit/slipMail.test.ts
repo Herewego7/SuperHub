@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { canReadOriginal, fromStoppedSender, newsletterKey, newsletterKeyLabel, newsletterMuted, noteBullets, personRecordLines, savedFacts, savedSchool, schoolFromSlip, schoolSaveTarget, slipMailOwner, slipNewsletterName, slipQuote, slipSender, slipSenderName, slipSentAt, slipText, suggestedSchool } from "../../src/lib/slipMail";
+import { kindKeptOut, mailKindsOf } from "../../src/lib/mailKinds";
+import { sourceShortLabel } from "../../src/lib/homeDay";
 import { schoolEmailNames } from "../../src/lib/homeDay";
 
 test("the person record shows the school once and each remembered fact once", () => {
@@ -122,4 +124,24 @@ test("an open item from a stopped sender never shows, whatever the case of the a
   assert.equal(fromStoppedSender(linkedin, ["Messages-NoReply@LinkedIn.com"]), true);
   assert.equal(fromStoppedSender(linkedin, ["news@school.org"]), false);
   assert.equal(fromStoppedSender({ category: "chore", description: "From: messages-noreply@linkedin.com\n" }, ["messages-noreply@linkedin.com"]), false);
+});
+
+test("a password reset is never a to-do, and a review request is one kind the family can stop", () => {
+  assert.deepEqual(mailKindsOf({ subject: "Reset your password", text: "This link expires in 30 minutes.", from: "no-reply@accounts.example" }), ["account"]);
+  assert.equal(kindKeptOut(["account"], []), true);
+  assert.deepEqual(mailKindsOf({ subject: "Review your recent purchase", text: "How would you rate the rain boots?", from: "orders@shop.example" }), ["reviews"]);
+  assert.equal(kindKeptOut(["reviews"], []), false);
+  assert.equal(kindKeptOut(["reviews"], ["reviews"]), true);
+  assert.deepEqual(mailKindsOf({ subject: "Respond to Roderick Lee's LinkedIn invitation", text: "", from: "messages-noreply@linkedin.com" }), ["social"]);
+  assert.deepEqual(mailKindsOf({ subject: "Field trip permission slip", text: "Sign and return by Friday.", from: "teacher@school.org" }), []);
+  assert.equal(sourceShortLabel("messages-noreply@linkedin.com", null, "mail"), "linkedin.com");
+  assert.equal(sourceShortLabel("info@mail.greatoaksacademy.org", "Great Oaks Academy", "mail"), "Great Oaks Academy");
+  assert.equal(sourceShortLabel("news@em.brushfire.com", null, "mail"), "brushfire.com");
+  assert.equal(sourceShortLabel(null, null, "todo"), "To-do");
+});
+
+test("a blank in the stopped list never crashes Home", () => {
+  const linkedin = { category: "school_email", description: "From: messages-noreply@linkedin.com\nPlan: todo\n" };
+  assert.equal(fromStoppedSender(linkedin, [null as unknown as string, "messages-noreply@linkedin.com"]), true);
+  assert.equal(fromStoppedSender(linkedin, [null as unknown as string]), false);
 });

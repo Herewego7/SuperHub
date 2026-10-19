@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { MAIL_KINDS, stoppedKinds, type MailKindId } from "@/lib/mailKinds";
 import { createPortal } from "react-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { objectUrl, apiUrl, isNativePlatform } from "@/lib/apiBase";
@@ -1449,6 +1450,7 @@ export function CalendarConnectionsSection({
     shareOriginals?: boolean | null;
     mutedSenders?: string[] | null;
     mutedNewsletters?: string[] | null;
+    dismissedSlipKeys?: string[] | null;
   }>({
     queryKey: ["/api/calendar-settings"],
   });
@@ -1521,6 +1523,22 @@ export function CalendarConnectionsSection({
   });
   const stoppedSenders = calendarSettingsData?.mutedSenders ?? [];
   const hiddenNewsletters = calendarSettingsData?.mutedNewsletters ?? [];
+  // Kinds of email stopped from every sender, saved on the server or, before
+  // it knew kinds, on this phone.
+  const [localKinds, setLocalKinds] = useState<MailKindId[]>(() => {
+    try { return JSON.parse(localStorage.getItem("superhub_stopped_mail_kinds") ?? "[]") as MailKindId[]; } catch { return []; }
+  });
+  const stoppedKindRows = MAIL_KINDS.filter((kind) => stoppedKinds(calendarSettingsData?.dismissedSlipKeys).includes(kind.id) || localKinds.includes(kind.id));
+  const undoKind = useMutation({
+    mutationFn: async (kind: MailKindId) => {
+      const next = localKinds.filter((id) => id !== kind);
+      setLocalKinds(next);
+      try { localStorage.setItem("superhub_stopped_mail_kinds", JSON.stringify(next)); } catch { /* private mode */ }
+      if (stoppedKinds(calendarSettingsData?.dismissedSlipKeys).includes(kind)) await apiRequest("POST", "/api/ingest/unmute-kind", { kind });
+    },
+    onError: () => toast({ title: "Couldn't undo that", variant: "destructive" }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] }),
+  });
   const undoStopped = useMutation({
     mutationFn: async (undo: { list: "mutedSenders" | "mutedNewsletters"; value: string }) => {
       if (undo.list === "mutedSenders") await apiRequest("POST", "/api/ingest/unmute", { address: undo.value });
@@ -2020,7 +2038,7 @@ export function CalendarConnectionsSection({
                     data-testid="toggle-share-originals"
                   />
                 </div>
-                {(stoppedSenders.length > 0 || hiddenNewsletters.length > 0) && (
+                {(stoppedSenders.length > 0 || hiddenNewsletters.length > 0 || stoppedKindRows.length > 0) && (
                   <div className="mb-3 flex flex-col gap-3" data-testid="inbox-stopped">
                     {stoppedSenders.length > 0 && (
                       <div>
@@ -2030,6 +2048,24 @@ export function CalendarConnectionsSection({
                             <li key={address} data-testid="stopped-sender" className="flex items-center justify-between gap-3 px-2.5 py-1">
                               <span className="min-w-0 truncate text-xs">{address}</span>
                               <button type="button" aria-label={`Undo stopping ${address}`} className="shrink-0 py-1 text-xs font-semibold text-[#5E8FAD]" onClick={() => undoStopped.mutate({ list: "mutedSenders", value: address })}>
+                                Undo
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {stoppedKindRows.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium mb-1">Kinds of email you stopped</p>
+                        <ul className="flex flex-col">
+                          {stoppedKindRows.map((kind) => (
+                            <li key={kind.id} data-testid="stopped-kind" className="flex items-center justify-between gap-3 px-2.5 py-1">
+                              <span className="min-w-0">
+                                <span className="block truncate text-xs">{kind.label}</span>
+                                <span className="block truncate text-[11px] text-muted-foreground">{kind.detail}</span>
+                              </span>
+                              <button type="button" aria-label={`Undo stopping ${kind.label}`} className="shrink-0 py-1 text-xs font-semibold text-[#5E8FAD]" onClick={() => undoKind.mutate(kind.id)}>
                                 Undo
                               </button>
                             </li>

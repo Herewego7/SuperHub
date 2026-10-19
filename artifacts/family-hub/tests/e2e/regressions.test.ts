@@ -6407,7 +6407,7 @@ test("Home to-dos: one parent sees theirs and the shared ones, and All Family se
 
     await page.getByTestId("profile-all family").click();
     await page.getByTestId("home-todo-planner").waitFor({ timeout: 3000 });
-    assert.deepEqual(await homeTodoIds(page), ["home-todo-dentist", "home-todo-planner", "home-todo-slip", "home-todo-weekend"], "All Family sees every to-do");
+    assert.deepEqual(await homeTodoIds(page), ["home-todo-dentist", "home-todo-linkedin", "home-todo-planner", "home-todo-slip", "home-todo-weekend"], "All Family sees every to-do (and never the password reset)");
   } finally {
     await page.close();
   }
@@ -6848,6 +6848,59 @@ test("Stop emails removes the sender's open items for good, even from a server t
     await page.waitForTimeout(2500);
     assert.equal(await slip.count(), 0, "the item stays gone after the list reloads");
     assert.equal(await page.getByTestId("home-todo-planner").count(), 1, "another sender's item stays");
+  } finally {
+    await page.close();
+  }
+});
+
+test("Key Dates: ticking dates brings up Add to calendar and Remove, and a swipe left removes one", async () => {
+  const page = await openScenarioTouch("homeInbox", { width: 390, height: 844 });
+  try {
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    const fair = page.getByTestId("home-key-date-fair");
+    const conf = page.getByTestId("home-key-date-conf");
+    await fair.waitFor({ timeout: 10_000 });
+    await fair.getByTestId("key-date-pick").click();
+    const bar = page.getByTestId("key-dates-actions");
+    await bar.waitFor({ timeout: 3000 });
+    assert.match(await bar.textContent() ?? "", /1 date selected/);
+    await conf.getByTestId("key-date-pick").click();
+    assert.match(await bar.textContent() ?? "", /2 dates selected/);
+    await conf.getByTestId("key-date-pick").click();
+    await page.getByTestId("key-dates-remove").click();
+    await fair.waitFor({ state: "detached", timeout: 5000 });
+    await bar.waitFor({ state: "detached", timeout: 3000 });
+    // Swipe the other one away.
+    const box = await conf.boundingBox();
+    assert.ok(box);
+    await page.mouse.move(box.x + box.width - 30, box.y + box.height / 2);
+    await page.mouse.down();
+    for (let step = 1; step <= 12; step++) await page.mouse.move(box.x + box.width - 30 - step * 22, box.y + box.height / 2);
+    await page.mouse.up();
+    await conf.waitFor({ state: "detached", timeout: 5000 });
+  } finally {
+    await page.close();
+  }
+});
+
+test("Home never shows a password reset, sources fit their chip, and Stop emails like this clears a kind from every sender", async () => {
+  const page = await openScenario("homeInbox");
+  try {
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    const linkedin = page.getByTestId("home-todo-linkedin");
+    await linkedin.waitFor({ timeout: 10_000 });
+    assert.equal(await page.getByTestId("home-todo-reset").count(), 0, "a password reset is never a to-do");
+    assert.equal((await linkedin.getByTestId("home-todo-source").textContent())?.trim(), "LinkedIn");
+    await page.getByRole("button", { name: /More actions for Respond to Roderick/ }).click();
+    await page.getByTestId("home-todo-stop-kind").click();
+    const social = page.getByTestId("home-kind-social");
+    await social.waitFor({ timeout: 3000 });
+    assert.equal(await social.getAttribute("aria-checked"), "true", "the kind this email is starts ticked");
+    await page.getByTestId("home-kind-stop").click();
+    await linkedin.waitFor({ state: "detached", timeout: 5000 });
+    await page.waitForTimeout(2000);
+    assert.equal(await linkedin.count(), 0, "it stays gone after the list reloads");
+    assert.equal(await page.getByTestId("home-todo-planner").count(), 1, "school mail stays");
   } finally {
     await page.close();
   }

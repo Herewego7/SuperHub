@@ -611,6 +611,22 @@ export function planDateLabel(start: Date, end: Date | null): string {
   return `${one(start)} – ${one(end)}`;
 }
 
+/**
+ * Who an item came from, short enough for its chip: the sender's own name
+ * ("LinkedIn"), else the site it came from ("linkedin.com" for
+ * messages-noreply@linkedin.com), else "Email". A typed to-do says To-do.
+ */
+export function sourceShortLabel(address: string | null, name: string | null, kind: "mail" | "todo"): string {
+  const said = name?.replace(/^["']|["']$/g, "").trim();
+  if (said) return said;
+  const domain = address?.split("@")[1]?.toLowerCase().trim();
+  if (domain) {
+    const parts = domain.split(".");
+    return parts.length > 2 ? parts.slice(-2).join(".") : domain;
+  }
+  return kind === "mail" ? "Email" : "To-do";
+}
+
 export function sourceChipLabel(sender: string | null, kind: "mail" | "todo"): string {
   if (sender) return `Source: ${sender}`;
   return kind === "mail" ? "Source: Email" : "To-do";

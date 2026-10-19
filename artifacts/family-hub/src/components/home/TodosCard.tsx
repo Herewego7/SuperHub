@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { Check, ChevronDown, ChevronUp, MoreVertical, Plus } from "lucide-react";
 import type { Chore } from "@workspace/shared-types";
-import { schoolHomeTitle, sourceChipLabel } from "@/lib/homeDay";
-import { slipQuote, slipSender } from "@/lib/slipMail";
+import { schoolHomeTitle } from "@/lib/homeDay";
+import { slipQuote, slipSender, slipSenderName } from "@/lib/slipMail";
 import { HomeCard } from "./HomeCard";
 import { PersonChips } from "./PersonChips";
+import { SourceChip } from "./SourceChip";
 import type { HomeModel } from "./useHomeDay";
 
 const REVEAL_PX = 172;
@@ -200,9 +201,7 @@ function TodoRow({ home, todo }: { home: HomeModel; todo: Row }) {
             {quote && <div data-testid="home-todo-quote" className={`mt-1 text-sm leading-snug line-clamp-3 ${todo.done ? "text-[#a0a0a8] line-through" : "text-[#6e6e78]"}`}>{quote}</div>}
           </button>
           <div className="mt-2 flex items-center gap-2">
-            <span data-testid="home-todo-source" className="inline-flex min-w-0 max-w-[55%] truncate rounded-full bg-[#F1F1F4] px-2.5 py-1 text-xs text-[#1e1e24]/80">
-              {sourceChipLabel(sender, isMail ? "mail" : "todo")}
-            </span>
+            <SourceChip address={sender} name={isMail ? slipSenderName(todo.description) : null} kind={isMail ? "mail" : "todo"} />
             <PersonChips home={home} profileIds={todo.profileIds} title={title} onPick={(ids) => home.reassign(todo, ids)} sender={todo.category === "school_email" ? sender : null} />
             <button type="button" aria-label={`More actions for ${title}`} className="grid h-7 w-7 shrink-0 place-items-center text-[#6e6e78]" onClick={() => setSheet({ chore: todo, mode: "actions" })}>
               <MoreVertical className="h-4 w-4" />

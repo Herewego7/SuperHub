@@ -1,7 +1,8 @@
 import { MoreVertical } from "lucide-react";
-import { PLAN_HORIZON, planDateLabel, sourceChipLabel } from "@/lib/homeDay";
+import { PLAN_HORIZON, planDateLabel } from "@/lib/homeDay";
 import { planEventTitle } from "@/lib/chatTools";
-import { slipSender } from "@/lib/slipMail";
+import { slipSender, slipSenderName } from "@/lib/slipMail";
+import { SourceChip } from "./SourceChip";
 import { eventStrip } from "@/lib/eventColor";
 import { EventRow } from "@/components/event-row";
 import { HomeCard } from "./HomeCard";
@@ -50,7 +51,7 @@ export function HorizonCard({ home }: { home: HomeModel }) {
                   <div className="text-[15px] font-medium leading-snug">{row.title}</div>
                   <div className="mt-1 text-xs text-[#6e6e78]">{planDateLabel(row.start, null)}</div>
                   <div className="mt-2 flex items-center gap-2">
-                    <span className="inline-flex max-w-[55%] truncate rounded-full bg-[#F1F1F4] px-2.5 py-1 text-xs">{sourceChipLabel(sender, row.category === "school_email" ? "mail" : "todo")}</span>
+                    <SourceChip address={sender} name={row.category === "school_email" ? slipSenderName(row.description) : null} kind={row.category === "school_email" ? "mail" : "todo"} />
                     <PersonChips home={home} profileIds={row.profileIds} title={row.title} onPick={(ids) => home.reassign(row, ids)} sender={row.category === "school_email" ? sender : null} />
                   </div>
                 </div>
@@ -66,7 +67,7 @@ export function HorizonCard({ home }: { home: HomeModel }) {
                   <div className="text-[15px] font-medium leading-snug">{row.title}</div>
                   <div className="mt-1 text-xs text-[#6e6e78]">{planDateLabel(row.start, null)} · {row.time}</div>
                   <div className="mt-2 flex items-center gap-2">
-                    <span className="inline-flex max-w-[55%] truncate rounded-full bg-[#F1F1F4] px-2.5 py-1 text-xs">{sourceChipLabel(sender, "mail")}</span>
+                    <SourceChip address={sender} name={slipSenderName(row.description)} kind="mail" />
                     <PersonChips home={home} profileIds={row.profileIds} title={row.title} onPick={(ids) => home.reassign(row, ids)} sender={row.category === "school_email" ? sender : null} />
                     <button type="button" aria-label={`More actions for ${row.title}`} className="grid h-7 w-7 place-items-center text-[#6e6e78]" onClick={() => setSheet({ chore: row, mode: "actions" })}>
                       <MoreVertical className="h-4 w-4" />

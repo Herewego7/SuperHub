@@ -5,6 +5,7 @@
  * Not-relevant and mute-sender live on the household, not on a person.
  */
 import { senderOwners, type OwnerPerson } from "./assign";
+import { kindKeptOut, mailKindsOf, stoppedKinds } from "./mailKinds";
 import { zonedWallClock } from "../lib/timezone";
 import { slipKey, type InboundMessage } from "./parse";
 
@@ -602,6 +603,7 @@ export function ingestMessages(
     if (message.fromAddress && muted.has(message.fromAddress.toLowerCase())) continue;
     if (newsletterShaped(message) && newsletterMuted(state.mutedNewsletters, message.fromAddress)) continue;
     if (deviceAlert(message) || !mailWorthSaving(message)) continue;
+    if (kindKeptOut(mailKindsOf({ subject: message.subject, text: message.body || message.snippet, from: message.fromAddress }), stoppedKinds(state.dismissedSlipKeys))) continue;
     const key = slipKey(message.subject);
     if (!key) continue;
     const taught = senderOwners(message.fromAddress, people);

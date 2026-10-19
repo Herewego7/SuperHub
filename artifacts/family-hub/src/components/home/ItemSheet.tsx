@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 import type { Chore } from "@workspace/shared-types";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { apiRequest } from "@/lib/queryClient";
 import { issueDateLabel, mailSpan, planDateLabel, snoozeUntil } from "@/lib/homeDay";
 import { canReadOriginal, noteBullets, schoolSaveTarget, slipHeader, slipMailOwner, slipSender, slipSenderName } from "@/lib/slipMail";
-import type { HomeModel, Letters, Person } from "./useHomeDay";
+import { MAIL_KINDS, type MailKindId } from "@/lib/mailKinds";
+import { kindsOfChore, type HomeModel, type Letters, type Person } from "./useHomeDay";
 
 export function ItemSheet({ home }: { home: HomeModel }) {
   const { people, personId, kidName, onEditTodo } = home.props;
@@ -45,6 +46,7 @@ export function ItemSheet({ home }: { home: HomeModel }) {
             {canRead(sheet.chore) && <ReadFullEmail key={sheet.chore.id} chore={sheet.chore} viewer={personId ?? null} />}
           </>
         )}
+        {sheet?.mode === "kinds" && <KindPicker key={sheet.chore.id} home={home} chore={sheet.chore} />}
         {sheet?.mode === "letter" && <LetterView home={home} chore={sheet.chore} letters={sheet.letters} canRead={canRead(sheet.chore)} />}
         {sheet?.mode === "issues" && sheet.letters && <IssueList home={home} letters={sheet.letters} />}
         {sheet?.mode === "actions" && (
@@ -59,6 +61,7 @@ export function ItemSheet({ home }: { home: HomeModel }) {
             onClaim={() => { if (personId) home.reassign(sheet.chore, [personId]); setSheet(null); }}
             onRemove={() => removeRow(sheet.chore)}
             onStopEmails={() => { setSheet(null); void askStopEmails(sheet.chore); }}
+            onStopKind={() => setSheet({ ...sheet, mode: "kinds" })}
             onCalendar={() => {
               const span = mailSpan(`${sheet.chore.title}\n${sheet.chore.description ?? ""}`, now);
               if (kept[sheet.chore.id]) removeFromCalendar.mutate({ choreId: sheet.chore.id, eventId: kept[sheet.chore.id] });
@@ -187,7 +190,7 @@ export function ReadFullEmail({ chore, viewer }: { chore: Chore; viewer: string 
   );
 }
 
-function ActionList({ chore, keyDate, personId, people, added, onEdit, onSnooze, onClaim, onRemove, onStopEmails, onCalendar, onSave }: {
+function ActionList({ chore, keyDate, personId, people, added, onEdit, onSnooze, onClaim, onRemove, onStopEmails, onStopKind, onCalendar, onSave }: {
   chore: Chore;
   keyDate: boolean;
   personId?: string | null;
@@ -198,6 +201,7 @@ function ActionList({ chore, keyDate, personId, people, added, onEdit, onSnooze,
   onClaim: () => void;
   onRemove: () => void;
   onStopEmails: () => void;
+  onStopKind: () => void;
   onCalendar: () => void;
   onSave: (offer: { profileId: string; school: string }) => void;
 }) {
@@ -216,6 +220,7 @@ function ActionList({ chore, keyDate, personId, people, added, onEdit, onSnooze,
   rows.push(isMail
     ? { label: "Remove", detail: "Remove this item for good.", onClick: onRemove, danger: true, testId: "home-todo-remove" }
     : { label: "Delete", detail: "Delete this to-do.", onClick: onRemove, danger: true, testId: "home-todo-delete" });
+  if (isMail) rows.push({ label: "Stop emails like this…", detail: "Pick kinds of email, like reviews or promotions, to skip from every sender.", onClick: onStopKind, danger: true, testId: "home-todo-stop-kind" });
   if (sender) rows.push({ label: `Stop emails from ${senderName}`, detail: "Clears their open items and skips their future email. You can undo this in Settings.", onClick: onStopEmails, danger: true, testId: "home-todo-stop-emails" });
   return (
     <div className="flex flex-col">
@@ -230,5 +235,54 @@ function ActionList({ chore, keyDate, personId, people, added, onEdit, onSnooze,
         </button>
       ))}
     </div>
+  );
+}
+
+/**
+ * "No more of these": kinds of email to skip from every sender. The kinds
+ * this email matches start ticked. Kinds that are never to-dos anyway
+ * (password resets, deliveries) aren't offered.
+ */
+function KindPicker({ home, chore }: { home: HomeModel; chore: Chore }) {
+  const offered = MAIL_KINDS.filter((kind) => !kind.always);
+  const [picked, setPicked] = useState<Set<MailKindId>>(() => new Set(kindsOfChore(chore).filter((kind) => offered.some((row) => row.id === kind))));
+  const toggle = (id: MailKindId) => setPicked((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+  return (
+    <>
+      <SheetHeader><SheetTitle className="text-left">Stop emails like this</SheetTitle></SheetHeader>
+      <p className="mt-1 text-sm text-[#6e6e78]">Pick the kinds you never want as to-dos, from any sender. Open ones leave Home now. You can undo this in Settings.</p>
+      <ul className="mt-3 flex flex-col" data-testid="home-kind-picker">
+        {offered.map((kind) => {
+          const on = picked.has(kind.id);
+          return (
+            <li key={kind.id} className="border-t border-[#ececf0] first:border-t-0">
+              <button type="button" role="checkbox" aria-checked={on} data-testid={`home-kind-${kind.id}`} className="flex w-full items-start gap-3 py-3 text-left" onClick={() => toggle(kind.id)}>
+                <span className={`mt-0.5 grid h-[21px] w-[21px] shrink-0 place-items-center rounded-[5px] border-[1.5px] ${on ? "border-[#5E8FAD] bg-[#5E8FAD] text-white" : "border-[#a0a0a8]"}`}>
+                  {on && <Check className="h-3 w-3" />}
+                </span>
+                <span>
+                  <span className="block text-[15px]">{kind.label}</span>
+                  <span className="mt-0.5 block text-xs text-[#6e6e78]">{kind.detail}</span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <button
+        type="button"
+        data-testid="home-kind-stop"
+        disabled={picked.size === 0}
+        className="mt-3 w-full rounded-full bg-destructive py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+        onClick={() => { home.stopKinds.mutate([...picked]); home.setSheet(null); }}
+      >
+        {picked.size <= 1 ? "Stop this kind of email" : `Stop these ${picked.size} kinds`}
+      </button>
+    </>
   );
 }

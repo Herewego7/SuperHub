@@ -11,6 +11,7 @@ import { confirmDialog } from "@/lib/confirmDialog";
 import { hapticLight } from "@/lib/haptics";
 import { fromStoppedSender, slipSender, slipSenderName } from "@/lib/slipMail";
 import { ownerFixes, teachSender, type OwnerPerson } from "@/lib/mailOwners";
+import { kindKeptOut, mailKindsOf, stoppedKinds, type MailKindId } from "@/lib/mailKinds";
 import { toast } from "@/hooks/use-toast";
 import { readCollapsed, saveCollapsed, type CardConfig, type HomeCardId } from "./registry";
 
@@ -47,7 +48,7 @@ export type HomeDayProps = {
 };
 
 export type Letters = NewsletterGroup<Chore>;
-export type SheetState = { chore: Chore; mode: "actions" | "snooze" | "source" | "letter" | "issues"; keyDate?: boolean; letters?: Letters };
+export type SheetState = { chore: Chore; mode: "actions" | "snooze" | "source" | "letter" | "issues" | "kinds"; keyDate?: boolean; letters?: Letters };
 
 const SNOOZE_KEY = "superhub_home_snooze";
 const TICK_MS = 60_000;
@@ -120,7 +121,7 @@ export function useHomeDay(props: HomeDayProps) {
   };
   const now = new Date();
   const dayKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
-  const { data: calendarSettings } = useQuery<{ shareOriginals?: boolean | null; familyCalendarId?: string | null; mutedNewsletters?: string[] | null; mutedSenders?: string[] | null }>({
+  const { data: calendarSettings } = useQuery<{ shareOriginals?: boolean | null; familyCalendarId?: string | null; mutedNewsletters?: string[] | null; mutedSenders?: string[] | null; dismissedSlipKeys?: string[] | null }>({
     queryKey: ["/api/calendar-settings"],
   });
   const { data: celebrations = [] } = useQuery<{ name: string; monthDay: string; year?: number | null; type?: string | null; customLabel?: string | null }[]>({
@@ -176,6 +177,42 @@ export function useHomeDay(props: HomeDayProps) {
       return dropChores((chore) => !(chore.category === "school_email" && !done.has(chore.id) && slipSender(chore.description)?.toLowerCase() === from));
     },
     onError: (_error, _address, context) => restoreChores(context),
+    onSettled: async () => {
+      await settleInbox();
+      await queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+    },
+  });
+  // Kinds of email turned off on this phone when the server couldn't save
+  // them (one from before kinds existed). Home hides them either way.
+  const [localKinds, setLocalKinds] = useState<MailKindId[]>(() => {
+    try { return JSON.parse(localStorage.getItem(LOCAL_KINDS_KEY) ?? "[]") as MailKindId[]; } catch { return []; }
+  });
+  const stopKinds = useMutation({
+    mutationFn: async (kinds: MailKindId[]) => {
+      let removedByServer = true;
+      for (const kind of kinds) {
+        try {
+          const res = await apiRequest("POST", "/api/ingest/mute-kind", { kind });
+          const body = await res.json().catch(() => ({})) as { removed?: number };
+          if (typeof body.removed !== "number") removedByServer = false;
+        } catch {
+          removedByServer = false;
+          setLocalKinds((current) => {
+            const next = [...new Set([...current, kind])];
+            try { localStorage.setItem(LOCAL_KINDS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+            return next;
+          });
+        }
+      }
+      if (removedByServer) return;
+      const done = new Set(completions.map((completion) => completion.choreId));
+      const left = chores.filter((chore) => chore.category === "school_email" && !done.has(chore.id) && kindsOfChore(chore).some((kind) => kinds.includes(kind)));
+      await Promise.all(left.map((chore) => apiRequest("DELETE", `/api/chores/${chore.id}`).catch(() => null)));
+    },
+    onMutate: (kinds) => {
+      const done = new Set(completions.map((completion) => completion.choreId));
+      return dropChores((chore) => !(chore.category === "school_email" && !done.has(chore.id) && kindsOfChore(chore).some((kind) => kinds.includes(kind))));
+    },
     onSettled: async () => {
       await settleInbox();
       await queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
@@ -375,9 +412,11 @@ export function useHomeDay(props: HomeDayProps) {
   });
 
   const stoppedSenders = calendarSettings?.mutedSenders ?? [];
+  const kindsOff = [...new Set([...stoppedKinds(calendarSettings?.dismissedSlipKeys), ...localKinds])];
   const visibleChores = todosForHome(chores, selectedIds, familyIds, familyProfileId)
     .filter((todo) => !kidName || schoolEmailNames(todo, kidName))
-    .filter((todo) => !fromStoppedSender(todo, stoppedSenders));
+    .filter((todo) => !fromStoppedSender(todo, stoppedSenders))
+    .filter((todo) => todo.category !== "school_email" || !kindKeptOut(kindsOfChore(todo), kindsOff));
   const stillOpen = visibleChores.filter((todo) => !completions.some((completion) => completion.choreId === todo.id));
   const homeEvents = forPeople(events, selectedIds, familyIds, familyProfileId).filter((event) => mailVisibleToKid(event, kidName ?? null));
   const newsletters = newsletterGroups(stillOpen, now, calendarSettings?.mutedNewsletters ?? [])
@@ -557,7 +596,7 @@ export function useHomeDay(props: HomeDayProps) {
     sheet, setSheet,
     revealed, setRevealed,
     snoozeItem,
-    checkOff, uncheck, removeRow, askStopEmails,
+    checkOff, uncheck, removeRow, askStopEmails, stopKinds,
     saveSchool, complete, undo, assign, reassign, removeTodo, removeItem, stopEmails, addToCalendar, removeFromCalendar,
     newsletters, visibleNewsletters, hideLetters, askHideLetters,
     keyDates, visibleKeys,
@@ -578,3 +617,9 @@ export type HomeModel = ReturnType<typeof useHomeDay>;
 
 const CLEARED_SEEN_KEY = "superhub_cleared_todos_seen";
 const HAND_PICKED_KEY = "superhub_todo_hand_picked";
+const LOCAL_KINDS_KEY = "superhub_stopped_mail_kinds";
+
+/** The kinds an inbox item's email was, read from its title and note. */
+export function kindsOfChore(chore: { title: string; description?: string | null }): MailKindId[] {
+  return mailKindsOf({ subject: chore.title, text: chore.description, from: slipSender(chore.description) });
+}

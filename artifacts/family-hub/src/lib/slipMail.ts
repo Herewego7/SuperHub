@@ -185,5 +185,6 @@ export function schoolSaveTarget(
 export function fromStoppedSender<T extends { category?: string | null; description?: string | null }>(chore: T, stopped: readonly string[]): boolean {
   if (chore.category !== "school_email" || stopped.length === 0) return false;
   const sender = slipSender(chore.description)?.toLowerCase();
-  return !!sender && stopped.some((address) => address.trim().toLowerCase() === sender);
+  // A list saved by an older server can hold a blank; skip it rather than crash Home.
+  return !!sender && stopped.some((address) => typeof address === "string" && address.trim().toLowerCase() === sender);
 }

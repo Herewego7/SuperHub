@@ -8,6 +8,7 @@ import { askJson, BOTLIFE_MODELS } from "../geminiClient";
 import { chunkText, familyGrades, forOtherGrades, shouldRead } from "../ai/parity";
 import { MAX_BODY_CHARS, MAX_THREAD_CHARS, slipKey, type InboundMessage, type MailFile } from "./parse";
 import { namedOwners, senderOwners, type OwnerPerson } from "./assign";
+import { kindKeptOut, mailKindsOf, stoppedKinds } from "./mailKinds";
 import { deviceAlert, mailLines, mailOwners, newsletterMuted, newsletterShaped, slipClock, type HouseholdMail, type PlannedEvent, type PlannedTodo } from "./process";
 
 export type MailPerson = { name: string; school?: string | null; facts?: string[] | null; isChild?: boolean | null };
@@ -326,6 +327,8 @@ export function plansFromRead(
   const muted = new Set(state.mutedSenders.map((address) => address.toLowerCase()));
   if (message.fromAddress && muted.has(message.fromAddress.toLowerCase())) return empty;
   if (deviceAlert(message)) return empty;
+  // Password resets, sign-in codes, and any kind of mail the family stopped.
+  if (kindKeptOut(mailKindsOf({ subject: message.subject, text: message.body || message.snippet, from: message.fromAddress }), stoppedKinds(state.dismissedSlipKeys))) return empty;
   // Who it is for: what the family taught the app about this sender, then the
   // people the mail names, then whoever's inbox it came in.
   const taught = senderOwners(message.fromAddress, people);

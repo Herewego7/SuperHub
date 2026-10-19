@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mailKindsOf, stoppedKinds } from "../src/ingest/mailKinds.ts";
 import { acceptSchool, choresDismissedBySlip, deviceAlert, mailEventStart, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, graphNextLink, holdSchoolEvent, inboxBlockReason, inboxFailure, inboxListStopped, inboxMailFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
 import { clientMessages, fileParts, gmailInboxQuery, gmailNewsletterQuery, gmailPayload, gmailWebLink, inboxFetchLimit, inboxSinceIso, latestPerSender, mergeMailboxes, outlookAttachments, outlookToInbound, outlookWebLink, readableText, toInbound } from "../src/ingest/parse.ts";
 import { muteNewsletter, newsletterMuted, openLettersFrom, openMailFrom, slipHeader, unmuteNewsletter, unmuteSender } from "../src/ingest/process.ts";
@@ -565,4 +566,16 @@ test("a time that had passed when the email was sent is a report, not an event",
   assert.equal(later?.toISOString(), "2026-10-13T22:30:00.000Z", "a time later that day is still an event");
   assert.equal(mailEventStart("Picture day 10/9 at 8:30 AM", 8, 30, sent, now, tz), null, "a dated event that is over is dropped");
   assert.equal(mailEventStart("Game tomorrow at 9 AM", 9, 0, sent, now, tz)?.toISOString(), "2026-10-14T14:00:00.000Z");
+});
+
+test("password resets never become to-dos, and a stopped kind is skipped from any sender", () => {
+  const state = { mutedSenders: [], dismissedSlipKeys: [] as string[] };
+  const reset = { id: "r", accountId: "a", subject: "Reset your password", snippet: "Click to reset your password. This link expires in 1 hour.", body: "", fromAddress: "no-reply@school.org" };
+  assert.deepEqual(ingestMessages([reset], state, [], ["mom"]).todos, []);
+  const review = { id: "v", accountId: "a", subject: "How did we do? Review your purchase", snippet: "Rate the soccer cleats you ordered for practice.", body: "", fromAddress: "reviews@shop.example" };
+  assert.equal(ingestMessages([review], state, [], ["mom"]).todos.length, 1, "kept until the family stops reviews");
+  assert.deepEqual(ingestMessages([review], { ...state, dismissedSlipKeys: ["kind:reviews"] }, [], ["mom"]).todos, []);
+  assert.deepEqual(mailKindsOf({ subject: "Chad, you have 3 new invitations", text: "", from: "invitations@linkedin.com" }), ["social"]);
+  assert.deepEqual(mailKindsOf({ subject: "Picture day is Friday", text: "Bring a smile.", from: "office@school.org" }), []);
+  assert.deepEqual(stoppedKinds(["kind:reviews", "picture day", "kind:nope"]), ["reviews"]);
 });

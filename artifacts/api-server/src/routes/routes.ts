@@ -35,7 +35,7 @@ import { requestInboxScan } from "../ingest/scanState";
 import { markSchedulerWorkDirty } from "../lib/workGate";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp, dinnersToCopy } from "../meals/dinnerEvent";
 import { clientMessages, INBOX_INITIAL_DAYS, slipKey } from "../ingest/parse";
-import { hideNewsletter, resumeSender, showNewsletter, stopSender } from "../ingest/mute";
+import { hideNewsletter, resumeKind, resumeSender, showNewsletter, stopKind, stopSender } from "../ingest/mute";
 import { readOriginal } from "../ingest/original";
 import { moveClock } from "../scheduler/eveningPlan";
 import { expandRecurringEvents, resolveSeriesEventId } from "../lib/eventRecurrence";
@@ -3427,6 +3427,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error muting a sender:", error);
       res.status(500).json({ error: "Failed to mute sender" });
+    }
+  });
+
+  // Stop (or bring back) a kind of email, like reviews and surveys, from every sender.
+  app.post("/api/ingest/mute-kind", isAuthenticated, async (req: any, res) => {
+    try {
+      const kind = typeof req.body?.kind === "string" ? req.body.kind.trim() : "";
+      if (!kind) {
+        res.status(400).json({ error: "kind is required" });
+        return;
+      }
+      res.json(await stopKind(getUserId(req), kind));
+    } catch (error) {
+      console.error("Error stopping a kind of email:", error);
+      res.status(400).json({ error: "Failed to stop that kind of email" });
+    }
+  });
+
+  app.post("/api/ingest/unmute-kind", isAuthenticated, async (req: any, res) => {
+    try {
+      const kind = typeof req.body?.kind === "string" ? req.body.kind.trim() : "";
+      if (!kind) {
+        res.status(400).json({ error: "kind is required" });
+        return;
+      }
+      res.json(await resumeKind(getUserId(req), kind));
+    } catch (error) {
+      console.error("Error resuming a kind of email:", error);
+      res.status(500).json({ error: "Failed to bring that kind of email back" });
     }
   });
 

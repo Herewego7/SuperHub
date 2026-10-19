@@ -9,6 +9,7 @@ import { slipKey, type InboundMessage } from "./parse";
 import { ingestMessages, mailEventStart, schoolEventStart, slipClock, type PlannedEvent, type PlannedTodo } from "./process";
 import { alreadyRead, openContextLines, plansFromRead, readInboxMessage, subjectPlaceholder, type MailPerson } from "./readMail";
 import { emptyTally } from "./scanProgress";
+import { kindKeptOut, mailKindsOf, stoppedKinds } from "./mailKinds";
 
 type Saved = { todos: unknown[]; events: unknown[]; scanOff: boolean };
 
@@ -103,6 +104,7 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
       !subject
       || (message.fromAddress && state.mutedSenders.some((address) => address.toLowerCase() === message.fromAddress?.toLowerCase()))
       || state.dismissedSlipKeys.includes(slipKey(subject))
+      || kindKeptOut(mailKindsOf({ subject, text: message.body || message.snippet, from: message.fromAddress }), stoppedKinds(state.dismissedSlipKeys))
       || chores.some((chore) => alreadyRead(chore.description, subject))
     ) {
       tally.skipped += 1;
