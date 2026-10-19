@@ -33,13 +33,27 @@ let todos = [
   { ...base, id: "weekend", title: "Plan the weekend", profileIds: ["all"], description: null, displayOrder: 3 },
 ];
 
+let stopped: string[] = [];
+
 export function setup(): void {
   installMockApi(
     baselineRoutes({
       "/api/auth/user": { id: "u1", email: "test@test.com", onboardingCompletedAt: new Date().toISOString(), createdAt: new Date().toISOString() },
       "/api/profiles": profiles,
-      "/api/calendar-settings": { shareOriginals: false },
+      "/api/calendar-settings": () => ok({ shareOriginals: false, mutedSenders: stopped }),
+      // Like the server before 2026-10: it only skips the sender's future
+      // mail and leaves their open items, so the app has to remove them.
+      "/api/ingest/mute": (_url: string, opts?: RequestInit) => {
+        const { address } = JSON.parse(opts?.body as string);
+        stopped = [...stopped, address];
+        return ok({ shareOriginals: false, mutedSenders: stopped });
+      },
       "/api/chores": (url: string, opts?: RequestInit) => {
+        if (opts?.method === "DELETE") {
+          const id = new URL(url, window.location.origin).pathname.split("/").pop();
+          todos = todos.filter((todo) => todo.id !== id);
+          return ok({});
+        }
         if (opts?.method === "PATCH") {
           const id = new URL(url, window.location.origin).pathname.split("/").pop();
           const body = JSON.parse(opts.body as string);

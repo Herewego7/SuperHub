@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canReadOriginal, newsletterKey, newsletterKeyLabel, newsletterMuted, noteBullets, personRecordLines, savedFacts, savedSchool, schoolFromSlip, schoolSaveTarget, slipMailOwner, slipNewsletterName, slipQuote, slipSender, slipSenderName, slipSentAt, slipText, suggestedSchool } from "../../src/lib/slipMail";
+import { canReadOriginal, fromStoppedSender, newsletterKey, newsletterKeyLabel, newsletterMuted, noteBullets, personRecordLines, savedFacts, savedSchool, schoolFromSlip, schoolSaveTarget, slipMailOwner, slipNewsletterName, slipQuote, slipSender, slipSenderName, slipSentAt, slipText, suggestedSchool } from "../../src/lib/slipMail";
 import { schoolEmailNames } from "../../src/lib/homeDay";
 
 test("the person record shows the school once and each remembered fact once", () => {
@@ -115,4 +115,11 @@ test("a note reads as a list: each line, and each sentence in it, without the he
     "For Ava and Liam.",
   ]);
   assert.deepEqual(noteBullets(null), []);
+});
+
+test("an open item from a stopped sender never shows, whatever the case of the address", () => {
+  const linkedin = { category: "school_email", description: "From: messages-noreply@linkedin.com\nPlan: todo\nRespond to Roderick." };
+  assert.equal(fromStoppedSender(linkedin, ["Messages-NoReply@LinkedIn.com"]), true);
+  assert.equal(fromStoppedSender(linkedin, ["news@school.org"]), false);
+  assert.equal(fromStoppedSender({ category: "chore", description: "From: messages-noreply@linkedin.com\n" }, ["messages-noreply@linkedin.com"]), false);
 });

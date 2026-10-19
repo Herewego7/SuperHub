@@ -6833,3 +6833,22 @@ test("Screens on demand: a screen that keeps failing reloads once, then stops", 
     await page.close();
   }
 });
+
+test("Stop emails removes the sender's open items for good, even from a server that only skips future mail", async () => {
+  const page = await openScenario("homeInbox");
+  try {
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    const slip = page.getByTestId("home-todo-slip");
+    await slip.waitFor({ timeout: 10_000 });
+    await page.getByRole("button", { name: /More actions for Sign the zoo trip form/ }).click();
+    await page.getByTestId("home-todo-stop-emails").click();
+    await page.getByRole("button", { name: "Stop emails" }).click();
+    await slip.waitFor({ state: "detached", timeout: 5000 });
+    // Past the refetch that used to bring it back.
+    await page.waitForTimeout(2500);
+    assert.equal(await slip.count(), 0, "the item stays gone after the list reloads");
+    assert.equal(await page.getByTestId("home-todo-planner").count(), 1, "another sender's item stays");
+  } finally {
+    await page.close();
+  }
+});

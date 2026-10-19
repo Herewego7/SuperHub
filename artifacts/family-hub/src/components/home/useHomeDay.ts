@@ -9,7 +9,7 @@ import { type NewsletterGroup, choreProgress, choresForCount, completedActions, 
 import { pointsProfileId } from "@/lib/chatTools";
 import { confirmDialog } from "@/lib/confirmDialog";
 import { hapticLight } from "@/lib/haptics";
-import { slipSender, slipSenderName } from "@/lib/slipMail";
+import { fromStoppedSender, slipSender, slipSenderName } from "@/lib/slipMail";
 import { ownerFixes, teachSender, type OwnerPerson } from "@/lib/mailOwners";
 import { toast } from "@/hooks/use-toast";
 import { readCollapsed, saveCollapsed, type CardConfig, type HomeCardId } from "./registry";
@@ -120,7 +120,7 @@ export function useHomeDay(props: HomeDayProps) {
   };
   const now = new Date();
   const dayKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
-  const { data: calendarSettings } = useQuery<{ shareOriginals?: boolean | null; familyCalendarId?: string | null; mutedNewsletters?: string[] | null }>({
+  const { data: calendarSettings } = useQuery<{ shareOriginals?: boolean | null; familyCalendarId?: string | null; mutedNewsletters?: string[] | null; mutedSenders?: string[] | null }>({
     queryKey: ["/api/calendar-settings"],
   });
   const { data: celebrations = [] } = useQuery<{ name: string; monthDay: string; year?: number | null; type?: string | null; customLabel?: string | null }[]>({
@@ -159,7 +159,16 @@ export function useHomeDay(props: HomeDayProps) {
   };
   const stopEmails = useMutation({
     mutationFn: async (address: string) => {
-      await apiRequest("POST", "/api/ingest/mute", { address });
+      const res = await apiRequest("POST", "/api/ingest/mute", { address });
+      const body = await res.json().catch(() => ({})) as { removed?: number };
+      // A server that only skips future mail leaves the open items behind,
+      // and they came straight back on the next refresh (2026-10-19). When it
+      // doesn't say it removed them, remove them here.
+      if (typeof body.removed === "number") return;
+      const from = address.toLowerCase();
+      const done = new Set(completions.map((completion) => completion.choreId));
+      const left = chores.filter((chore) => chore.category === "school_email" && !done.has(chore.id) && slipSender(chore.description)?.toLowerCase() === from);
+      await Promise.all(left.map((chore) => apiRequest("DELETE", `/api/chores/${chore.id}`).catch(() => null)));
     },
     onMutate: (address) => {
       const from = address.toLowerCase();
@@ -365,7 +374,10 @@ export function useHomeDay(props: HomeDayProps) {
     },
   });
 
-  const visibleChores = todosForHome(chores, selectedIds, familyIds, familyProfileId).filter((todo) => !kidName || schoolEmailNames(todo, kidName));
+  const stoppedSenders = calendarSettings?.mutedSenders ?? [];
+  const visibleChores = todosForHome(chores, selectedIds, familyIds, familyProfileId)
+    .filter((todo) => !kidName || schoolEmailNames(todo, kidName))
+    .filter((todo) => !fromStoppedSender(todo, stoppedSenders));
   const stillOpen = visibleChores.filter((todo) => !completions.some((completion) => completion.choreId === todo.id));
   const homeEvents = forPeople(events, selectedIds, familyIds, familyProfileId).filter((event) => mailVisibleToKid(event, kidName ?? null));
   const newsletters = newsletterGroups(stillOpen, now, calendarSettings?.mutedNewsletters ?? [])

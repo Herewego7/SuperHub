@@ -176,3 +176,14 @@ export function schoolSaveTarget(
   if (selected.role !== "child" && !selected.isChild) return null;
   return { profileId: selected.id, name: selected.name, school };
 }
+
+/**
+ * Open inbox items from senders the family stopped. Home never shows them,
+ * and Stop emails deletes them, so they can't come back on the next refresh
+ * even from a server that only skipped the sender's future mail.
+ */
+export function fromStoppedSender<T extends { category?: string | null; description?: string | null }>(chore: T, stopped: readonly string[]): boolean {
+  if (chore.category !== "school_email" || stopped.length === 0) return false;
+  const sender = slipSender(chore.description)?.toLowerCase();
+  return !!sender && stopped.some((address) => address.trim().toLowerCase() === sender);
+}
