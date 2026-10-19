@@ -6,7 +6,7 @@ import { examplesForMessage, rememberMail } from "../ai/memory";
 import { connectedCalendarEvents } from "../scheduler/eveningPlan";
 import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { slipKey, type InboundMessage } from "./parse";
-import { ingestMessages, mailEventStart, schoolEventStart, slipClock, type PlannedEvent, type PlannedTodo } from "./process";
+import { ingestMessages, knownDomains, mailEventStart, prefilterDrop, schoolEventStart, slipClock, type PlannedEvent, type PlannedTodo } from "./process";
 import { alreadyRead, openContextLines, plansFromRead, readInboxMessage, subjectPlaceholder, type MailPerson } from "./readMail";
 import { emptyTally } from "./scanProgress";
 import { kindKeptOut, mailKindsOf, stoppedKinds } from "./mailKinds";
@@ -76,11 +76,16 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
   const owners = people
     .filter((person) => !person.isAllFamilyProfile && person.isActive !== false && person.name?.trim())
     .map((person) => ({ id: person.id, name: person.name, facts: person.facts }));
+  // Always read: sites that already sent something kept, and mail naming a kid's school.
+  const known = {
+    domains: knownDomains(chores),
+    schools: people.map((person) => person.school ?? "").filter((school) => school.trim().length > 0),
+  };
   const ai = geminiClient();
   if (!ai) {
     const saved = await storePlanned(
       userId,
-      ingestMessages(messages, state, existingKeys, profileIds, existingEventKeys, owners),
+      ingestMessages(messages, state, existingKeys, profileIds, existingEventKeys, owners, new Date(), known),
       timeZone,
       calendarId,
     );
@@ -104,6 +109,7 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
       !subject
       || (message.fromAddress && state.mutedSenders.some((address) => address.toLowerCase() === message.fromAddress?.toLowerCase()))
       || state.dismissedSlipKeys.includes(slipKey(subject))
+      || prefilterDrop(message, known) !== null
       || kindKeptOut(mailKindsOf({ subject, text: message.body || message.snippet, from: message.fromAddress }), stoppedKinds(state.dismissedSlipKeys))
       || chores.some((chore) => alreadyRead(chore.description, subject))
     ) {
@@ -184,7 +190,7 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
   if (keyword.length > 0) {
     const saved = await storePlanned(
       userId,
-      ingestMessages(keyword, state, existingKeys, profileIds, existingEventKeys, owners),
+      ingestMessages(keyword, state, existingKeys, profileIds, existingEventKeys, owners, new Date(), known),
       timeZone,
       calendarId,
     );

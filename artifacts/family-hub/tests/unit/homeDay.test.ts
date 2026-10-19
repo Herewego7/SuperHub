@@ -363,12 +363,15 @@ test("a to-do lands on its day, stays overdue for a week, and a check stays on t
   assert.equal(planTodoRows(rows, [{ choreId: "milk", completedAt: new Date(2026, 9, 1) }], today, today).some((row) => row.id === "milk"), false);
 });
 
-test("an undated inbox to-do leaves Home after two weeks, and one you made stays", () => {
-  const fresh = { id: "fresh", title: "Bring a snack", description: "From: office@school.org\nSent: 2026-09-25T15:00:00.000Z\nPlease bring a snack.", category: "school_email", createdAt: new Date(2026, 9, 1) };
+test("an undated inbox to-do leaves Home after two days, and one you made stays", () => {
+  const fresh = { id: "fresh", title: "Bring a snack", description: "From: office@school.org\nSent: 2026-09-30T15:00:00.000Z\nPlease bring a snack.", category: "school_email", createdAt: new Date(2026, 9, 1) };
   const stale = { id: "stale", title: "Old ask", description: "From: office@school.org\nSent: 2026-09-10T15:00:00.000Z\nPlease bring a snack.", category: "school_email", createdAt: new Date(2026, 9, 1) };
   const saved = { id: "saved", title: "Older ask", description: "From: office@school.org\nPlease bring a snack.", category: "school_email", createdAt: new Date(2026, 8, 15) };
   const mine = { id: "mine", title: "Buy milk", description: "", category: null, createdAt: new Date(2026, 7, 1) };
   assert.deepEqual(planTodoRows([fresh, stale, saved, mine], [], today, today).map((row) => row.id), ["fresh", "mine"]);
+  const weekOld = { ...fresh, id: "week", description: "From: office@school.org\nSent: 2026-09-25T15:00:00.000Z\nPlease bring a snack." };
+  assert.deepEqual(planTodoRows([weekOld], [], today, today), [], "a week-old undated ask has left");
+  assert.deepEqual(clearedTodos([weekOld, stale], [], today).map((row) => [row.id, row.undated]), [["week", true]], "counted in the cleared note; one over two weeks old is not mentioned");
 });
 
 test("a range read a few days after it ends stays this year, and a range across New Year holds together", () => {

@@ -6,6 +6,7 @@
  */
 import { senderOwners, type OwnerPerson } from "./assign";
 import { kindKeptOut, mailKindsOf, stoppedKinds } from "./mailKinds";
+import { overWhenFound } from "./todoTiming";
 import { zonedWallClock } from "../lib/timezone";
 import { slipKey, type InboundMessage } from "./parse";
 
@@ -325,8 +326,8 @@ export function unmuteNewsletter(keys: readonly string[], key: string): string[]
   return keys.filter((item) => item !== key);
 }
 
-type SlipHeader = Partial<Record<"From" | "Plan" | "Ref" | "Name" | "Sender" | "Sent" | "Mail", string>>;
-const HEADER_LINE = /^(From|Plan|Ref|Name|Sender|Sent|Mail): (.*)$/;
+type SlipHeader = Partial<Record<"From" | "Plan" | "Type" | "Ref" | "Name" | "Sender" | "Sent" | "Mail", string>>;
+const HEADER_LINE = /^(From|Plan|Type|Ref|Name|Sender|Sent|Mail): (.*)$/;
 
 /** The header lines at the top of an inbox item's note. The body starts at the first other line. */
 export function slipHeader(description: string | null | undefined): SlipHeader {
@@ -488,6 +489,18 @@ const FAMILY_PLATFORMS = [
   "sportsengine.com",
   "signupgenius.com",
   "classroom.google.com",
+  "smore.com",
+  "leagueapps.com",
+  "evite.com",
+  "paperlesspost.com",
+  "punchbowl.com",
+];
+
+/** Big stores and delivery apps. Their mail is shopping, never a family to-do (Bot Life's pre-filter). */
+const RETAIL_SENDERS = [
+  "amazon.com", "target.com", "walmart.com", "bestbuy.com", "costco.com", "homedepot.com", "lowes.com",
+  "macys.com", "nordstrom.com", "gap.com", "oldnavy.com", "kohls.com", "wayfair.com", "etsy.com", "ebay.com",
+  "sephora.com", "ulta.com", "nike.com", "zappos.com", "chewy.com", "doordash.com", "ubereats.com", "instacart.com",
 ];
 
 const SCHOOL_WORDS = /\b(school|permission|field trip|picture day|pta|pto|classroom|teacher|homework|practice|recital|tournament|sign-?up|early release|early dismissal|no school|half day|spirit day|book fair|aftercare|conference|parent night|open house|soccer|basketball|baseball|softball|volleyball|football|swim|swimming|cheer)\b/i;
@@ -559,6 +572,40 @@ export function deviceAlert(message: { subject: string; fromAddress?: string }):
   return ALERT_SUBJECT.test(message.subject);
 }
 
+/**
+ * Mail dropped before any model reads it: a big store, bulk mail in Gmail's
+ * Promotions tab, or mail the family sent themselves. A school, a known
+ * family platform, or a sender the family's own mail came from is always
+ * read. This is most of an inbox, and none of it is a family to-do.
+ */
+export function prefilterDrop(
+  message: { fromAddress?: string; labels?: string[]; bulk?: boolean; subject?: string; snippet?: string; body?: string },
+  known: { domains?: readonly string[]; schools?: readonly string[] } = {},
+): "promotion" | "ownOutgoing" | null {
+  const labels = message.labels ?? [];
+  if (labels.includes("SENT")) return "ownOutgoing";
+  const domain = senderDomain(message.fromAddress);
+  if (domain && (domainIs(domain, FAMILY_PLATFORMS) || isSchoolDomain(domain) || domainIs(domain, known.domains ?? []))) return null;
+  // A newsletter sent through Mailchimp lands in Promotions too; one that
+  // names a kid's school is kept.
+  const said = `${message.subject ?? ""} ${message.snippet ?? ""} ${(message.body ?? "").slice(0, 2000)}`.toLowerCase();
+  if ((known.schools ?? []).some((school) => school.trim().length > 3 && said.includes(school.trim().toLowerCase()))) return null;
+  if (domain && domainIs(domain, RETAIL_SENDERS)) return "promotion";
+  if (labels.includes("CATEGORY_PROMOTIONS") && message.bulk) return "promotion";
+  return null;
+}
+
+/** Sites that already sent this family something worth keeping. Their mail is always read. */
+export function knownDomains(rows: { category?: string | null; description?: string | null }[]): string[] {
+  const domains = new Set<string>();
+  for (const row of rows) {
+    if (row.category !== "school_email") continue;
+    const domain = senderDomain(slipSender(row.description) ?? undefined);
+    if (domain && !domainIs(domain, RETAIL_SENDERS)) domains.add(domain);
+  }
+  return [...domains];
+}
+
 export function mailWorthSaving(message: { subject: string; snippet?: string; body?: string; fromAddress?: string }): boolean {
   const domain = senderDomain(message.fromAddress);
   if (domain && (domainIs(domain, FAMILY_PLATFORMS) || isSchoolDomain(domain))) return true;
@@ -589,6 +636,8 @@ export function ingestMessages(
   profileIds: string[],
   existingEventKeys: string[] = [],
   people: OwnerPerson[] = [],
+  readAt: Date = new Date(),
+  known: { domains?: readonly string[]; schools?: readonly string[] } = {},
 ): { todos: PlannedTodo[]; events: PlannedEvent[] } {
   const muted = new Set(state.mutedSenders.map((address) => address.toLowerCase()));
   const dismissed = new Set(state.dismissedSlipKeys);
@@ -602,7 +651,7 @@ export function ingestMessages(
   for (const message of messages) {
     if (message.fromAddress && muted.has(message.fromAddress.toLowerCase())) continue;
     if (newsletterShaped(message) && newsletterMuted(state.mutedNewsletters, message.fromAddress)) continue;
-    if (deviceAlert(message) || !mailWorthSaving(message)) continue;
+    if (prefilterDrop(message, known) || deviceAlert(message) || !mailWorthSaving(message)) continue;
     if (kindKeptOut(mailKindsOf({ subject: message.subject, text: message.body || message.snippet, from: message.fromAddress }), stoppedKinds(state.dismissedSlipKeys))) continue;
     const key = slipKey(message.subject);
     if (!key) continue;
@@ -624,6 +673,11 @@ export function ingestMessages(
       continue;
     }
     seen.add(key);
+    // Read a day or more after it came and already past due: not added.
+    const sent = message.receivedAt ? new Date(message.receivedAt) : null;
+    const sentAt = sent && Number.isFinite(sent.getTime()) ? sent : null;
+    const dueDay = sentAt ? slipDate(`${message.subject} ${message.snippet}`, sentAt) : null;
+    if (overWhenFound(dueDay, sentAt, readAt)) continue;
     todos.push({
       title: message.subject.trim(),
       description: slipBody(message.fromAddress, message.snippet, message.body, mailLines(message)),

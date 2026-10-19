@@ -364,6 +364,7 @@ export class GoogleCalendarService {
           id,
           snippet: full.data.snippet ?? undefined,
           internalDate: full.data.internalDate ?? undefined,
+          labelIds: full.data.labelIds ?? undefined,
           payload,
         }, accountId);
         const files = [];

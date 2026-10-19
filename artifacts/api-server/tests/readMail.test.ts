@@ -139,3 +139,28 @@ test("an item goes to the people the mail names, and a taught sender beats that"
   const learned = plansFromRead(mail, read, ["dad", "mom"], state, [], [], now, new Set(), taught);
   assert.deepEqual(learned.todos.map((todo) => todo.profileIds), [["dad"], ["dad"]], "what the family taught wins");
 });
+
+test("past events, undated events, and unmatched changes are never to-dos; a late read skips missed deadlines; a to-do keeps its type", () => {
+  const now = new Date(2026, 9, 20, 9);
+  const state = { mutedSenders: [], dismissedSlipKeys: [] };
+  const mail = { id: "m", accountId: "a", subject: "Thrive 2026", snippet: "", body: "", fromAddress: "emails@brushfire.com", receivedAt: new Date(2026, 9, 19, 8).toISOString() };
+  const read = {
+    familyRelated: true,
+    newsletter: null,
+    items: [
+      { kind: "event" as const, title: "Thrive 2026 Conference", detail: "At Mayo Civic Center.", date: "2026-10-09", time: null, who: [], changeOf: null },
+      { kind: "event" as const, title: "Fall party", detail: "Sometime soon.", date: null, time: null, who: [], changeOf: null },
+      { kind: "change" as const, title: "Practice moved", detail: "", date: null, time: null, who: [], changeOf: null },
+      { kind: "todo" as const, title: "RSVP for the gala", detail: "Let us know by Friday.", date: "2026-10-23", time: null, who: [], changeOf: null, taskType: "rsvp" as const },
+      { kind: "backpack" as const, title: "sack lunch", detail: "", date: "2026-10-22", time: null, who: [], changeOf: null, taskType: null },
+    ],
+    profileFacts: [],
+  };
+  const planned = plansFromRead(mail, read, ["dad"], state, [], [], now);
+  assert.deepEqual(planned.todos.map((todo) => todo.title), ["RSVP for the gala", "sack lunch"]);
+  assert.match(planned.todos[0].description, /\nType: rsvp\n/);
+  assert.match(planned.todos[1].description, /\nType: bring\n/);
+  const old = { ...mail, receivedAt: new Date(2026, 9, 1, 8).toISOString() };
+  const lateRead = { ...read, items: [{ kind: "todo" as const, title: "Turn in the form", detail: "", date: "2026-10-05", time: null, who: [], changeOf: null, taskType: "sign_form" as const }] };
+  assert.deepEqual(plansFromRead(old, lateRead, ["dad"], state, [], [], now).todos, [], "a deadline missed before the mail was read is not added");
+});

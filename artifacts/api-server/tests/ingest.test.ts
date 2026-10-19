@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { emailTodoOnDay } from "../src/scheduler/eveningPlan.ts";
 import { mailKindsOf, stoppedKinds } from "../src/ingest/mailKinds.ts";
-import { acceptSchool, choresDismissedBySlip, deviceAlert, mailEventStart, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, graphNextLink, holdSchoolEvent, inboxBlockReason, inboxFailure, inboxListStopped, inboxMailFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
+import { acceptSchool, choresDismissedBySlip, deviceAlert, knownDomains, mailEventStart, prefilterDrop, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, graphNextLink, holdSchoolEvent, inboxBlockReason, inboxFailure, inboxListStopped, inboxMailFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
 import { clientMessages, fileParts, gmailInboxQuery, gmailNewsletterQuery, gmailPayload, gmailWebLink, inboxFetchLimit, inboxSinceIso, latestPerSender, mergeMailboxes, outlookAttachments, outlookToInbound, outlookWebLink, readableText, toInbound } from "../src/ingest/parse.ts";
 import { muteNewsletter, newsletterMuted, openLettersFrom, openMailFrom, slipHeader, unmuteNewsletter, unmuteSender } from "../src/ingest/process.ts";
 import { inboxOwnerFixes } from "../src/ingest/owners.ts";
@@ -578,4 +579,46 @@ test("password resets never become to-dos, and a stopped kind is skipped from an
   assert.deepEqual(mailKindsOf({ subject: "Chad, you have 3 new invitations", text: "", from: "invitations@linkedin.com" }), ["social"]);
   assert.deepEqual(mailKindsOf({ subject: "Picture day is Friday", text: "Bring a smile.", from: "office@school.org" }), []);
   assert.deepEqual(stoppedKinds(["kind:reviews", "picture day", "kind:nope"]), ["reviews"]);
+});
+
+test("the keyword reader also skips a deadline missed before the mail was read", () => {
+  const state = { mutedSenders: [], dismissedSlipKeys: [] as string[] };
+  const old = { id: "o", accountId: "a", subject: "Field trip form due 10/5", snippet: "Please sign the permission slip.", body: "", fromAddress: "teacher@school.org", receivedAt: new Date(2026, 9, 1, 8).toISOString() };
+  assert.deepEqual(ingestMessages([old], state, [], ["mom"], [], [], new Date(2026, 9, 20, 9)).todos, []);
+  assert.equal(ingestMessages([old], state, [], ["mom"], [], [], new Date(2026, 9, 2, 9)).todos.length, 1, "read the next day, it still counts");
+});
+
+test("shopping and Promotions-tab bulk mail are dropped before any model reads them, but a school or known sender never is", () => {
+  assert.equal(prefilterDrop({ fromAddress: "store-news@amazon.com" }), "promotion");
+  assert.equal(prefilterDrop({ fromAddress: "deals@shop.example", labels: ["CATEGORY_PROMOTIONS", "INBOX"], bulk: true }), "promotion");
+  assert.equal(prefilterDrop({ fromAddress: "deals@shop.example", labels: ["CATEGORY_PROMOTIONS"] }), null, "Promotions without a list header is read");
+  assert.equal(prefilterDrop({ fromAddress: "me@gmail.com", labels: ["SENT"] }), "ownOutgoing");
+  assert.equal(prefilterDrop({ fromAddress: "news@greatoaksacademy.org", labels: ["CATEGORY_PROMOTIONS"], bulk: true }), null, "a school domain is always read");
+  assert.equal(prefilterDrop({ fromAddress: "noreply@teamsnap.com", labels: ["CATEGORY_PROMOTIONS"], bulk: true }), null);
+  const mailchimp = { fromAddress: "us1@mcsv.net", labels: ["CATEGORY_PROMOTIONS"], bulk: true, subject: "Eagle News", snippet: "This week at Great Oaks Academy" };
+  assert.equal(prefilterDrop(mailchimp), "promotion");
+  assert.equal(prefilterDrop(mailchimp, { schools: ["Great Oaks Academy"] }), null, "a newsletter that names a kid's school is read");
+  assert.equal(prefilterDrop(mailchimp, { domains: ["mcsv.net"] }), null, "a site that sent something kept before is read");
+  assert.deepEqual(knownDomains([{ category: "school_email", description: "From: us1@mcsv.net\n" }, { category: "school_email", description: "From: x@amazon.com\n" }]), ["mcsv.net"]);
+});
+
+test("a Gmail message keeps its tab labels and whether it was sent to a list", () => {
+  const inbound = toInbound({
+    id: "g1",
+    labelIds: ["CATEGORY_PROMOTIONS", "INBOX"],
+    payload: { headers: [{ name: "From", value: "Shop <deals@shop.example>" }, { name: "Subject", value: "Sale" }, { name: "List-Unsubscribe", value: "<mailto:u@shop.example>" }] },
+  }, "acct");
+  assert.deepEqual(inbound.labels, ["CATEGORY_PROMOTIONS", "INBOX"]);
+  assert.equal(inbound.bulk, true);
+});
+
+test("the evening plan lists only the email to-dos Home will show that day", () => {
+  const tz = "America/Chicago";
+  const lunch = { title: "Sack lunch", description: "From: office@school.org\nPlan: todo\nType: bring\nRef: x\nBring a sack lunch. Due 10/21/2026.", category: "school_email" };
+  const linkedin = { title: "Respond to LinkedIn", description: "From: messages-noreply@linkedin.com\nPlan: todo\nRef: y\nSent: 2026-10-10T15:00:00.000Z\nWaiting for you.", category: "school_email" };
+  const typed = { title: "Buy milk", description: null, category: null };
+  assert.equal(emailTodoOnDay(lunch, "2026-10-21", "2026-10-20", tz), true, "a lunch is on its day");
+  assert.equal(emailTodoOnDay(lunch, "2026-10-23", "2026-10-20", tz), false);
+  assert.equal(emailTodoOnDay(linkedin, "2026-10-21", "2026-10-20", tz), false, "an old undated inbox item is not tomorrow's");
+  assert.equal(emailTodoOnDay(typed, "2026-10-21", "2026-10-20", tz), true);
 });

@@ -1,4 +1,4 @@
-import { driverNamesFor, mailVisibleToKid, openTodos, todosForHome } from "@/lib/homeDay";
+import { driverNamesFor, mailVisibleToKid, openTodos, planTodoRows, todosForHome } from "@/lib/homeDay";
 import { familyEventsFor, type FamilyEvent } from "@/lib/familyEvents";
 import { contrastText, eventStrip } from "@/lib/eventColor";
 import { EventRow } from "@/components/event-row";
@@ -1448,10 +1448,15 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
       }),
       checkedSlips,
     );
-    const todos = dropSchoolTodoTwins(
+    // The same to-dos Today's To-dos shows, not every open item the inbox
+    // ever made: old undated mail and things already past due stay off here too.
+    const todayTodos = planTodoRows(
       openTodos(todosForHome(chores, selectedProfiles, familyIds, everyoneId), completions).filter((todo) => mailVisibleToKid(todo, kidName)),
-      events,
-    ).map((todo) => ({
+      completions,
+      new Date(),
+      new Date(),
+    ).filter((todo) => !todo.done);
+    const todos = dropSchoolTodoTwins(todayTodos, events).map((todo) => ({
       id: todo.id,
       title: todo.title,
       startTime: currentDate,

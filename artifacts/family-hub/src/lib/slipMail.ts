@@ -3,8 +3,8 @@ export function slipSender(description: string | null | undefined): string | nul
   return match?.[1] ?? null;
 }
 
-type SlipHeader = Partial<Record<"From" | "Plan" | "Ref" | "Name" | "Sender" | "Sent" | "Mail", string>>;
-const HEADER_LINE = /^(From|Plan|Ref|Name|Sender|Sent|Mail): (.*)$/;
+type SlipHeader = Partial<Record<"From" | "Plan" | "Type" | "Ref" | "Name" | "Sender" | "Sent" | "Mail", string>>;
+const HEADER_LINE = /^(From|Plan|Type|Ref|Name|Sender|Sent|Mail): (.*)$/;
 
 /** The lines the inbox writes at the top of a note. The body starts at the first other line. */
 export function slipHeader(description: string | null | undefined): SlipHeader {

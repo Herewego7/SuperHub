@@ -1,4 +1,5 @@
 /** What Home shows for one day. A shared to-do is one chore row, however many people are on it. */
+import { hardCutoff, showFromDays, taskTypeOf, todoPlace, type TodoPlace } from "./todoTiming";
 import { withoutUnwatched, type AssignmentLike } from "./outlookAttribution";
 import { driverIdsOf } from "./eventDrivers";
 import { newsletterMuted, slipHeader, slipSentAt, slipText } from "./slipMail";
@@ -510,10 +511,6 @@ export const PLAN_HORIZON = 3;
 export const PLAN_NEWSLETTERS = 3;
 export const PLAN_OVERDUE_DAYS = 7;
 export const PLAN_COMPLETED_DAYS = 7;
-/** A to-do stays on Today's To-dos, marked late, for this many days past its due date. Older ones are cleared with a note. */
-export const PLAN_TODO_LATE_DAYS = 1;
-/** An inbox to-do with no date leaves Home after two weeks. It stays on the To-Dos tab. */
-export const PLAN_INBOX_DAYS = 14;
 export const NEWSLETTER_DAYS = 30;
 
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
@@ -697,16 +694,41 @@ function completionOn<T extends { choreId: string; completedAt?: Date | string |
   }) ?? null;
 }
 
-/** Open to-dos due that day, overdue ones on today for a week, and ones checked off that day. */
+/** Days from `from` to `to`, by calendar day. */
+function daysBetween(from: Date, to: Date): number {
+  return Math.round((dayStart(to).getTime() - dayStart(from).getTime()) / 86400000);
+}
+
+/** Where an open to-do goes on the day on screen, by the shared timing rules (lib/todoTiming.ts). */
+function placeOf(todo: PlanChore, day: Date, now: Date): TodoPlace {
+  const today = dayStart(now);
+  const note = noteOf(todo);
+  const due = mailDate(note, today);
+  const inbox = todo.category === "school_email";
+  const sent = inbox ? slipSentAt(todo.description) ?? (todo.createdAt ? new Date(todo.createdAt) : null) : null;
+  return todoPlace({
+    type: taskTypeOf(todo.title, todo.description),
+    inbox,
+    dueIn: due ? daysBetween(day, due) : null,
+    viewingToday: sameDay(dayStart(day), today),
+    sentDaysAgo: sent ? daysBetween(sent, today) : null,
+    cutoff: hardCutoff(note),
+  });
+}
+
+/**
+ * Today's To-dos: what needs doing now, not everything the inbox ever said.
+ * An undated email item shows today while its email is two days old or less;
+ * a dated one shows from a day or two before it's due, by its type; a late
+ * one stays a day if it can still be done. Ones checked off that day stay,
+ * struck through.
+ */
 export function planTodoRows<T extends PlanChore>(
   todos: T[],
   completions: { choreId: string; completedAt?: Date | string | null }[],
   day: Date,
   now: Date,
 ): (T & { done: boolean; overdue: boolean })[] {
-  const viewing = dayStart(day);
-  const today = dayStart(now);
-  const onToday = sameDay(viewing, today);
   const rows: (T & { done: boolean; overdue: boolean })[] = [];
   for (const todo of todos) {
     if (completionOn(todo.id, completions, day)) {
@@ -714,43 +736,30 @@ export function planTodoRows<T extends PlanChore>(
       continue;
     }
     if (completions.some((completion) => completion.choreId === todo.id)) continue;
-    const due = mailDate(noteOf(todo), today);
-    if (due && sameDay(due, viewing)) {
-      rows.push({ ...todo, done: false, overdue: false });
-      continue;
-    }
-    if (onToday && due) {
-      const age = Math.round((today.getTime() - dayStart(due).getTime()) / 86400000);
-      if (age > 0 && age <= PLAN_TODO_LATE_DAYS) rows.push({ ...todo, done: false, overdue: true });
-      continue;
-    }
-    if (!due && onToday) {
-      const age = (today.getTime() - dayStart(mailSentAt(todo, today)).getTime()) / 86400000;
-      if (todo.category === "school_email" && age > PLAN_INBOX_DAYS) continue;
-      rows.push({ ...todo, done: false, overdue: false });
-    }
+    const place = placeOf(todo, day, now);
+    if (place === "show" || place === "late") rows.push({ ...todo, done: false, overdue: place === "late" });
   }
   return rows.sort((a, b) => Number(b.overdue) - Number(a.overdue));
 }
 
 /**
- * Open to-dos whose due date passed before yesterday. They leave Today's
- * To-dos, and Home says how many went so nothing disappears without a word.
- * Only the last two weeks count, so the note doesn't grow forever.
+ * Open to-dos that left Today's To-dos: past due, or older inbox items with
+ * no date. Home says how many went so nothing disappears without a word.
+ * Only the last two weeks count, so the note doesn't grow forever. `due` is
+ * the due day, or the day the email came for an undated one.
  */
 export function clearedTodos<T extends PlanChore>(
   todos: T[],
   completions: { choreId: string }[],
   now: Date,
-): (T & { due: Date })[] {
+): (T & { due: Date; undated: boolean })[] {
   const today = dayStart(now);
-  const rows: (T & { due: Date })[] = [];
+  const rows: (T & { due: Date; undated: boolean })[] = [];
   for (const todo of todos) {
     if (completions.some((completion) => completion.choreId === todo.id)) continue;
+    if (placeOf(todo, today, now) !== "cleared") continue;
     const due = mailDate(noteOf(todo), today);
-    if (!due) continue;
-    const age = Math.round((today.getTime() - dayStart(due).getTime()) / 86400000);
-    if (age > PLAN_TODO_LATE_DAYS && age <= PLAN_INBOX_DAYS) rows.push({ ...todo, due });
+    rows.push({ ...todo, due: due ?? mailSentAt(todo, today), undated: !due });
   }
   return rows.sort((a, b) => b.due.getTime() - a.due.getTime());
 }
@@ -824,6 +833,8 @@ export function horizonDatedTodos<T extends PlanChore>(
     const due = mailDate(note, day);
     if (!due || due < from || due >= until) continue;
     if (events.some((event) => titlesMatch(event.title, todo.title) && sameDay(new Date(event.startTime), due))) continue;
+    // Already on Today's To-dos for this day; the Horizon doesn't repeat it.
+    if (daysBetween(day, due) <= showFromDays(taskTypeOf(todo.title, todo.description))) continue;
     rows.push({ ...todo, start: due });
   }
   return rows.sort((a, b) => a.start.getTime() - b.start.getTime());

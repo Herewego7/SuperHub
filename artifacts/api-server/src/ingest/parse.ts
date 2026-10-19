@@ -115,6 +115,10 @@ export interface InboundMessage {
   files?: MailFile[];
   /** The first file, kept so a one-file caller still works. */
   file?: { mimeType: string; data: string };
+  /** Gmail's labels, like CATEGORY_PROMOTIONS or SENT. */
+  labels?: string[];
+  /** Sent to a list: it carries a List-Unsubscribe header. */
+  bulk?: boolean;
 }
 
 export function decodeBody(part: GmailPart): string {
@@ -391,6 +395,8 @@ export function toInbound(msg: GmailMessage, accountId: string): InboundMessage 
     ...(body ? { body } : {}),
     ...(msg.id ? { provider: "gmail" as const, messageId: msg.id } : {}),
     ...(Number.isFinite(received) && received > 0 ? { receivedAt: new Date(received).toISOString() } : {}),
+    ...(msg.labelIds?.length ? { labels: [...msg.labelIds] } : {}),
+    ...(header(msg, "List-Unsubscribe") ? { bulk: true } : {}),
   };
 }
 

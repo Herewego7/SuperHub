@@ -15,7 +15,8 @@ import { DEFAULT_TIMEZONE } from "../lib/timezone";
 import { loadProfiles } from "../lib/profileRows";
 import { expandRecurringEvents } from "../lib/eventRecurrence";
 import { eventsOnWatchedCalendars } from "../lib/calendarAssignmentScope";
-import { withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
+import { slipDate, slipHeader, withoutDismissedChores, withoutDismissedSlips } from "../ingest/process";
+import { hardCutoff, taskTypeOf, todoPlace } from "../ingest/todoTiming";
 import { askJson, BOTLIFE_MODELS, geminiClient } from "../geminiClient";
 import { planLinesStayHonest } from "../ai/parity";
 import { storage } from "../storage";
@@ -423,6 +424,41 @@ export function choresForPlan<T extends { id: string; profileIds?: string[] | nu
   });
 }
 
+/** Days from one YYYY-MM-DD to another. */
+function dayGap(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000);
+}
+
+/**
+ * Whether an email to-do is on Today's To-dos for `target` (YYYY-MM-DD), by
+ * the same rules as Home (ingest/todoTiming.ts), so the evening plan lists
+ * what the app will show, not every open item the inbox ever made. A to-do a
+ * person typed always counts.
+ */
+export function emailTodoOnDay(
+  chore: { title: string; description?: string | null; category?: string | null; createdAt?: Date | string | null },
+  target: string,
+  today: string,
+  tz: string,
+): boolean {
+  if (chore.category !== "school_email") return true;
+  const note = `${chore.title}\n${chore.description ?? ""}`;
+  const due = slipDate(note, new Date(`${today}T12:00:00`));
+  const dueDay = due ? `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}-${String(due.getDate()).padStart(2, "0")}` : null;
+  const sentRaw = slipHeader(chore.description).Sent ?? chore.createdAt ?? null;
+  const sent = sentRaw ? new Date(sentRaw) : null;
+  const sentDay = sent && Number.isFinite(sent.getTime()) ? localDate(sent, tz) : null;
+  const place = todoPlace({
+    type: taskTypeOf(chore.title, chore.description),
+    inbox: true,
+    dueIn: dueDay ? dayGap(target, dueDay) : null,
+    viewingToday: target === today,
+    sentDaysAgo: sentDay ? dayGap(sentDay, today) : null,
+    cutoff: hardCutoff(note),
+  });
+  return place === "show" || place === "late";
+}
+
 function namesPerson(text: string, name: string | null | undefined): boolean {
   const who = name?.trim();
   if (!who) return false;
@@ -763,10 +799,13 @@ async function planTextFor(profile: PlanPerson, now: Date, tz: string, target: s
     if (list.length === 0 || list.includes(profile.id)) return [];
     return list.map((id) => family.get(id)).filter((name): name is string => !!name);
   };
+  const today = localDate(now, tz);
   const openChores = dueForPlan(
     choresForPlan(withoutDismissedChores(chores, dismissed), doneToday, isChild ? profile.id : null, finishedTodos),
     new Date(`${target}T12:00:00`),
-  ).map((chore) => ({ ...chore, who: otherNames(chore.profileIds) }));
+  )
+    .filter((chore) => emailTodoOnDay(chore, target, today, tz))
+    .map((chore) => ({ ...chore, who: otherNames(chore.profileIds) }));
   const watched = eventsOnWatchedCalendars(planDayEvents(withoutDismissedSlips(events, dismissed), target, tz), assignments);
   const dayEvents = (isChild ? eventsForPlan(watched, profile.id) : watched)
     .map((event) => ({
