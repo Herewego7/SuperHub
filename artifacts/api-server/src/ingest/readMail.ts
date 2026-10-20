@@ -118,6 +118,18 @@ export function mailReadPrompt(message: InboundMessage, people: MailPerson[], ex
   ].filter(Boolean).join("\n\n");
 }
 
+/**
+ * The models a read tries, in order. Newsletters and long mail go to the
+ * preview model first, which is often busy: on 2026-10-18 it answered 429
+ * five times running and a newsletter fell back to a bare keyword item. The
+ * stable model reads it instead, the way chat already falls back.
+ */
+export function readModels(letter: boolean, strong: boolean): string[] {
+  if (letter) return [BOTLIFE_MODELS.newsletter, BOTLIFE_MODELS.extract];
+  if (strong) return [BOTLIFE_MODELS.extractComplex, BOTLIFE_MODELS.extract];
+  return [BOTLIFE_MODELS.extract];
+}
+
 async function recognizeFiles(ai: GoogleGenAI, message: InboundMessage): Promise<void> {
   const files = message.files ?? [];
   for (const file of files) {
@@ -236,11 +248,7 @@ export async function readInboxMessage(ai: GoogleGenAI, message: InboundMessage,
   const threadCount = message.thread?.length ?? 0;
   const strong = (message.body || "").length > 12_000 || files.length > 0 || threadCount > 3;
   const letter = newsletterShaped(message);
-  const models = letter
-    ? [BOTLIFE_MODELS.newsletter]
-    : strong
-      ? [BOTLIFE_MODELS.extractComplex]
-      : [BOTLIFE_MODELS.extract];
+  const models = readModels(letter, strong);
   const job = letter ? "newsletter" as const : strong ? "extractComplex" as const : "extract" as const;
   const parts = letter ? chunkText(message.body || message.snippet || "") : [message.body || message.snippet || ""];
   const reads: MailRead[] = [];

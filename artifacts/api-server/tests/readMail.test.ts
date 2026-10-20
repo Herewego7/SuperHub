@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { alreadyRead, clipLines, decisionTitle, undoubleDecide, withoutDecide, mailReadPrompt, parseMailRead, plansFromRead, subjectPlaceholder } from "../src/ingest/readMail.ts";
+import { alreadyRead, clipLines, readModels, decisionTitle, undoubleDecide, withoutDecide, mailReadPrompt, parseMailRead, plansFromRead, subjectPlaceholder } from "../src/ingest/readMail.ts";
 import { slipMail } from "../src/ingest/process.ts";
 
 const people = [{ name: "Liam", isChild: true, school: "Oak Elementary" }];
@@ -187,4 +187,11 @@ test("a decision that already says Decide on keeps its own words", () => {
 test("details keep one line per point", () => {
   assert.equal(clipLines("Wear school colors.\n- Bring $2 for the bake sale.\n\nStarts at 8 AM.", 5, 600), "Wear school colors.\nBring $2 for the bake sale.\nStarts at 8 AM.");
   assert.equal(clipLines("a\nb\nc\nd\ne\nf", 5, 600).split("\n").length, 5);
+});
+
+// A newsletter read gave up after five 429s from the busy preview model (2026-10-18).
+test("newsletters and long mail fall back to the stable model", () => {
+  assert.deepEqual(readModels(true, false), ["gemini-3.1-pro-preview", "gemini-3.5-flash"]);
+  assert.deepEqual(readModels(false, true), ["gemini-3.1-pro-preview", "gemini-3.5-flash"]);
+  assert.deepEqual(readModels(false, false), ["gemini-3.5-flash"]);
 });
