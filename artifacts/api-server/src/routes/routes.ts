@@ -35,6 +35,7 @@ import { requestInboxScan } from "../ingest/scanState";
 import { markSchedulerWorkDirty } from "../lib/workGate";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp, dinnersToCopy } from "../meals/dinnerEvent";
 import { clientMessages, INBOX_INITIAL_DAYS, slipKey } from "../ingest/parse";
+import { undoubleDecide } from "../ingest/readMail";
 import { hideNewsletter, resumeKind, resumeSender, showNewsletter, stopKind, stopSender } from "../ingest/mute";
 import { readOriginal } from "../ingest/original";
 import { moveClock } from "../scheduler/eveningPlan";
@@ -864,6 +865,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         includeArchived ? all : all.filter((c) => !(c as any).archivedAt),
         settings?.dismissedSlipKeys ?? [],
       );
+      // Mail to-dos saved as "Decide: Decide: ..." are fixed in place once.
+      // Only rows still showing, so a removed one isn't brought back by its
+      // new title.
+      for (const chore of chores) {
+        if (chore.category !== "school_email") continue;
+        const title = undoubleDecide(chore.title);
+        const description = chore.description == null ? chore.description : undoubleDecide(chore.description);
+        if (title === chore.title && description === chore.description) continue;
+        await storage.updateChore(chore.id, { title, description }, userId).catch(() => null);
+        chore.title = title;
+        chore.description = description;
+      }
       res.json(chores);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch chores" });

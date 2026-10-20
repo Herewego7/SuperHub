@@ -87,6 +87,10 @@ export function setup(): void {
         await new Promise((resolve) => setTimeout(resolve, REMOVE_MS));
         const { title } = JSON.parse(opts?.body as string);
         todos = todos.filter((todo) => todo.title !== title);
+        // A test can make the server remove it but still answer with an error.
+        if ((window as unknown as { removeFails?: boolean }).removeFails) {
+          return new Response(JSON.stringify({ error: "Failed to dismiss slip" }), { status: 500, headers: { "content-type": "application/json" } });
+        }
         return ok({});
       },
       "/api/ingest/original": {

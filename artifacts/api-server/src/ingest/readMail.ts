@@ -290,6 +290,16 @@ function beforeToday(iso: string | null, now: Date): boolean {
   return date < start;
 }
 
+/** A title without any "Decide:" it already starts with. */
+export function withoutDecide(title: string): string {
+  return title.replace(/^(\s*decide:\s*)+/i, "").trim();
+}
+
+/** Text saved before that fix, with each run of "Decide: Decide:" made one. */
+export function undoubleDecide(text: string): string {
+  return text.replace(/\bdecide:\s*(?:decide:\s*)+/gi, "Decide: ");
+}
+
 function noteFor(message: InboundMessage, mark: "newsletter" | "keydate" | "todo", ref: string, body: string, who: string[], name?: string, type?: TaskType): string {
   const address = message.fromAddress?.trim();
   const head = address ? `From: ${address}\n` : "";
@@ -392,9 +402,12 @@ export function plansFromRead(
     const lateRead = overWhenFound(dayOf(item.date), sent && Number.isFinite(sent.getTime()) ? sent : null, now);
     if (item.kind === "backpack" || item.kind === "decision") {
       if (lateRead) continue;
-      const lead = item.kind === "backpack" ? `Bring ${item.title}.` : `Decide: ${item.title}.`;
+      // The reader sometimes starts a decision with "Decide:" itself, which
+      // made "Decide: Decide: ..." (2026-10-19).
+      const named = item.kind === "decision" ? withoutDecide(item.title) : item.title;
+      const lead = item.kind === "backpack" ? `Bring ${named}.` : `Decide: ${named}.`;
       const due = when ? `Due ${when}.` : "";
-      const title = item.kind === "decision" ? `Decide: ${item.title}` : item.title;
+      const title = item.kind === "decision" ? `Decide: ${named}` : named;
       const type = item.taskType ?? (item.kind === "decision" ? "rsvp" : taskTypeOf(`Bring ${item.title}`, item.detail));
       todos.push(todoRow(title, noteFor(message, "todo", ref, [lead, due, item.detail.trim()].filter(Boolean).join(" "), item.who, undefined, type), ownersOf(item.who)));
       continue;

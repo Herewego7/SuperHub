@@ -218,10 +218,10 @@ function ActionList({ chore, keyDate, personId, people, added, onEdit, onSnooze,
   if (keyDate) rows.push({ label: added ? "Remove from calendar" : "Add to calendar", detail: added ? "Take this date back off the calendar." : "Put this date on the family calendar.", onClick: onCalendar });
   if (offer) rows.push({ label: `Save ${offer.school}`, detail: offer.profileId === personId ? "Remember this school." : `Remember this school for ${offer.name}.`, onClick: () => onSave(offer), testId: "home-todo-save-school" });
   rows.push(isMail
-    ? { label: "Remove", detail: "Remove this item for good.", onClick: onRemove, danger: true, testId: "home-todo-remove" }
+    ? { label: "Remove", detail: "Just this one, for good. It leaves every card on Home, and copies of it don't come back.", onClick: onRemove, danger: true, testId: "home-todo-remove" }
     : { label: "Delete", detail: "Delete this to-do.", onClick: onRemove, danger: true, testId: "home-todo-delete" });
-  if (isMail) rows.push({ label: "Stop emails like this…", detail: "Pick kinds of email, like reviews or promotions, to skip from every sender.", onClick: onStopKind, danger: true, testId: "home-todo-stop-kind" });
-  if (sender) rows.push({ label: `Stop emails from ${senderName}`, detail: "Clears their open items and skips their future email. You can undo this in Settings.", onClick: onStopEmails, danger: true, testId: "home-todo-stop-emails" });
+  if (isMail) rows.push({ label: "Stop emails like this…", detail: "Pick kinds of email, like reviews or promotions, to skip from every sender, in To-dos, Key Dates and every other card.", onClick: onStopKind, danger: true, testId: "home-todo-stop-kind" });
+  if (sender) rows.push({ label: `Stop emails from ${senderName}`, detail: "Clears all their open items from every card on Home and skips their future email. You can undo this in Settings.", onClick: onStopEmails, danger: true, testId: "home-todo-stop-emails" });
   return (
     <div className="flex flex-col">
       <SheetHeader className="mb-2"><SheetTitle className="text-left">{chore.title}</SheetTitle></SheetHeader>
@@ -255,7 +255,7 @@ function KindPicker({ home, chore }: { home: HomeModel; chore: Chore }) {
   return (
     <>
       <SheetHeader><SheetTitle className="text-left">Stop emails like this</SheetTitle></SheetHeader>
-      <p className="mt-1 text-sm text-[#6e6e78]">Pick the kinds you never want as to-dos, from any sender. Open ones leave Home now. You can undo this in Settings.</p>
+      <p className="mt-1 text-sm text-[#6e6e78]">Pick the kinds you never want on Home, from any sender. Open ones leave To-dos, Key Dates and every other card now. You can undo this in Settings.</p>
       <ul className="mt-3 flex flex-col" data-testid="home-kind-picker">
         {offered.map((kind) => {
           const on = picked.has(kind.id);

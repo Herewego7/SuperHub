@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { alreadyRead, mailReadPrompt, parseMailRead, plansFromRead, subjectPlaceholder } from "../src/ingest/readMail.ts";
+import { alreadyRead, undoubleDecide, withoutDecide, mailReadPrompt, parseMailRead, plansFromRead, subjectPlaceholder } from "../src/ingest/readMail.ts";
 import { slipMail } from "../src/ingest/process.ts";
 
 const people = [{ name: "Liam", isChild: true, school: "Oak Elementary" }];
@@ -163,4 +163,14 @@ test("past events, undated events, and unmatched changes are never to-dos; a lat
   const old = { ...mail, receivedAt: new Date(2026, 9, 1, 8).toISOString() };
   const lateRead = { ...read, items: [{ kind: "todo" as const, title: "Turn in the form", detail: "", date: "2026-10-05", time: null, who: [], changeOf: null, taskType: "sign_form" as const }] };
   assert.deepEqual(plansFromRead(old, lateRead, ["dad"], state, [], [], now).todos, [], "a deadline missed before the mail was read is not added");
+});
+
+// The reader sometimes starts a decision with "Decide:" itself (2026-10-19).
+test("a decision is titled with one Decide:, and saved doubles are made one", () => {
+  assert.equal(withoutDecide("Decide: Accept or decline River Valley Church volunteer request"), "Accept or decline River Valley Church volunteer request");
+  assert.equal(withoutDecide("decide: Decide: Pick a camp"), "Pick a camp");
+  assert.equal(withoutDecide("Pick a camp"), "Pick a camp");
+  assert.equal(undoubleDecide("Decide: Decide: Accept or decline. Due 10/18/2026."), "Decide: Accept or decline. Due 10/18/2026.");
+  assert.equal(undoubleDecide("From: a@b.com\nPlan: todo\nDecide: Decide: Decide: Pick"), "From: a@b.com\nPlan: todo\nDecide: Pick");
+  assert.equal(undoubleDecide("Decide: Pick a camp"), "Decide: Pick a camp");
 });

@@ -168,11 +168,7 @@ export function useHomeDay(props: HomeDayProps) {
     queryClient.setQueryData<Chore[]>(CHORES_KEY, (old = []) => old.filter(keep));
     return { prev, dropped };
   };
-  const restoreChores = (context?: { prev?: Chore[]; dropped?: string[] }) => {
-    if (context?.dropped?.length) {
-      const back = new Set(context.dropped);
-      setGone((current) => new Set([...current].filter((id) => !back.has(id))));
-    }
+  const restoreChores = (context?: { prev?: Chore[] }) => {
     if (context?.prev) queryClient.setQueryData(CHORES_KEY, context.prev);
   };
   /** When the server only skipped future mail, delete the open rows that already left Home. */
@@ -183,6 +179,19 @@ export function useHomeDay(props: HomeDayProps) {
   const settleInbox = async () => {
     await queryClient.invalidateQueries({ queryKey: CHORES_KEY });
     await queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+  };
+  // A removal the server answered with an error often went through anyway,
+  // and putting the row straight back made it vanish, return, then vanish
+  // again (2026-10-19). Rows stay gone until a fresh list says otherwise.
+  const settleDrop = async (failed: boolean, context?: { dropped?: string[] }) => {
+    await settleInbox();
+    if (!context?.dropped?.length) return;
+    const back = new Set(context.dropped);
+    setGone((current) => new Set([...current].filter((id) => !back.has(id))));
+    const list = queryClient.getQueryData<Chore[]>(CHORES_KEY) ?? [];
+    if (failed && list.some((chore) => back.has(chore.id))) {
+      toast({ title: "Couldn't remove that", description: "Check your connection and try again." });
+    }
   };
   const stopEmails = useMutation({
     mutationFn: async (address: string) => {
@@ -212,13 +221,10 @@ export function useHomeDay(props: HomeDayProps) {
     },
     // The rows to delete come from the list as it was before they left Home.
     onSuccess: (removedByServer, _address, context) => removeLeftovers(removedByServer, context),
-    onError: (_error, address, context) => {
-      setStopping((current) => current.filter((item) => item !== address.toLowerCase()));
-      restoreChores(context);
-    },
-    onSettled: async () => {
-      await settleInbox();
+    onError: (_error, address) => setStopping((current) => current.filter((item) => item !== address.toLowerCase())),
+    onSettled: async (_data, error, _address, context) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+      await settleDrop(!!error, context);
     },
   });
   const savedSenders = calendarSettings?.mutedSenders;
@@ -264,9 +270,9 @@ export function useHomeDay(props: HomeDayProps) {
       return dropChores((chore) => !(chore.category === "school_email" && !done.has(chore.id) && kindsOfChore(chore).some((kind) => kinds.includes(kind))));
     },
     onSuccess: (removedByServer, _kinds, context) => removeLeftovers(removedByServer, context),
-    onSettled: async () => {
-      await settleInbox();
+    onSettled: async (_data, error, _kinds, context) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+      await settleDrop(!!error, context);
     },
   });
   const hideLetters = useMutation({
@@ -277,10 +283,9 @@ export function useHomeDay(props: HomeDayProps) {
       const ids = new Set(letters.issues.map((issue) => issue.id));
       return dropChores((chore) => !ids.has(chore.id));
     },
-    onError: (_error, _letters, context) => restoreChores(context),
-    onSettled: async () => {
-      await settleInbox();
+    onSettled: async (_data, error, _letters, context) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+      await settleDrop(!!error, context);
     },
   });
   const saveSchool = useMutation({
@@ -296,8 +301,7 @@ export function useHomeDay(props: HomeDayProps) {
       await apiRequest("POST", "/api/ingest/not-relevant", { title: chore.title });
     },
     onMutate: (chore) => dropChores((item) => item.id !== chore.id),
-    onError: (_error, _chore, context) => restoreChores(context),
-    onSettled: settleInbox,
+    onSettled: (_data, error, _chore, context) => settleDrop(!!error, context),
   });
   const profileFor = (choreId: string) => {
     const chore = chores.find((item) => item.id === choreId);

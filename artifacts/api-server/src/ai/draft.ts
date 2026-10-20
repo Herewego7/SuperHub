@@ -4,6 +4,7 @@
  */
 import { askJson, BOTLIFE_MODELS, geminiClient } from "../geminiClient";
 import { schoolEventStart, slipClock, slipDate, slipDayOffset } from "../ingest/process";
+import { withoutDecide } from "../ingest/readMail";
 
 export const DRAFT_KINDS = ["task", "event", "keyDate", "backpack", "decision"] as const;
 export type DraftKind = (typeof DRAFT_KINDS)[number];
@@ -201,8 +202,9 @@ export function draftWrite(draft: PlanDraft, people: { id: string; name: string 
     const end = new Date(start.getTime() + (allDay ? 24 * 60 * 60 * 1000 - 60_000 : 60 * 60 * 1000));
     return { kind: "event", title: draft.title, start, end, allDay, description: draft.detail, profileIds: ids };
   }
-  const lead = draft.kind === "backpack" ? `Bring ${draft.title}.` : draft.kind === "decision" ? `Decide: ${draft.title}.` : "";
-  const title = draft.kind === "decision" ? `Decide: ${draft.title.replace(/^decide:\s*/i, "")}` : draft.title;
+  const named = draft.kind === "decision" ? withoutDecide(draft.title) : draft.title;
+  const lead = draft.kind === "backpack" ? `Bring ${named}.` : draft.kind === "decision" ? `Decide: ${named}.` : "";
+  const title = draft.kind === "decision" ? `Decide: ${named}` : named;
   const description = ["Plan: todo", lead, due, draft.detail].filter(Boolean).join("\n");
   return { kind: "todo", title, description, profileIds: ids };
 }

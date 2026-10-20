@@ -6948,6 +6948,45 @@ test("Key Dates: a swiped card stays gone while a refresh lands mid-removal", as
   }
 });
 
+// The server removed a swiped card but answered with an error, and the app
+// put it back until the next refresh (2026-10-19).
+test("Key Dates: a swiped card stays gone when the server removes it but answers with an error", async () => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  try {
+    await page.addInitScript("window.removeFails = true");
+    await page.goto(`${BASE_URL}?scenario=homeInbox`);
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    const conf = page.getByTestId("home-key-date-conf");
+    await conf.waitFor({ timeout: 10_000 });
+    await conf.scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollBy(0, 150));
+    await page.waitForTimeout(300);
+    const box = await conf.boundingBox();
+    assert.ok(box);
+    await page.mouse.move(box.x + box.width - 30, box.y + box.height / 2);
+    await page.mouse.down();
+    for (let step = 1; step <= 12; step++) await page.mouse.move(box.x + box.width - 30 - step * 22, box.y + box.height / 2);
+    await page.mouse.up();
+    // Watch the row's height while the server is still removing it.
+    const heights = page.evaluate(async () => {
+      const seen: number[] = [];
+      const start = performance.now();
+      while (performance.now() - start < 3000) {
+        seen.push(document.querySelector("[data-testid='home-key-date-conf']")?.getBoundingClientRect().height ?? 0);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return seen;
+    });
+    const seen = await heights;
+    const low = seen.findIndex((height) => height < 5);
+    assert.ok(low >= 0, `the card folds away (${seen.map(Math.round).join(",")})`);
+    assert.ok(seen.slice(low).every((height) => height < 5), `the card never comes back (${seen.map(Math.round).join(",")})`);
+  } finally {
+    await page.close();
+  }
+});
+
 test("Home never shows a password reset, sources fit their chip, and Stop emails like this clears a kind from every sender", async () => {
   const page = await openScenario("homeInbox");
   try {
