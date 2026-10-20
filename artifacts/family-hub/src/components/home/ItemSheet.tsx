@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, SlidersHorizontal } from "lucide-react";
 import type { Chore } from "@workspace/shared-types";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -41,7 +42,7 @@ export function ItemSheet({ home }: { home: HomeModel }) {
         {sheet?.mode === "source" && (
           <>
             <SheetHeader><SheetTitle>{sheet.chore.title}</SheetTitle></SheetHeader>
-            <NoteBullets description={sheet.chore.description} />
+            <ItemDetails key={sheet.chore.id} chore={sheet.chore} onMore={(description) => setSheet({ ...sheet, chore: { ...sheet.chore, description } })} />
             {canRead(sheet.chore) && <ReadFullEmail key={sheet.chore.id} chore={sheet.chore} viewer={personId ?? null} />}
           </>
         )}
@@ -136,6 +137,45 @@ export function NoteBullets({ description }: { description: string | null | unde
     <ul data-testid="home-note-bullets" className="mt-3 flex list-disc flex-col gap-1.5 pl-5 text-sm leading-snug">
       {bullets.map((line, at) => <li key={`${at}-${line}`}>{line}</li>)}
     </ul>
+  );
+}
+
+const TRIED_KEY = "superhub_details_tried";
+const tried = (): string[] => {
+  try { return JSON.parse(localStorage.getItem(TRIED_KEY) ?? "[]") as string[]; } catch { return []; }
+};
+
+/**
+ * An item's note as bullets. One saved with almost nothing (a date and a
+ * school, both already on the card) asks once for more from its email, and
+ * the item keeps what comes back (2026-10-20).
+ */
+function ItemDetails({ chore, onMore }: { chore: Chore; onMore: (description: string) => void }) {
+  const queryClient = useQueryClient();
+  const thin = noteBullets(chore.description).length <= 2 && !!slipHeader(chore.description).Mail;
+  const [asking, setAsking] = useState(() => thin && !tried().includes(chore.id));
+  useEffect(() => {
+    if (!asking) return;
+    try { localStorage.setItem(TRIED_KEY, JSON.stringify([...tried(), chore.id].slice(-500))); } catch { /* private mode */ }
+    let live = true;
+    apiRequest("POST", "/api/ingest/details", { choreId: chore.id })
+      .then((res) => res.json() as Promise<{ description?: string }>)
+      .then(({ description }) => {
+        if (!live || !description || description === chore.description) return;
+        queryClient.setQueryData<Chore[]>(["/api/chores"], (old) => old?.map((row) => (row.id === chore.id ? { ...row, description } : row)));
+        onMore(description);
+      })
+      .catch(() => null)
+      .finally(() => { if (live) setAsking(false); });
+    return () => { live = false; };
+  // Once per item opened.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <>
+      <NoteBullets description={chore.description} />
+      {asking && <p data-testid="home-note-more" className="mt-2 text-xs text-[#6e6e78]">Getting more details from the email…</p>}
+    </>
   );
 }
 

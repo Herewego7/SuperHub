@@ -6902,6 +6902,38 @@ test("Confirm dialog: a long email address wraps and the buttons stay on screen"
   }
 });
 
+// Spirit Day's details were only its date and school, both already on the
+// card. A thin item asks its email once for more, and keeps it (2026-10-20).
+test("Opening an item with almost no detail fills it in from its email, once", async () => {
+  const page = await openScenario("homeInbox");
+  try {
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    const slip = page.getByTestId("home-todo-slip");
+    await slip.waitFor({ timeout: 10_000 });
+    let asked = 0;
+    await page.exposeFunction("countDetails", () => { asked++; });
+    await page.evaluate(() => {
+      const before = window.fetch;
+      window.fetch = (input, init) => {
+        if (String(input).includes("/api/ingest/details")) (window as unknown as { countDetails: () => void }).countDetails();
+        return before(input, init);
+      };
+    });
+    await slip.getByText("Sign the zoo trip form").click();
+    const bullets = page.getByTestId("home-note-bullets");
+    await bullets.waitFor({ timeout: 5000 });
+    await bullets.getByText("Pack a lunch and water.").waitFor({ timeout: 5000 });
+    assert.match(await bullets.textContent() ?? "", /Return the signed form to the office\..*The zoo trip is Friday, 9 AM to 2 PM\./);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    await slip.getByText("Sign the zoo trip form").click();
+    await bullets.getByText("Pack a lunch and water.").waitFor({ timeout: 5000 });
+    assert.equal(asked, 1, "the email is read for details only once");
+  } finally {
+    await page.close();
+  }
+});
+
 test("Key Dates: ticking dates brings up Add to calendar and Remove, and a swipe left removes one", async () => {
   const page = await openScenarioTouch("homeInbox", { width: 390, height: 844 });
   try {

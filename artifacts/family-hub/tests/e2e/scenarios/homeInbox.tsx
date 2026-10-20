@@ -96,6 +96,11 @@ export function setup(): void {
         }
         return ok({});
       },
+      "/api/ingest/details": (_url: string, opts?: RequestInit) => {
+        const { choreId } = JSON.parse(opts?.body as string);
+        todos = todos.map((todo) => (todo.id === choreId ? { ...todo, description: `${todo.description}\nThe zoo trip is Friday, 9 AM to 2 PM.\nPack a lunch and water.` } : todo));
+        return ok({ description: todos.find((todo) => todo.id === choreId)?.description });
+      },
       "/api/ingest/original": {
         subject: "Planner reminder",
         from: "Front Office <office@school.org>",

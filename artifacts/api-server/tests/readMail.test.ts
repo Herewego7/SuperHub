@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { alreadyRead, undoubleDecide, withoutDecide, mailReadPrompt, parseMailRead, plansFromRead, subjectPlaceholder } from "../src/ingest/readMail.ts";
+import { alreadyRead, clipLines, decisionTitle, undoubleDecide, withoutDecide, mailReadPrompt, parseMailRead, plansFromRead, subjectPlaceholder } from "../src/ingest/readMail.ts";
 import { slipMail } from "../src/ingest/process.ts";
 
 const people = [{ name: "Liam", isChild: true, school: "Oak Elementary" }];
@@ -173,4 +173,18 @@ test("a decision is titled with one Decide:, and saved doubles are made one", ()
   assert.equal(undoubleDecide("Decide: Decide: Accept or decline. Due 10/18/2026."), "Decide: Accept or decline. Due 10/18/2026.");
   assert.equal(undoubleDecide("From: a@b.com\nPlan: todo\nDecide: Decide: Decide: Pick"), "From: a@b.com\nPlan: todo\nDecide: Pick");
   assert.equal(undoubleDecide("Decide: Pick a camp"), "Decide: Pick a camp");
+});
+
+// "Decide: Decide on a date night" (2026-10-20).
+test("a decision that already says Decide on keeps its own words", () => {
+  assert.equal(decisionTitle("Decide on a date night"), "Decide on a date night");
+  assert.equal(decisionTitle("Decide: decide whether to go"), "Decide whether to go");
+  assert.equal(decisionTitle("Pick a camp"), "Decide: Pick a camp");
+  assert.equal(undoubleDecide("Decide: Decide on a date night to the Withdrawing Room"), "Decide on a date night to the Withdrawing Room");
+});
+
+// Details came back as one 240-character line (2026-10-20).
+test("details keep one line per point", () => {
+  assert.equal(clipLines("Wear school colors.\n- Bring $2 for the bake sale.\n\nStarts at 8 AM.", 5, 600), "Wear school colors.\nBring $2 for the bake sale.\nStarts at 8 AM.");
+  assert.equal(clipLines("a\nb\nc\nd\ne\nf", 5, 600).split("\n").length, 5);
 });

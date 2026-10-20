@@ -36,6 +36,7 @@ import { markSchedulerWorkDirty } from "../lib/workGate";
 import { dinnerCalendarChange, dinnerEventInsert, dinnerLeavesTheApp, dinnersToCopy } from "../meals/dinnerEvent";
 import { clientMessages, INBOX_INITIAL_DAYS, slipKey } from "../ingest/parse";
 import { undoubleDecide } from "../ingest/readMail";
+import { moreDetails } from "../ingest/details";
 import { hideNewsletter, resumeKind, resumeSender, showNewsletter, stopKind, stopSender } from "../ingest/mute";
 import { readOriginal } from "../ingest/original";
 import { moveClock } from "../scheduler/eveningPlan";
@@ -3532,6 +3533,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error opening an original email:", error);
       res.status(502).json({ error: "Couldn't open that email right now." });
+    }
+  });
+
+  // Fill in an inbox item saved with almost no detail, from its email.
+  app.post("/api/ingest/details", isAuthenticated, async (req: any, res) => {
+    try {
+      const choreId = typeof req.body?.choreId === "string" ? req.body.choreId : "";
+      if (!choreId) {
+        res.status(400).json({ error: "choreId is required" });
+        return;
+      }
+      const answer = await moreDetails(getUserId(req), choreId);
+      res.status(answer.status).json(answer.body);
+    } catch (error) {
+      console.error("Error adding details to an item:", error);
+      res.status(502).json({ error: "Couldn't get more details right now." });
     }
   });
 
