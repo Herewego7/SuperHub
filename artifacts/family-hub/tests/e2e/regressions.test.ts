@@ -6987,7 +6987,7 @@ test("Key Dates: a swiped card stays gone when the server removes it but answers
   }
 });
 
-test("Home never shows a password reset, sources fit their chip, and Stop emails like this clears a kind from every sender", async () => {
+test("Home never shows a password reset, sources fit their chip, and Email settings clears a kind from every sender", async () => {
   const page = await openScenario("homeInbox");
   try {
     await page.getByTestId("profile-all family").click({ timeout: 15_000 });
@@ -6995,30 +6995,30 @@ test("Home never shows a password reset, sources fit their chip, and Stop emails
     await linkedin.waitFor({ timeout: 10_000 });
     assert.equal(await page.getByTestId("home-todo-reset").count(), 0, "a password reset is never a to-do");
     assert.equal((await linkedin.getByTestId("home-todo-source").textContent())?.trim(), "LinkedIn");
+    // Kinds of email are a setting for all mail, so the item menu only links
+    // to Settings instead of picking them there (2026-10-20).
     await page.getByRole("button", { name: /More actions for Respond to Roderick/ }).click();
-    await page.getByTestId("home-todo-stop-kind").click();
-    const social = page.getByTestId("home-kind-social");
-    await social.waitFor({ timeout: 3000 });
-    assert.equal(await social.getAttribute("aria-checked"), "true", "the kind this email is starts ticked");
-    await page.getByTestId("home-kind-stop").click();
+    assert.equal(await page.getByTestId("home-todo-stop-kind").count(), 0, "no per-item kind picker");
+    await page.getByTestId("home-todo-email-settings").click();
+    const social = page.getByTestId("inbox-kind-social").getByRole("checkbox");
+    await social.waitFor({ timeout: 5000 });
+    assert.equal(await social.getAttribute("aria-checked"), "false");
+    await social.click();
+    await page.waitForTimeout(300);
+    assert.equal(await social.getAttribute("aria-checked"), "true", "it ticks at once");
+    await page.keyboard.press("Escape");
     await linkedin.waitFor({ state: "detached", timeout: 5000 });
     await page.waitForTimeout(2000);
     assert.equal(await linkedin.count(), 0, "it stays gone after the list reloads");
     assert.equal(await page.getByTestId("home-todo-planner").count(), 1, "school mail stays");
-    // Reopened from another email, the picker shows what's saved (2026-10-20).
+    // Back in Settings, it is still ticked, and unticking turns it back on.
     await page.getByRole("button", { name: /More actions for Bring planner/ }).click();
-    await page.getByTestId("home-todo-stop-kind").click();
-    await social.waitFor({ timeout: 3000 });
+    await page.getByTestId("home-todo-email-settings").click();
+    await social.waitFor({ timeout: 5000 });
     assert.equal(await social.getAttribute("aria-checked"), "true", "a stopped kind stays ticked");
-    assert.equal(await page.getByTestId("home-kind-social-mine").count(), 0, "it isn't marked as this email's kind");
-    assert.equal(await page.getByTestId("home-kind-stop").isDisabled(), true, "nothing to save until something changes");
     await social.click();
-    await page.getByTestId("home-kind-stop").click();
     await page.waitForTimeout(500);
-    await page.getByRole("button", { name: /More actions for Bring planner/ }).click();
-    await page.getByTestId("home-todo-stop-kind").click();
-    await social.waitFor({ timeout: 3000 });
-    assert.equal(await social.getAttribute("aria-checked"), "false", "unticking and saving turns it back on");
+    assert.equal(await social.getAttribute("aria-checked"), "false", "unticking turns it back on");
   } finally {
     await page.close();
   }

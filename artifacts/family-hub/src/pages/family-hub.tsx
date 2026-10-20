@@ -371,14 +371,16 @@ export default function FamilyHub() {
   // one to connect) — spotlights the whole Calendar Connections list instead
   // of auto-expanding a single row.
   const [settingsSpotlightAllCalendarProfiles, setSettingsSpotlightAllCalendarProfiles] = useState(false);
+  const [settingsInboxKinds, setSettingsInboxKinds] = useState(false);
   // Every "open Settings" entry point routes through this so opening it is
   // PIN-gated in one place, not at each trigger.
-  const openSettings = (initialSection?: string, initialCalendarProfileId?: string, initialHighlightTabId?: string, spotlightAllCalendarProfiles?: boolean) =>
+  const openSettings = (initialSection?: string, initialCalendarProfileId?: string, initialHighlightTabId?: string, spotlightAllCalendarProfiles?: boolean, inboxKinds?: boolean) =>
     guardParentAction("settings", () => {
       if (initialSection) setSettingsInitialSection(initialSection);
       setSettingsInitialCalendarProfileId(initialCalendarProfileId ?? null);
       setSettingsInitialHighlightTabId(initialHighlightTabId ?? null);
       setSettingsSpotlightAllCalendarProfiles(!!spotlightAllCalendarProfiles);
+      setSettingsInboxKinds(!!inboxKinds);
       setShowSettings(true);
     });
 
@@ -1584,6 +1586,7 @@ export default function FamilyHub() {
             }}
             onReplayOnboarding={(step) => setReplayOnboardingStep(step)}
             onOpenCalendarSettings={() => openSettings("calendar", undefined, undefined, true)}
+            onOpenInboxSettings={() => openSettings("calendar", undefined, undefined, false, true)}
             healthReminderSpotlightTrigger={healthReminderSpotlightTrigger}
             onHealthReminderSpotlightHandled={() => setHealthReminderSpotlightTrigger(0)}
             praiseSpotlightTrigger={praiseSpotlightTrigger}
@@ -1984,6 +1987,7 @@ export default function FamilyHub() {
             initialCalendarProfileId={settingsInitialCalendarProfileId}
             initialCalendarSpotlightAll={settingsSpotlightAllCalendarProfiles}
             initialHighlightTabId={settingsInitialHighlightTabId}
+            initialInboxKinds={settingsInboxKinds}
           />
         </Suspense>
       )}

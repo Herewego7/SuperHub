@@ -907,6 +907,9 @@ interface SettingsModalProps {
    * you might have missed" nudge so its "Turn it on" button lands on the
    * exact checkbox instead of just the general section. */
   initialHighlightTabId?: string | null;
+  /** Open Calendar on the inbox's "Kinds of email to skip" list, from an
+   * email item's menu on Home. */
+  initialInboxKinds?: boolean;
 }
 
 function deriveInitials(name: string): string {
@@ -1356,6 +1359,7 @@ export function CalendarConnectionsSection({
   isOpen = true,
   initialCalendarProfileId,
   initialCalendarSpotlightAll,
+  initialInboxKinds,
   onBeforeWebRedirect,
 }: {
   profiles: Profile[];
@@ -1372,6 +1376,8 @@ export function CalendarConnectionsSection({
    * single specific person to point at (e.g. Home's "no calendar connected
    * yet" empty state). */
   initialCalendarSpotlightAll?: boolean;
+  /** Scrolls to and spotlights the "Kinds of email to skip" list. */
+  initialInboxKinds?: boolean;
   /** Called immediately before a WEB (non-native) OAuth connect navigates
    * the whole page away — native uses an in-app browser session and never
    * needs this. Lets a host that has its own in-memory step/flow state (the
@@ -1528,7 +1534,32 @@ export function CalendarConnectionsSection({
   const [localKinds, setLocalKinds] = useState<MailKindId[]>(() => {
     try { return JSON.parse(localStorage.getItem("superhub_stopped_mail_kinds") ?? "[]") as MailKindId[]; } catch { return []; }
   });
-  const stoppedKindRows = MAIL_KINDS.filter((kind) => stoppedKinds(calendarSettingsData?.dismissedSlipKeys).includes(kind.id) || localKinds.includes(kind.id));
+  const offeredKinds = MAIL_KINDS.filter((kind) => !kind.always);
+  const kindIsOff = (kind: MailKindId) => stoppedKinds(calendarSettingsData?.dismissedSlipKeys).includes(kind) || localKinds.includes(kind);
+  const markKind = (kind: MailKindId, off: boolean) => queryClient.setQueryData(["/api/calendar-settings"], (old: any) => {
+    if (!old) return old;
+    const key = `kind:${kind}`;
+    const kept = ((old.dismissedSlipKeys ?? []) as string[]).filter((item) => item !== key);
+    return { ...old, dismissedSlipKeys: off ? [...kept, key] : kept };
+  });
+  // Turning a kind off skips it from every sender and clears its open items.
+  const stopKind = useMutation({
+    mutationFn: async (kind: MailKindId) => {
+      try {
+        await apiRequest("POST", "/api/ingest/mute-kind", { kind });
+      } catch {
+        // A server from before kinds: this phone keeps it, and Home hides it.
+        const next = [...new Set([...localKinds, kind])];
+        setLocalKinds(next);
+        try { localStorage.setItem("superhub_stopped_mail_kinds", JSON.stringify(next)); } catch { /* private mode */ }
+      }
+    },
+    onMutate: (kind) => markKind(kind, true),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/chores"] });
+    },
+  });
   const undoKind = useMutation({
     mutationFn: async (kind: MailKindId) => {
       const next = localKinds.filter((id) => id !== kind);
@@ -1536,6 +1567,7 @@ export function CalendarConnectionsSection({
       try { localStorage.setItem("superhub_stopped_mail_kinds", JSON.stringify(next)); } catch { /* private mode */ }
       if (stoppedKinds(calendarSettingsData?.dismissedSlipKeys).includes(kind)) await apiRequest("POST", "/api/ingest/unmute-kind", { kind });
     },
+    onMutate: (kind) => markKind(kind, false),
     onError: () => toast({ title: "Couldn't undo that", variant: "destructive" }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] }),
   });
@@ -1748,6 +1780,15 @@ export function CalendarConnectionsSection({
     }, 250);
     return () => clearTimeout(t);
   }, [isOpen, initialCalendarSpotlightAll]);
+  useEffect(() => {
+    if (!isOpen || !initialInboxKinds) return;
+    const t = setTimeout(() => {
+      document.getElementById("inbox-kinds")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      spotlight("inbox-kinds");
+    }, 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialInboxKinds]);
 
   // Handle OAuth callback success and refresh calendar queries
   useEffect(() => {
@@ -2038,7 +2079,32 @@ export function CalendarConnectionsSection({
                     data-testid="toggle-share-originals"
                   />
                 </div>
-                {(stoppedSenders.length > 0 || hiddenNewsletters.length > 0 || stoppedKindRows.length > 0) && (
+                <div id="inbox-kinds" className="mb-3 rounded-md" data-testid="inbox-kinds">
+                  <p className="text-xs font-medium mb-0.5">Kinds of email to skip</p>
+                  <p className="text-[11px] text-muted-foreground mb-1">From every sender, everywhere on Home. Open ones leave now; unticking brings back future email.</p>
+                  <ul className="flex flex-col">
+                    {offeredKinds.map((kind) => {
+                      const off = kindIsOff(kind.id);
+                      return (
+                        <li key={kind.id}>
+                          <label className="flex items-start gap-2.5 px-2.5 py-1.5" data-testid={`inbox-kind-${kind.id}`}>
+                            <Checkbox
+                              checked={off}
+                              className="mt-0.5"
+                              aria-label={kind.label}
+                              onCheckedChange={(checked) => (checked ? stopKind.mutate(kind.id) : undoKind.mutate(kind.id))}
+                            />
+                            <span className="min-w-0">
+                              <span className="block text-xs">{kind.label}</span>
+                              <span className="block text-[11px] text-muted-foreground">{kind.detail}</span>
+                            </span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+                {(stoppedSenders.length > 0 || hiddenNewsletters.length > 0) && (
                   <div className="mb-3 flex flex-col gap-3" data-testid="inbox-stopped">
                     {stoppedSenders.length > 0 && (
                       <div>
@@ -2048,24 +2114,6 @@ export function CalendarConnectionsSection({
                             <li key={address} data-testid="stopped-sender" className="flex items-center justify-between gap-3 px-2.5 py-1">
                               <span className="min-w-0 truncate text-xs">{address}</span>
                               <button type="button" aria-label={`Undo stopping ${address}`} className="shrink-0 py-1 text-xs font-semibold text-[#5E8FAD]" onClick={() => undoStopped.mutate({ list: "mutedSenders", value: address })}>
-                                Undo
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {stoppedKindRows.length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium mb-1">Kinds of email you stopped</p>
-                        <ul className="flex flex-col">
-                          {stoppedKindRows.map((kind) => (
-                            <li key={kind.id} data-testid="stopped-kind" className="flex items-center justify-between gap-3 px-2.5 py-1">
-                              <span className="min-w-0">
-                                <span className="block truncate text-xs">{kind.label}</span>
-                                <span className="block truncate text-[11px] text-muted-foreground">{kind.detail}</span>
-                              </span>
-                              <button type="button" aria-label={`Undo stopping ${kind.label}`} className="shrink-0 py-1 text-xs font-semibold text-[#5E8FAD]" onClick={() => undoKind.mutate(kind.id)}>
                                 Undo
                               </button>
                             </li>
@@ -2280,7 +2328,7 @@ export function CalendarConnectionsSection({
   );
 }
 
-export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setHiddenTabs, defaultTab = 'home', setDefaultTab, tabOrder, setTabOrder, navIconsOnly = false, setNavIconsOnly, onReplayOnboarding, initialOpenSectionId, initialCalendarProfileId, initialCalendarSpotlightAll, initialHighlightTabId }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setHiddenTabs, defaultTab = 'home', setDefaultTab, tabOrder, setTabOrder, navIconsOnly = false, setNavIconsOnly, onReplayOnboarding, initialOpenSectionId, initialCalendarProfileId, initialCalendarSpotlightAll, initialHighlightTabId, initialInboxKinds }: SettingsModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, logout } = useAuth();
@@ -4331,6 +4379,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
               isOpen={isOpen}
               initialCalendarProfileId={initialCalendarProfileId}
               initialCalendarSpotlightAll={initialCalendarSpotlightAll}
+              initialInboxKinds={initialInboxKinds}
             />
           </SettingsSection>
 

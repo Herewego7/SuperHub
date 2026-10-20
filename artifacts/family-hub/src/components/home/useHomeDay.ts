@@ -11,7 +11,7 @@ import { confirmDialog } from "@/lib/confirmDialog";
 import { hapticLight } from "@/lib/haptics";
 import { fromStoppedSender, slipSender, slipSenderName } from "@/lib/slipMail";
 import { ownerFixes, teachSender, type OwnerPerson } from "@/lib/mailOwners";
-import { KIND_PREFIX, kindKeptOut, mailKindsOf, stoppedKinds, type MailKindId } from "@/lib/mailKinds";
+import { kindKeptOut, mailKindsOf, stoppedKinds, type MailKindId } from "@/lib/mailKinds";
 import { toast } from "@/hooks/use-toast";
 import { readCollapsed, saveCollapsed, type CardConfig, type HomeCardId } from "./registry";
 
@@ -40,6 +40,8 @@ export type HomeDayProps = {
   /** `failing` names each source whose events could not be fetched. */
   calendarStatus?: { connected: boolean; failing: string[] };
   onOpenCalendarSettings?: () => void;
+  /** Settings, open on the inbox's kinds of email to skip. */
+  onOpenInboxSettings?: () => void;
   familyProfileId?: string | null;
   /** The All Family profile's color, for anything that is for everyone. */
   familyColor?: string | null;
@@ -48,7 +50,7 @@ export type HomeDayProps = {
 };
 
 export type Letters = NewsletterGroup<Chore>;
-export type SheetState = { chore: Chore; mode: "actions" | "snooze" | "source" | "letter" | "issues" | "kinds"; keyDate?: boolean; letters?: Letters };
+export type SheetState = { chore: Chore; mode: "actions" | "snooze" | "source" | "letter" | "issues"; keyDate?: boolean; letters?: Letters };
 
 const SNOOZE_KEY = "superhub_home_snooze";
 const TICK_MS = 60_000;
@@ -242,63 +244,10 @@ export function useHomeDay(props: HomeDayProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!savedSenders]);
   // Kinds of email turned off on this phone when the server couldn't save
-  // them (one from before kinds existed). Home hides them either way.
-  const [localKinds, setLocalKinds] = useState<MailKindId[]>(() => {
-    try { return JSON.parse(localStorage.getItem(LOCAL_KINDS_KEY) ?? "[]") as MailKindId[]; } catch { return []; }
-  });
-  type MailSettings = { dismissedSlipKeys?: string[] | null } | undefined;
-  /** Show a change to the stopped kinds at once, so reopening the picker shows it ticked. */
-  const markKinds = (kinds: MailKindId[], off: boolean) => {
-    const keys = kinds.map((kind) => `${KIND_PREFIX}${kind}`);
-    queryClient.setQueryData<MailSettings>(["/api/calendar-settings"], (old) => {
-      if (!old) return old;
-      const kept = (old.dismissedSlipKeys ?? []).filter((key) => !keys.includes(key));
-      return { ...old, dismissedSlipKeys: off ? [...kept, ...keys] : kept };
-    });
-  };
-  /** Turn kinds back on: only future mail comes back. */
-  const resumeKinds = useMutation({
-    mutationFn: async (kinds: MailKindId[]) => {
-      setLocalKinds((current) => {
-        const next = current.filter((kind) => !kinds.includes(kind));
-        try { localStorage.setItem(LOCAL_KINDS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
-        return next;
-      });
-      await Promise.all(kinds.map((kind) => apiRequest("POST", "/api/ingest/unmute-kind", { kind }).catch(() => null)));
-    },
-    onMutate: (kinds) => markKinds(kinds, false),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] }),
-  });
-  const stopKinds = useMutation({
-    mutationFn: async (kinds: MailKindId[]) => {
-      let removedByServer = true;
-      for (const kind of kinds) {
-        try {
-          const res = await apiRequest("POST", "/api/ingest/mute-kind", { kind });
-          const body = await res.json().catch(() => ({})) as { removed?: number };
-          if (typeof body.removed !== "number") removedByServer = false;
-        } catch {
-          removedByServer = false;
-          setLocalKinds((current) => {
-            const next = [...new Set([...current, kind])];
-            try { localStorage.setItem(LOCAL_KINDS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
-            return next;
-          });
-        }
-      }
-      return removedByServer;
-    },
-    onMutate: (kinds) => {
-      markKinds(kinds, true);
-      const done = new Set(completions.map((completion) => completion.choreId));
-      return dropChores((chore) => !(chore.category === "school_email" && !done.has(chore.id) && kindsOfChore(chore).some((kind) => kinds.includes(kind))));
-    },
-    onSuccess: (removedByServer, _kinds, context) => removeLeftovers(removedByServer, context),
-    onSettled: async (_data, error, _kinds, context) => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] });
-      await settleDrop(!!error, context);
-    },
-  });
+  // them (one from before kinds existed). Home hides them either way. Read
+  // on every render: Settings changes the list while Home stays open.
+  let localKinds: MailKindId[] = [];
+  try { localKinds = JSON.parse(localStorage.getItem(LOCAL_KINDS_KEY) ?? "[]") as MailKindId[]; } catch { /* private mode */ }
   const hideLetters = useMutation({
     mutationFn: async (letters: Letters) => {
       await apiRequest("POST", "/api/ingest/newsletter/hide", { address: letters.sender, name: letters.muteName });
@@ -675,7 +624,7 @@ export function useHomeDay(props: HomeDayProps) {
     sheet, setSheet,
     revealed, setRevealed,
     snoozeItem,
-    checkOff, uncheck, removeRow, askStopEmails, stopKinds, resumeKinds, kindsOff,
+    checkOff, uncheck, removeRow, askStopEmails,
     saveSchool, complete, undo, assign, reassign, removeTodo, removeItem, stopEmails, addToCalendar, removeFromCalendar,
     newsletters, visibleNewsletters, hideLetters, askHideLetters,
     keyDates, visibleKeys,
