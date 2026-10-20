@@ -51,8 +51,6 @@ interface HomeViewProps {
   /** Opens the app's Settings modal directly to "Calendar" — used by Today's
    * Schedule when no calendar is connected, or one has stopped syncing. */
   onOpenCalendarSettings?: () => void;
-  /** Settings, open on the inbox's kinds of email to skip. */
-  onOpenInboxSettings?: () => void;
   /** Opens everyone's health reminders, with this person first. */
   onManageHealthReminders?: (profileId: string | null) => void;
   /** Counters bumped by a push-notification tap deep-link (family-hub.tsx),
@@ -76,7 +74,7 @@ interface HomeViewProps {
   onShiftDay?: (by: number) => void;
 }
 
-export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectProfile, selectedDate, onNavigateToRewards, onNavigateToBonusChores, onOpenHistory, onOpenActivityEntry, addEventTrigger, onNavigateToEvent, onNavigateToParentControls, onNavigateToRewardSuggestions, onReplayOnboarding, onOpenCalendarSettings, onOpenInboxSettings, healthReminderSpotlightTrigger, onHealthReminderSpotlightHandled, praiseSpotlightTrigger, onPraiseSpotlightHandled, notesSpotlightTrigger, onNotesSpotlightHandled, onManageHealthReminders, onEditChore, onDeleteChore, onAddTodo, onShiftDay }: HomeViewProps) {
+export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectProfile, selectedDate, onNavigateToRewards, onNavigateToBonusChores, onOpenHistory, onOpenActivityEntry, addEventTrigger, onNavigateToEvent, onNavigateToParentControls, onNavigateToRewardSuggestions, onReplayOnboarding, onOpenCalendarSettings, healthReminderSpotlightTrigger, onHealthReminderSpotlightHandled, praiseSpotlightTrigger, onPraiseSpotlightHandled, notesSpotlightTrigger, onNotesSpotlightHandled, onManageHealthReminders, onEditChore, onDeleteChore, onAddTodo, onShiftDay }: HomeViewProps) {
   const { spotlight, spotlightOverlay } = useSpotlight();
 
   const [selectedEvent, setSelectedEvent] = useState<EventDisplay | null>(null);
@@ -649,7 +647,6 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           ].filter((name): name is string => !!name),
         }}
         onOpenCalendarSettings={onOpenCalendarSettings}
-        onOpenInboxSettings={onOpenInboxSettings}
         familyProfileId={profiles.find((p) => p.isAllFamilyProfile)?.id ?? null}
         openEarlierKey={openEarlierKey}
       />

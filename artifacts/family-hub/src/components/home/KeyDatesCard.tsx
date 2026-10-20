@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useAnimationControls, type PanInfo } from "fra
 import { AlarmClock, Calendar, CalendarPlus, Check, MoreVertical, Trash2, X } from "lucide-react";
 import { PLAN_KEY_DATES, planDateLabel } from "@/lib/homeDay";
 import { slipSender, slipSenderName } from "@/lib/slipMail";
-import { HomeCard } from "./HomeCard";
+import { EmailFiltersButton, HomeCard } from "./HomeCard";
 import { SourceChip } from "./SourceChip";
 import type { HomeModel } from "./useHomeDay";
 
@@ -38,7 +38,7 @@ export function KeyDatesCard({ home }: { home: HomeModel }) {
     setPicked(new Set());
   };
   return (
-    <HomeCard id="keyDates" title="Key Dates to Add" summary={summary} collapsed={home.isCollapsed("keyDates")} onToggle={() => home.toggleCard("keyDates")}>
+    <HomeCard id="keyDates" title="Key Dates to Add" summary={summary} collapsed={home.isCollapsed("keyDates")} onToggle={() => home.toggleCard("keyDates")} actions={<EmailFiltersButton onOpen={() => home.setFiltersOpen(true)} />}>
       {visibleKeys.length === 0 ? (
         <p className="text-sm text-muted-foreground">No new dates to add.</p>
       ) : (

@@ -6987,7 +6987,7 @@ test("Key Dates: a swiped card stays gone when the server removes it but answers
   }
 });
 
-test("Home never shows a password reset, sources fit their chip, and Email settings clears a kind from every sender", async () => {
+test("Home never shows a password reset, sources fit their chip, and Email filters on Home clear a kind from every sender", async () => {
   const page = await openScenario("homeInbox");
   try {
     await page.getByTestId("profile-all family").click({ timeout: 15_000 });
@@ -6995,12 +6995,13 @@ test("Home never shows a password reset, sources fit their chip, and Email setti
     await linkedin.waitFor({ timeout: 10_000 });
     assert.equal(await page.getByTestId("home-todo-reset").count(), 0, "a password reset is never a to-do");
     assert.equal((await linkedin.getByTestId("home-todo-source").textContent())?.trim(), "LinkedIn");
-    // Kinds of email are a setting for all mail, so the item menu only links
-    // to Settings instead of picking them there (2026-10-20).
+    // Kinds of email are a filter for all mail, kept on Home: a button on the
+    // card, and a separate row in an item's menu (2026-10-20).
     await page.getByRole("button", { name: /More actions for Respond to Roderick/ }).click();
     assert.equal(await page.getByTestId("home-todo-stop-kind").count(), 0, "no per-item kind picker");
-    await page.getByTestId("home-todo-email-settings").click();
-    const social = page.getByTestId("inbox-kind-social").getByRole("checkbox");
+    await page.getByTestId("home-todo-email-filters").click();
+    const filters = page.getByTestId("home-email-filters");
+    const social = filters.getByTestId("home-kind-social");
     await social.waitFor({ timeout: 5000 });
     assert.equal(await social.getAttribute("aria-checked"), "false");
     await social.click();
@@ -7011,9 +7012,8 @@ test("Home never shows a password reset, sources fit their chip, and Email setti
     await page.waitForTimeout(2000);
     assert.equal(await linkedin.count(), 0, "it stays gone after the list reloads");
     assert.equal(await page.getByTestId("home-todo-planner").count(), 1, "school mail stays");
-    // Back in Settings, it is still ticked, and unticking turns it back on.
-    await page.getByRole("button", { name: /More actions for Bring planner/ }).click();
-    await page.getByTestId("home-todo-email-settings").click();
+    // From the card's own button, it is still ticked, and unticking turns it back on.
+    await page.getByTestId("home-email-filters-button").first().click();
     await social.waitFor({ timeout: 5000 });
     assert.equal(await social.getAttribute("aria-checked"), "true", "a stopped kind stays ticked");
     await social.click();

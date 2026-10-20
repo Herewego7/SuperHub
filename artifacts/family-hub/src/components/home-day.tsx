@@ -3,6 +3,7 @@ import { ChoresCard } from "@/components/home/ChoresCard";
 import { CompletedCard } from "@/components/home/CompletedCard";
 import { DayHeader } from "@/components/home/DayHeader";
 import { DrivingCard } from "@/components/home/DrivingCard";
+import { EmailFiltersSheet } from "@/components/home/EmailFiltersSheet";
 import { HorizonCard } from "@/components/home/HorizonCard";
 import { InboxScanBanner } from "@/components/home/InboxScanBanner";
 import { ItemSheet } from "@/components/home/ItemSheet";
@@ -36,6 +37,7 @@ export function HomeDay(props: HomeDayProps) {
         return <Card key={card.id} home={home} />;
       })}
       <ItemSheet home={home} />
+      <EmailFiltersSheet home={home} />
     </div>
   );
 }

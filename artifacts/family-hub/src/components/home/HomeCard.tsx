@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { cardIcon, type HomeCardId } from "./registry";
 
 type Props = {
@@ -41,5 +41,14 @@ export function HomeCard({ id, title, summary, collapsed, onToggle, actions, tes
       </div>
       {!collapsed && <div id={bodyId}>{children}</div>}
     </section>
+  );
+}
+
+/** Opens Email filters from a card whose rows come from email. */
+export function EmailFiltersButton({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button type="button" aria-label="Email filters" data-testid="home-email-filters-button" className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-border text-[#6e6e78]" onClick={onOpen}>
+      <SlidersHorizontal className="h-4 w-4" />
+    </button>
   );
 }

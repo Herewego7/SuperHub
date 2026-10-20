@@ -4,7 +4,7 @@ import { Check, ChevronDown, ChevronUp, MoreVertical, Plus } from "lucide-react"
 import type { Chore } from "@workspace/shared-types";
 import { schoolHomeTitle } from "@/lib/homeDay";
 import { slipQuote, slipSender, slipSenderName } from "@/lib/slipMail";
-import { HomeCard } from "./HomeCard";
+import { EmailFiltersButton, HomeCard } from "./HomeCard";
 import { PersonChips } from "./PersonChips";
 import { SourceChip } from "./SourceChip";
 import type { HomeModel } from "./useHomeDay";
@@ -35,10 +35,15 @@ export function TodosCard({ home }: { home: HomeModel }) {
       summary={summary}
       collapsed={home.isCollapsed("todos")}
       onToggle={() => home.toggleCard("todos")}
-      actions={onAddTodo && (
-        <button type="button" aria-label="Add a to-do" className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-border" onClick={onAddTodo}>
-          <Plus className="h-4 w-4" />
-        </button>
+      actions={(
+        <>
+          <EmailFiltersButton onOpen={() => home.setFiltersOpen(true)} />
+          {onAddTodo && (
+            <button type="button" aria-label="Add a to-do" className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-border" onClick={onAddTodo}>
+              <Plus className="h-4 w-4" />
+            </button>
+          )}
+        </>
       )}
     >
       <ClearedNote home={home} />
