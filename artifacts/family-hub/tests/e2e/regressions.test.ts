@@ -7005,6 +7005,20 @@ test("Home never shows a password reset, sources fit their chip, and Stop emails
     await page.waitForTimeout(2000);
     assert.equal(await linkedin.count(), 0, "it stays gone after the list reloads");
     assert.equal(await page.getByTestId("home-todo-planner").count(), 1, "school mail stays");
+    // Reopened from another email, the picker shows what's saved (2026-10-20).
+    await page.getByRole("button", { name: /More actions for Bring planner/ }).click();
+    await page.getByTestId("home-todo-stop-kind").click();
+    await social.waitFor({ timeout: 3000 });
+    assert.equal(await social.getAttribute("aria-checked"), "true", "a stopped kind stays ticked");
+    assert.equal(await page.getByTestId("home-kind-social-mine").count(), 0, "it isn't marked as this email's kind");
+    assert.equal(await page.getByTestId("home-kind-stop").isDisabled(), true, "nothing to save until something changes");
+    await social.click();
+    await page.getByTestId("home-kind-stop").click();
+    await page.waitForTimeout(500);
+    await page.getByRole("button", { name: /More actions for Bring planner/ }).click();
+    await page.getByTestId("home-todo-stop-kind").click();
+    await social.waitFor({ timeout: 3000 });
+    assert.equal(await social.getAttribute("aria-checked"), "false", "unticking and saving turns it back on");
   } finally {
     await page.close();
   }

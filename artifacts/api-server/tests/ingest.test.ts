@@ -622,3 +622,13 @@ test("the evening plan lists only the email to-dos Home will show that day", () 
   assert.equal(emailTodoOnDay(linkedin, "2026-10-21", "2026-10-20", tz), false, "an old undated inbox item is not tomorrow's");
   assert.equal(emailTodoOnDay(typed, "2026-10-21", "2026-10-20", tz), true);
 });
+
+// A Wells Fargo statement stayed after Bills & subscriptions was stopped (2026-10-20).
+test("statements and bills read as billing, in the mail's words or the to-do's", () => {
+  for (const said of ["Review Wells Fargo statement", "Your Wells Fargo credit card statement is available", "View your eStatement", "American Express payment due", "Pay your Verizon bill", "Statement balance $1,234"]) {
+    assert.ok(mailKindsOf({ subject: said }).includes("billing"), said);
+  }
+  for (const said of ["Pay for the field trip by Friday", "Review the report card with Ava", "Mission statement for the PTA", "Sign the zoo trip form"]) {
+    assert.ok(!mailKindsOf({ subject: said }).includes("billing"), said);
+  }
+});

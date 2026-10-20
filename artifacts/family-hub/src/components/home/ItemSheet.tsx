@@ -239,19 +239,32 @@ function ActionList({ chore, keyDate, personId, people, added, onEdit, onSnooze,
 }
 
 /**
- * "No more of these": kinds of email to skip from every sender. The kinds
- * this email matches start ticked. Kinds that are never to-dos anyway
- * (password resets, deliveries) aren't offered.
+ * "No more of these": kinds of email to skip from every sender. Kinds already
+ * turned off start ticked, so the picker shows what's saved; the kinds this
+ * email matches start ticked too and are marked. Unticking one turns it back
+ * on. Kinds that are never to-dos anyway (password resets, deliveries) aren't
+ * offered.
  */
 function KindPicker({ home, chore }: { home: HomeModel; chore: Chore }) {
   const offered = MAIL_KINDS.filter((kind) => !kind.always);
-  const [picked, setPicked] = useState<Set<MailKindId>>(() => new Set(kindsOfChore(chore).filter((kind) => offered.some((row) => row.id === kind))));
+  const isOffered = (kind: MailKindId) => offered.some((row) => row.id === kind);
+  const saved = home.kindsOff.filter(isOffered);
+  const mine = kindsOfChore(chore).filter(isOffered);
+  const [picked, setPicked] = useState<Set<MailKindId>>(() => new Set([...saved, ...mine]));
   const toggle = (id: MailKindId) => setPicked((current) => {
     const next = new Set(current);
     if (next.has(id)) next.delete(id);
     else next.add(id);
     return next;
   });
+  const save = () => {
+    const stop = [...picked].filter((kind) => !saved.includes(kind));
+    const resume = saved.filter((kind) => !picked.has(kind));
+    if (stop.length > 0) home.stopKinds.mutate(stop);
+    if (resume.length > 0) home.resumeKinds.mutate(resume);
+    home.setSheet(null);
+  };
+  const changed = [...picked].some((kind) => !saved.includes(kind)) || saved.some((kind) => !picked.has(kind));
   return (
     <>
       <SheetHeader><SheetTitle className="text-left">Stop emails like this</SheetTitle></SheetHeader>
@@ -266,7 +279,10 @@ function KindPicker({ home, chore }: { home: HomeModel; chore: Chore }) {
                   {on && <Check className="h-3 w-3" />}
                 </span>
                 <span>
-                  <span className="block text-[15px]">{kind.label}</span>
+                  <span className="block text-[15px]">
+                    {kind.label}
+                    {mine.includes(kind.id) && <span className="ml-2 rounded-full bg-[#F1F1F4] px-2 py-0.5 text-[11px] font-medium text-[#6e6e78]" data-testid={`home-kind-${kind.id}-mine`}>This email</span>}
+                  </span>
                   <span className="mt-0.5 block text-xs text-[#6e6e78]">{kind.detail}</span>
                 </span>
               </button>
@@ -277,11 +293,11 @@ function KindPicker({ home, chore }: { home: HomeModel; chore: Chore }) {
       <button
         type="button"
         data-testid="home-kind-stop"
-        disabled={picked.size === 0}
+        disabled={!changed}
         className="mt-3 w-full rounded-full bg-destructive py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-        onClick={() => { home.stopKinds.mutate([...picked]); home.setSheet(null); }}
+        onClick={save}
       >
-        {picked.size <= 1 ? "Stop this kind of email" : `Stop these ${picked.size} kinds`}
+        Save
       </button>
     </>
   );

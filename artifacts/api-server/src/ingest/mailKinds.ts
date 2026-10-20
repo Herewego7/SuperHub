@@ -29,7 +29,9 @@ const RULES: Record<MailKindId, RegExp> = {
   reviews: /\b(?:review (?:your|the|my) (?:purchase|order|item|items|product|stay|visit|experience)|rate (?:your|the|my|us)|leave (?:a |us a )?review|write a review|how did we do|how was your|how would you rate|tell us (?:about|what you think)|share your (?:feedback|thoughts|experience)|(?:quick|short|customer|satisfaction) survey|take (?:our|a) survey|we value your feedback)\b/i,
   promotions: /\b(?:\d+% off|% off|sale ends|flash sale|limited time|special offer|exclusive offer|shop now|new arrivals|coupon|promo code|free shipping|deal of the|black friday|cyber monday|save up to|don't miss (?:out|these))\b/i,
   social: /\b(?:invited you to connect|wants to connect|connection request|accepted your invitation|new follower|started following you|liked your|commented on your|mentioned you|tagged you|people you may know|endorsed you|viewed your profile)\b/i,
-  billing: /\b(?:your (?:bill|statement|invoice) is (?:ready|available)|payment (?:due|reminder)|autopay|subscription (?:renew|renewal|will renew)|renews on|membership renewal|amount due|minimum payment)\b/i,
+  // Saved to-dos keep the reader's own words ("Review your Wells Fargo
+  // statement"), not the subject, so the wording around statements is wide.
+  billing: /\b(?:(?:your|new|monthly|account|card|bank|billing|credit card|checking|savings|e-?) ?(?:bill|statement|e-?statement|invoice)s?\b[^\n.]{0,40}?\b(?:is |are |now )?(?:ready|available|posted|online)|(?:review|view|check|download|see|look over|read) (?:your |the |my |this month's |the latest )?(?:[\w&'.-]+ ){0,4}(?:bill|statement|e-?statement|invoice)s?|(?:monthly|account|credit card|card|bank|billing|checking|savings) statement|e-?statements?|statement (?:balance|period|date|closing)|pay (?:your |the |my )?(?:[\w&'.-]+ ){0,3}(?:bill|invoice|card balance|balance due)|payment (?:due|reminder|is due|scheduled)|autopay|subscription (?:renew|renewal|will renew|is renewing|ending|expir)|renews on|renewal (?:notice|reminder)|membership renewal|amount due|minimum (?:payment|due))\b/i,
 };
 
 function domainOf(address: string | null | undefined): string {

@@ -145,3 +145,13 @@ test("a blank in the stopped list never crashes Home", () => {
   assert.equal(fromStoppedSender(linkedin, [null as unknown as string, "messages-noreply@linkedin.com"]), true);
   assert.equal(fromStoppedSender(linkedin, [null as unknown as string]), false);
 });
+
+// A Wells Fargo statement stayed after Bills & subscriptions was stopped (2026-10-20).
+test("statements and bills read as billing, in the mail's words or the to-do's", () => {
+  for (const said of ["Review Wells Fargo statement", "Your Wells Fargo credit card statement is available", "View your eStatement", "American Express payment due", "Pay your Verizon bill", "Statement balance $1,234"]) {
+    assert.ok(mailKindsOf({ subject: said }).includes("billing"), said);
+  }
+  for (const said of ["Pay for the field trip by Friday", "Review the report card with Ava", "Mission statement for the PTA", "Sign the zoo trip form"]) {
+    assert.ok(!mailKindsOf({ subject: said }).includes("billing"), said);
+  }
+});
