@@ -1,5 +1,7 @@
 import buildApp from "./app";
 import { logger } from "./lib/logger";
+import { pool } from "@workspace/db";
+import { repairSettingsTables } from "./db/repairSettings";
 
 const rawPort = process.env["PORT"];
 
@@ -13,6 +15,15 @@ const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
+}
+
+// A database that missed schema changes broke every settings read and save.
+// Repairs are additive, and a failure here never stops the server.
+try {
+  const done = await repairSettingsTables((sql) => pool.query(sql));
+  if (done.length > 0) logger.info({ done }, "Repaired settings tables");
+} catch (err) {
+  logger.warn({ err }, "Couldn't check the settings tables");
 }
 
 const app = await buildApp();

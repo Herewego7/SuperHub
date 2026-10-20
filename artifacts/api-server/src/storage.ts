@@ -1056,7 +1056,8 @@ export class DatabaseStorage implements IStorage {
       // half of the pair.
       return settingsRowForUser(rows, userId);
     } catch (e) {
-      console.warn("getCalendarSettingsByUser failed (column missing?):", e instanceof Error ? e.message : e);
+      // The cause names the real problem, like a missing column; the message is only the query.
+      console.warn("getCalendarSettingsByUser failed (column missing?):", (e as { cause?: { message?: string } })?.cause?.message ?? (e instanceof Error ? e.message : e));
       return undefined;
     }
   }
