@@ -1077,15 +1077,27 @@ export class DatabaseStorage implements IStorage {
     // caller actually sent, so a partial write (the two-way-sync PATCH sends
     // one field) still updates just that column — same as the read-then-update
     // it replaces.
-    const [saved] = await db
-      .insert(calendarSettings)
-      .values(settings)
-      .onConflictDoUpdate({
-        target: calendarSettings.userId,
-        set: { ...settings, updatedAt: new Date() },
-      })
-      .returning();
-    return saved;
+    try {
+      const [saved] = await db
+        .insert(calendarSettings)
+        .values(settings)
+        .onConflictDoUpdate({
+          target: calendarSettings.userId,
+          set: { ...settings, updatedAt: new Date() },
+        })
+        .returning();
+      return saved;
+    } catch (err) {
+      // A database without the one-row-per-user index can't take the upsert,
+      // and every save failed: Stop emails, removing an item, email filters
+      // (2026-10-20). Update the user's row, or add one when there is none.
+      console.warn("calendar settings upsert failed, saving row by row:", (err as { cause?: { message?: string } })?.cause?.message ?? err);
+      const { userId, ...fields } = settings;
+      const updated = await db.update(calendarSettings).set({ ...fields, updatedAt: new Date() }).where(eq(calendarSettings.userId, userId)).returning();
+      if (updated.length > 0) return updated[0];
+      const [created] = await db.insert(calendarSettings).values(settings).returning();
+      return created;
+    }
   }
 
   async claimPlanKey(userId: string, key: string, today: string): Promise<boolean> {
@@ -1133,15 +1145,25 @@ export class DatabaseStorage implements IStorage {
   /** ⚠️ `userId` is REQUIRED — see updateCalendarSettings above for why. */
   async updateLocationSettings(settings: InsertLocationSettings & { userId: string }): Promise<LocationSettings> {
     // Atomic upsert — see updateCalendarSettings above for why.
-    const [saved] = await db
-      .insert(locationSettings)
-      .values(settings)
-      .onConflictDoUpdate({
-        target: locationSettings.userId,
-        set: { ...settings, updatedAt: new Date() },
-      })
-      .returning();
-    return saved;
+    try {
+      const [saved] = await db
+        .insert(locationSettings)
+        .values(settings)
+        .onConflictDoUpdate({
+          target: locationSettings.userId,
+          set: { ...settings, updatedAt: new Date() },
+        })
+        .returning();
+      return saved;
+    } catch (err) {
+      // Same fallback as updateCalendarSettings, for a database without the unique index.
+      console.warn("location settings upsert failed, saving row by row:", (err as { cause?: { message?: string } })?.cause?.message ?? err);
+      const { userId, ...fields } = settings;
+      const updated = await db.update(locationSettings).set({ ...fields, updatedAt: new Date() }).where(eq(locationSettings.userId, userId)).returning();
+      if (updated.length > 0) return updated[0];
+      const [created] = await db.insert(locationSettings).values(settings).returning();
+      return created;
+    }
   }
 
   // Google Calendar Tokens
