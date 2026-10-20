@@ -35,7 +35,10 @@ let todos = [
   { ...base, id: "planner", title: "Bring planner", category: "school_email", profileIds: ["dad"], displayOrder: 0,
     description: mail("office@school.org", "Front Office", "dad", "m1", "Bring the planner to class. Sign the reading log.\nFor Ava.") },
   { ...base, id: "slip", title: "Sign the zoo trip form", category: "school_email", profileIds: ["mom"], displayOrder: 1,
-    description: mail("teacher@school.org", "Ms. Rivera", "mom", "m2", "Return the signed form to the office.") },
+    // A test can give this one a long sender with no name, the way some school mail comes.
+    description: (window as unknown as { longSender?: boolean }).longSender
+      ? `From: callaire@fitacademycharterschool.ccsend.com\nPlan: todo\nRef: m2\nSent: ${new Date().toISOString()}\nReturn the signed form to the office.`
+      : mail("teacher@school.org", "Ms. Rivera", "mom", "m2", "Return the signed form to the office.") },
   { ...base, id: "fair", title: "Book fair", category: "school_email", profileIds: ["mom"], displayOrder: 4,
     description: `From: office@school.org\nPlan: keydate\nRef: m3\nSender: Front Office\n${ahead(9)}\nBook fair in the library.` },
   { ...base, id: "conf", title: "Conferences", category: "school_email", profileIds: ["dad"], displayOrder: 5,

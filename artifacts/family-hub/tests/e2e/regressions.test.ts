@@ -6877,6 +6877,31 @@ test("Stop emails keeps the sender's items gone even when the server can't save 
   }
 });
 
+// A long sender address in the title pushed the Stop emails dialog and its
+// buttons off the right edge of a phone (2026-10-20).
+test("Confirm dialog: a long email address wraps and the buttons stay on screen", async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  try {
+    await page.addInitScript("window.longSender = true");
+    await page.goto(`${BASE_URL}?scenario=homeInbox`);
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    await page.getByTestId("home-todo-slip").waitFor({ timeout: 10_000 });
+    await page.getByRole("button", { name: /More actions for Sign the zoo trip form/ }).click();
+    await page.getByTestId("home-todo-stop-emails").click();
+    const confirm = page.getByTestId("confirm-dialog-confirm");
+    await confirm.waitFor({ timeout: 5000 });
+    for (const testId of ["confirm-dialog-confirm", "confirm-dialog-cancel"]) {
+      const box = await page.getByTestId(testId).boundingBox();
+      assert.ok(box);
+      assert.ok(box.x >= 0 && box.x + box.width <= 390, `${testId} fits the screen (${box.x}, ${box.width})`);
+    }
+    const dialog = await page.getByRole("alertdialog").boundingBox();
+    assert.ok(dialog && dialog.x + dialog.width <= 390, "the dialog fits the screen");
+  } finally {
+    await page.close();
+  }
+});
+
 test("Key Dates: ticking dates brings up Add to calendar and Remove, and a swipe left removes one", async () => {
   const page = await openScenarioTouch("homeInbox", { width: 390, height: 844 });
   try {

@@ -129,11 +129,14 @@ export function ConfirmDialogHost() {
     setPendingChoice(null);
   };
 
+  // A title can hold an email address with nowhere to wrap; breaking anywhere
+  // keeps it from pushing the dialog and its buttons off the screen
+  // (2026-10-20).
   return (
     <>
       <AlertDialog open={!!pending} onOpenChange={(open) => !open && settle(false)}>
         <AlertDialogContent className="max-w-sm">
-          <AlertDialogHeader>
+          <AlertDialogHeader className="min-w-0 [overflow-wrap:anywhere]">
             <AlertDialogTitle>{opts?.title}</AlertDialogTitle>
             {opts?.description ? (
               <AlertDialogDescription>{opts.description}</AlertDialogDescription>
@@ -161,7 +164,7 @@ export function ConfirmDialogHost() {
           carries a line of explanation, which a footer can't fit. */}
       <AlertDialog open={!!pendingChoice} onOpenChange={(open) => !open && settleChoice(null)}>
         <AlertDialogContent className="max-w-sm">
-          <AlertDialogHeader>
+          <AlertDialogHeader className="min-w-0 [overflow-wrap:anywhere]">
             <AlertDialogTitle>{choice?.title}</AlertDialogTitle>
             {choice?.description ? (
               <AlertDialogDescription>{choice.description}</AlertDialogDescription>
