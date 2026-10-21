@@ -151,7 +151,7 @@ export function CreateTaskModal({ open, onOpenChange, profiles, selectedProfiles
    *  just made one tap away, wherever you happened to create it from. */
   const goToAction = (k: TaskKind | null) => {
     if (!k || !onGoToKind) return undefined;
-    const label = k === "todo" ? "View To-Dos" : "View";
+    const label = k === "todo" ? "View on Home" : "View";
     return (
       <ToastAction altText={label} onClick={() => onGoToKind(k)}>
         {label}

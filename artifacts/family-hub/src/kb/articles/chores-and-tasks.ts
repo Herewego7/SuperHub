@@ -15,7 +15,7 @@ export const choresAndTasksArticles: KbArticle[] = [
       {
         kind: "text",
         text:
-          "The app has five kinds of task. They look similar but solve different problems. Tap the + button, then Create a chore — the picker offers Chore, Target chore, Bonus chore and Inspiration. To-dos have their own entry: + → Add a to-do (or the To-Dos tab).",
+          "The app has five kinds of task. They look similar but solve different problems. Tap the + button, then Create a chore — the picker offers Chore, Target chore, Bonus chore and Inspiration. To-dos have their own entry: + → Add a to-do (or the + on Today's To-dos on Home).",
       },
       {
         kind: "faq",
@@ -164,14 +164,14 @@ export const choresAndTasksArticles: KbArticle[] = [
       {
         kind: "text",
         text:
-          "To-dos live on the To-Dos tab. Add one from + → Add a to-do, or with Add a to-do on the To-Dos tab itself. Pick who it's for under Assign to — the create button stays off until someone is picked.",
+          "To-dos live on Home, in Today's To-dos. Add one from + → Add a to-do, or with the + on that card. Pick who it's for under Assign to — the create button stays off until someone is picked.",
       },
       {
         kind: "faq",
         items: [
           { q: "Does it repeat?", a: "No. A to-do has no days — it stays on the list until someone checks it off." },
           { q: "Sub-to-dos", a: "Tap \"+ sub-to-do\" under the name to add steps. A sub-to-do always goes to whoever its parent goes to." },
-          { q: "Where do finished ones go?", a: "Tap Completed to-dos (the history icon on the To-Dos tab) for a record of the past 30 days. Tap Put back on the list to reopen one." },
+          { q: "Where do finished ones go?", a: "Checked-off to-dos fold into Done at the bottom of Today's To-dos. Tap Done to see them, and tap one's check to put it back on the list." },
           { q: "Stars", a: "None — see \"Why don't to-dos earn stars?\"" },
         ],
       },
@@ -262,7 +262,7 @@ export const choresAndTasksArticles: KbArticle[] = [
         items: [
           {
             q: "Option 1 — a to-do (recommended)",
-            a: "Tap + → Add a to-do, type the job, tap the child under Assign to, and create it. To-dos are never worth stars, don't repeat, and stay on the To-Dos tab until they're checked off.",
+            a: "Tap + → Add a to-do, type the job, tap the child under Assign to, and create it. To-dos are never worth stars, don't repeat, and stay in Today's To-dos on Home until they're checked off.",
           },
           {
             q: "Option 2 — a zero-star chore on one day",

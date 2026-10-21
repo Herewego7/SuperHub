@@ -17,11 +17,11 @@ export const gettingStartedArticles: KbArticle[] = [
       {
         kind: "steps",
         steps: [
-          "Home — a snapshot of the day: events, tasks, stars, and recent activity.",
+          "Home — your day: to-dos (including ones from email), key dates, chores, the schedule, and what's coming up.",
           "Calendar — the shared family calendar, synced with Google/Outlook/iCal if you connect them.",
           "Chores — everyone's chores, trophies, Star Insights, the reward store, and bonus chores.",
-          "To-Dos — one-off things to check off.",
           "Meals — weekly meal planning and the grocery list.",
+          "Chat — ask about the day, or add and change things by typing.",
         ],
       },
       {
