@@ -140,6 +140,28 @@ export function scanAfterConnect(profileId: string) {
   });
 }
 
+/** Longer than the 60-day newsletter window, so nothing a scan can reach is forgotten. */
+const READ_MAIL_DAYS = 75;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The listed messages to remember as read: every one, in each mailbox it came
+ * from, except those whose read failed (matched by sender and subject, since
+ * one email in two mailboxes is read once).
+ */
+export function readMailRows(listed: InboundMessage[], unread: InboundMessage[]): { ownerProfileId: string; provider: string; messageId: string }[] {
+  const key = (message: InboundMessage) => `${(message.fromAddress ?? "").toLowerCase()}|${(message.subject ?? "").trim()}`;
+  const retry = new Set(unread.map(key));
+  const rows: { ownerProfileId: string; provider: string; messageId: string }[] = [];
+  for (const message of listed) {
+    if (!message.provider || !message.messageId || retry.has(key(message))) continue;
+    for (const ownerProfileId of message.ownerProfileIds ?? []) {
+      rows.push({ ownerProfileId, provider: message.provider, messageId: message.messageId });
+    }
+  }
+  return rows;
+}
+
 async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanResult> {
   const settings = await storage.getCalendarSettingsByUser(userId);
   if (!inboxScanEnabled(settings?.scanInbox)) {
@@ -154,6 +176,12 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanR
   const mailboxes: MailboxRead[] = [];
   const mine = (ownerId: string, list: InboundMessage[]) => list.map((message) => ({ ...message, ownerProfileIds: [ownerId] }));
   const saved = await storage.getChoresByUser(userId);
+  // Mail already read on an earlier pass, whatever came of it, isn't read again.
+  const remembered = await storage.getReadMail(userId, new Date(Date.now() - READ_MAIL_DAYS * DAY_MS))
+    .catch((): { ownerProfileId: string; provider: string; messageId: string }[] => []);
+  const alreadyRead = (ownerId: string, provider: "gmail" | "outlook") => new Set(
+    remembered.filter((row) => row.ownerProfileId === ownerId && row.provider === provider).map((row) => row.messageId),
+  );
   let connected = 0;
   let needsReconnect = false;
   let mailProblem: "scope" | "unavailable" | null = null;
@@ -171,7 +199,7 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanR
       const box: MailboxRead = { address: tokens.email || owner.id, emails: 0 };
       mailboxes.push(box);
       try {
-        const seen = savedGmailIds(saved, owner.id);
+        const seen = new Set([...savedGmailIds(saved, owner.id), ...alreadyRead(owner.id, "gmail")]);
         const recent = await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry, days, undefined, seen);
         box.emails += recent.length;
         messages.push(...mine(owner.id, recent));
@@ -195,7 +223,9 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanR
       mailboxes.push(box);
       try {
         const access = (await getFreshOutlookAccessToken(owner.id)) ?? outlookTokens.accessToken;
-        const recent = await outlook.listInbox(access, outlookTokens.email || owner.id, days);
+        const read = alreadyRead(owner.id, "outlook");
+        const recent = (await outlook.listInbox(access, outlookTokens.email || owner.id, days))
+          .filter((message) => !message.messageId || !read.has(message.messageId));
         box.emails += recent.length;
         messages.push(...mine(owner.id, recent));
       } catch (err) {
@@ -204,5 +234,13 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanR
     }
   }
   const applied = await applyIngestedMail(userId, mergeMailboxes(messages), audience);
-  return { ...applied, connected, needsReconnect, mailProblem, mailboxes };
+  try {
+    await storage.rememberReadMail(userId, readMailRows(messages, applied.unread));
+    await storage.pruneReadMail(userId, new Date(Date.now() - READ_MAIL_DAYS * DAY_MS));
+  } catch (err) {
+    // Not remembering only means the mail is read again next time.
+    console.warn("Couldn't remember read mail:", err instanceof Error ? err.message : err);
+  }
+  const { unread: _unread, ...result } = applied;
+  return { ...result, connected, needsReconnect, mailProblem, mailboxes };
 }

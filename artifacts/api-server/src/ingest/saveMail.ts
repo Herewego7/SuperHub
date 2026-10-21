@@ -55,9 +55,14 @@ async function storePlanned(
   return { todos, events, scanOff: false };
 }
 
+/**
+ * Saves what the mail says. `unread` lists the messages that weren't really
+ * read (scan off, no AI, or the read failed), so the scan doesn't remember
+ * them as read and tries them again next time.
+ */
 export async function applyIngestedMail(userId: string, messages: InboundMessage[], profileIds: string[]) {
   const settings = await storage.getCalendarSettingsByUser(userId);
-  if (settings?.scanInbox === false) return { todos: [], events: [], scanOff: true, tally: emptyTally(messages.length) };
+  if (settings?.scanInbox === false) return { todos: [], events: [], scanOff: true, tally: emptyTally(messages.length), unread: messages };
   const chores = await storage.getChoresByUser(userId);
   const existingKeys = chores.filter((chore) => chore.category === "school_email").map((chore) => slipKey(chore.title));
   const savedEvents = await storage.getEventsByUser(userId);
@@ -89,7 +94,7 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
       timeZone,
       calendarId,
     );
-    return { ...saved, tally: emptyTally(messages.length) };
+    return { ...saved, tally: emptyTally(messages.length), unread: messages };
   }
 
   const family: MailPerson[] = people
@@ -197,7 +202,7 @@ export async function applyIngestedMail(userId: string, messages: InboundMessage
     todos.push(...saved.todos);
     events.push(...saved.events);
   }
-  return { todos, events, scanOff: false, tally };
+  return { todos, events, scanOff: false, tally, unread: keyword };
 }
 
 function localDay(value: string | Date, zone: string): string {

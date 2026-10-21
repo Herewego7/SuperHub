@@ -1,7 +1,7 @@
 import buildApp from "./app";
 import { logger } from "./lib/logger";
 import { pool } from "@workspace/db";
-import { repairSettingsTables } from "./db/repairSettings";
+import { ensureReadMailTable, repairSettingsTables } from "./db/repairSettings";
 
 const rawPort = process.env["PORT"];
 
@@ -20,7 +20,10 @@ if (Number.isNaN(port) || port <= 0) {
 // A database that missed schema changes broke every settings read and save.
 // Repairs are additive, and a failure here never stops the server.
 try {
-  const done = await repairSettingsTables((sql) => pool.query(sql));
+  const done = [
+    ...await repairSettingsTables((sql) => pool.query(sql)),
+    ...await ensureReadMailTable((sql) => pool.query(sql)),
+  ];
   if (done.length > 0) logger.info({ done }, "Repaired settings tables");
 } catch (err) {
   logger.warn({ err }, "Couldn't check the settings tables");

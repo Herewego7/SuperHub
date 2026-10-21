@@ -667,3 +667,25 @@ test("a rate limit is not a missing permission, and is waited out", async () => 
   assert.equal(calls, 3);
   await assert.rejects(politely(async () => { throw scope403; }, [1]), "other errors aren't retried");
 });
+
+// The regular check re-read every recent email that made no item, each time
+// the app opened (2026-10-21). Read mail is remembered; failed reads aren't.
+test("every email read is remembered in each mailbox it came from, except failed reads", async () => {
+  const { readMailRows } = await import("../src/ingest/scanHousehold.ts");
+  const mail = (id: string, provider: "gmail" | "outlook", owner: string, subject: string) => ({
+    subject, fromAddress: "news@school.org", snippet: "", body: "", provider, messageId: id, ownerProfileIds: [owner],
+  });
+  const listed = [
+    mail("g1", "gmail", "dad", "Picture day"),
+    mail("g2", "gmail", "mom", "Picture day"),
+    mail("o1", "outlook", "mom", "Lunch menu"),
+    mail("g3", "gmail", "dad", "Field trip form"),
+    { subject: "No id", fromAddress: "x@y.com", snippet: "", body: "", ownerProfileIds: ["dad"] },
+  ];
+  const failed = [mail("g3", "gmail", "dad", "Field trip form")];
+  assert.deepEqual(readMailRows(listed, failed), [
+    { ownerProfileId: "dad", provider: "gmail", messageId: "g1" },
+    { ownerProfileId: "mom", provider: "gmail", messageId: "g2" },
+    { ownerProfileId: "mom", provider: "outlook", messageId: "o1" },
+  ]);
+});

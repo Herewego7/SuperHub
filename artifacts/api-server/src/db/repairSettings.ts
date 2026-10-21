@@ -66,3 +66,26 @@ export async function repairSettingsTables(query: Query): Promise<string[]> {
   }
   return done;
 }
+
+/**
+ * The emails-already-read table (2026-10-21), created here because the live
+ * database doesn't reliably take schema pushes. New, so it can't hold rows
+ * that would block its unique index.
+ */
+export async function ensureReadMailTable(query: Query): Promise<string[]> {
+  const has = await query("SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'read_mail'");
+  const done: string[] = [];
+  if (has.rows.length === 0) {
+    await query(`CREATE TABLE IF NOT EXISTS read_mail (
+      user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      owner_profile_id varchar NOT NULL,
+      provider text NOT NULL,
+      message_id text NOT NULL,
+      read_at timestamp NOT NULL DEFAULT now()
+    )`);
+    done.push("added read_mail");
+  }
+  await query("CREATE UNIQUE INDEX IF NOT EXISTS read_mail_message_idx ON read_mail (owner_profile_id, provider, message_id)");
+  await query("CREATE INDEX IF NOT EXISTS read_mail_user_idx ON read_mail (user_id)");
+  return done;
+}

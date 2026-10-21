@@ -14,6 +14,7 @@ import {
   rewards,
   rewardRedemptions,
   calendarSettings,
+  readMail,
   locationSettings,
   googleCalendarTokens,
   outlookCalendarTokens,
@@ -141,7 +142,7 @@ import {
   type InsertCompletionBonus,
 } from "@workspace/db";
 import { db } from "./db";
-import { eq, and, gte, lte, inArray, desc, isNull, or, sql, type SQL } from "drizzle-orm";
+import { eq, and, gte, lt, lte, inArray, desc, isNull, or, sql, type SQL } from "drizzle-orm";
 
 // A handful of storage methods (the ones read/written inside a
 // `db.transaction(...)` row-lock, e.g. the cash-out flow) accept this so they
@@ -342,6 +343,12 @@ export interface IStorage {
   getDailyContentCompletions(profileId?: string, date?: Date): Promise<DailyContentCompletion[]>;
   getDailyContentCompletionsByUser(userId: string, date?: Date): Promise<DailyContentCompletion[]>;
   createDailyContentCompletion(completion: InsertDailyContentCompletion): Promise<DailyContentCompletion>;
+  /** Emails the inbox scan already read for this household, newer than `since`. */
+  getReadMail(userId: string, since: Date): Promise<{ ownerProfileId: string; provider: string; messageId: string }[]>;
+  /** Records emails as read. Ones already recorded are left as they are. */
+  rememberReadMail(userId: string, rows: { ownerProfileId: string; provider: string; messageId: string }[]): Promise<void>;
+  /** Drops records older than `before`, past any scan's window. */
+  pruneReadMail(userId: string, before: Date): Promise<void>;
   deleteDailyContentCompletion(contentId: string, profileId: string): Promise<boolean>;
 
   // Rewards
@@ -1906,6 +1913,27 @@ export class DatabaseStorage implements IStorage {
     }
     const query = db.select().from(dailyContentCompletions);
     return await (conditions.length > 0 ? query.where(and(...conditions)) : query);
+  }
+
+  async getReadMail(userId: string, since: Date): Promise<{ ownerProfileId: string; provider: string; messageId: string }[]> {
+    return db
+      .select({ ownerProfileId: readMail.ownerProfileId, provider: readMail.provider, messageId: readMail.messageId })
+      .from(readMail)
+      .where(and(eq(readMail.userId, userId), gte(readMail.readAt, since)));
+  }
+
+  async rememberReadMail(userId: string, rows: { ownerProfileId: string; provider: string; messageId: string }[]): Promise<void> {
+    // In batches, so a 30-day first read doesn't send one enormous insert.
+    for (let at = 0; at < rows.length; at += 500) {
+      await db
+        .insert(readMail)
+        .values(rows.slice(at, at + 500).map((row) => ({ userId, ...row })))
+        .onConflictDoNothing();
+    }
+  }
+
+  async pruneReadMail(userId: string, before: Date): Promise<void> {
+    await db.delete(readMail).where(and(eq(readMail.userId, userId), lt(readMail.readAt, before)));
   }
 
   async getDailyContentCompletionsByUser(userId: string, date?: Date): Promise<DailyContentCompletion[]> {

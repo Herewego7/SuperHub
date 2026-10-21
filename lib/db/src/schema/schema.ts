@@ -378,6 +378,23 @@ export const calendarSettings = pgTable("calendar_settings", {
   uniqueIndex("calendar_settings_user_idx").on(table.userId),
 ]);
 
+/**
+ * Emails the inbox scan has already read, whatever came of them, so the
+ * regular check doesn't download and re-read the same mail every time the
+ * app opens (2026-10-21). Mail whose read failed isn't recorded and is tried
+ * again. Rows past the scan window are pruned.
+ */
+export const readMail = pgTable("read_mail", {
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  ownerProfileId: varchar("owner_profile_id").notNull(),
+  provider: text("provider").notNull(),
+  messageId: text("message_id").notNull(),
+  readAt: timestamp("read_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("read_mail_message_idx").on(table.ownerProfileId, table.provider, table.messageId),
+  index("read_mail_user_idx").on(table.userId),
+]);
+
 export const locationSettings = pgTable("location_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
