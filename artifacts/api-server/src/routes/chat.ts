@@ -10,7 +10,7 @@ import { choresDismissedBySlip, dismissSlip } from "../ingest/process";
 import { stopSender } from "../ingest/mute";
 import { slipKey } from "../ingest/parse";
 import { draftLine, draftWrite, normalizeDraft, readDraft } from "../ai/draft";
-import { conditionText, type TemperatureUnit } from "../ai/weather";
+import { forecastDays, forecastUrl, type ForecastDay, type TemperatureUnit } from "../ai/weather";
 import { acceptedMealPlan, assignedDinners, dinnerConfirmText, proposedDinners, type DinnerNight } from "../meals/assignDinner";
 import { findGrocery, groceriesToAdd, groceryAddedLine, groceryListText, groceryRequest, matchMeal, type GroceryRequest } from "../meals/mealMatch";
 import { driverWriteFields } from "../lib/eventDrivers";
@@ -319,18 +319,12 @@ function changedKeys(actions: ChatAction[]): string[] {
   return [...keys];
 }
 
-async function homeForecast(lat?: number | null, lon?: number | null, unit: TemperatureUnit = "fahrenheit"): Promise<{ date: string; high: number; low: number; condition: string }[]> {
+async function homeForecast(lat?: number | null, lon?: number | null, unit: TemperatureUnit = "fahrenheit"): Promise<ForecastDay[]> {
   if (lat == null || lon == null) return [];
   try {
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&temperature_unit=${unit}&forecast_days=7`, { signal: AbortSignal.timeout(2500) });
+    const res = await fetch(forecastUrl(lat, lon, unit), { signal: AbortSignal.timeout(2500) });
     if (!res.ok) return [];
-    const data = await res.json() as { daily?: { time?: string[]; temperature_2m_max?: number[]; temperature_2m_min?: number[]; weathercode?: number[] } };
-    return (data.daily?.time ?? []).map((date, index) => ({
-      date,
-      high: Math.round(data.daily?.temperature_2m_max?.[index] ?? 0),
-      low: Math.round(data.daily?.temperature_2m_min?.[index] ?? 0),
-      condition: conditionText(data.daily?.weathercode?.[index] ?? -1),
-    }));
+    return forecastDays(await res.json());
   } catch {
     return [];
   }

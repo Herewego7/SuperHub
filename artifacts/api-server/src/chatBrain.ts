@@ -6,6 +6,7 @@
 import { mapsUrl, searchHits } from "./ai/parity";
 import { dinnerIdeaNames, matchMeal } from "./meals/mealMatch";
 import { daysQuestion, eventPersonQuestion, starsQuestion, whoQuestion } from "./plan/chatSchedule";
+import { forecastLine } from "./ai/weather";
 
 export type ChatProfile = {
   id: string;
@@ -52,7 +53,7 @@ export type ChatSnapshot = {
   celebrations: { name: string; monthDay: string; type?: string | null; year?: number | null }[];
   groceries: { name: string; quantity?: string | null; checked?: boolean }[];
   weather?: { temperature?: number; condition?: string; location?: string } | null;
-  forecast?: { date: string; high: number; low: number; condition?: string }[];
+  forecast?: { date: string; high: number; low: number; condition?: string; rainChance?: number | null }[];
   notes?: string[];
   temperatureUnit?: "fahrenheit" | "celsius";
   findMail?: (query: string) => Promise<string[]>;
@@ -174,7 +175,7 @@ export function chatBriefing(snap: ChatSnapshot): string {
     `Groceries:\n${snap.groceries.slice(0, 40).map((item) => `- ${item.name}${item.quantity ? ` (${item.quantity})` : ""}${item.checked ? " (checked)" : ""}`).join("\n") || "(none)"}`,
     snap.weather?.condition ? `Weather now: ${snap.weather.temperature ?? ""} ${snap.weather.condition}${snap.weather.location ? ` in ${snap.weather.location}` : ""}.` : "",
     (snap.forecast ?? []).length
-      ? `Forecast:\n${(snap.forecast ?? []).slice(0, 7).map((day) => `- ${day.date}: ${day.condition ? `${day.condition}, ` : ""}high ${day.high}, low ${day.low}`).join("\n")}`
+      ? `Forecast:\n${(snap.forecast ?? []).slice(0, 7).map((day) => `- ${forecastLine({ ...day, condition: day.condition ?? "Cloudy" })}`).join("\n")}`
       : "",
   ].filter(Boolean).join("\n\n");
 }
@@ -193,6 +194,7 @@ export function chatSystemPrompt(snap: ChatSnapshot): string {
     "- For a day or a week, write two or three short paragraphs and no headings: what they need to do, where the family needs to be, then one heads-up.",
     "- Say who each thing is for. Include every meeting and event on the calendar. Leave one out only when they ask you to.",
     "- Mention the weather only when it changes something, like a big temperature drop, rain during something outdoors, or heat, and say what to do about it.",
+    "- A day's weather is its daytime high; the low is overnight, so never call it the temperature. The condition is the day's worst moment: mention rain only when its chance is 50% or more, and say the chance.",
     "- Change the calendar, to-dos, chores, meals, or groceries only when they ask in this conversation.",
     "- A chore is not a to-do. create_chore adds a chore only after you know the days, who it is for, and how many stars it is worth. If any of those is missing, ask. Do not invent the person or the stars. create_task adds a to-do. Never say you added either unless that tool returns ok.",
     "- create_event needs a title, a day, a start time, and who it is for. If any of those is missing, ask for it. Do not invent the day, the time, or the person. After it is saved, the app asks once about a driver, a place, a repeat, and a description. Never say an event was added or removed unless create_event or delete_event returns ok.",
@@ -460,8 +462,9 @@ export function handleToolCall(
   }
   if (name === "get_weather") {
     const day = textArg(input, "date");
-    const row = (snap.forecast ?? []).find((item) => item.date === day) ?? (snap.forecast ?? [])[0];
-    return { output: row ?? { error: "No forecast yet." }, action: null, handoff: false };
+    // Not today's weather for a day the forecast doesn't reach.
+    const row = (snap.forecast ?? []).find((item) => item.date === day);
+    return { output: row ? { summary: forecastLine({ ...row, condition: row.condition ?? "Cloudy" }), ...row } : { error: "No forecast for that day yet." }, action: null, handoff: false };
   }
   if (name === "maps_link") {
     const place = textArg(input, "place");

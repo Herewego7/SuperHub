@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { chatBriefing, chatSystemPrompt, eventsForChat, handleToolCall, toolDeclarations, userSaidYes, type ChatSnapshot } from "../src/chatBrain";
 import { CHAT_PROBLEM, MAX_ROUNDS } from "../src/chatReply";
+import { forecastDays, forecastLine } from "../src/ai/weather.ts";
 
 const snap: ChatSnapshot = {
   now: new Date("2026-10-02T15:00:00Z"),
@@ -140,5 +141,23 @@ describe("chat brain", () => {
     assert.equal(reminder.action?.kind, "create_task");
     assert.equal(toolDeclarations(false).some((tool) => tool.name === "get_newsletters"), true);
     assert.equal(toolDeclarations(true).some((tool) => tool.name === "get_newsletters"), false);
+  });
+});
+
+// Chat said "rain tomorrow and a drop into the 50s" from a day labeled Rain
+// with a low of 54 (2026-10-21).
+describe("the forecast chat reads", () => {
+  it("names the weekday, the daytime high, the overnight low, and the chance of rain", () => {
+    assert.equal(
+      forecastLine({ date: "2026-10-22", high: 74, low: 54, condition: "Rain", rainChance: 30 }),
+      "Thu 2026-10-22: Rain at some point, daytime high 74, overnight low 54, 30% chance of rain",
+    );
+    const days = forecastDays({ daily: { time: ["2026-10-22"], temperature_2m_max: [73.6], temperature_2m_min: [53.8], weathercode: [61], precipitation_probability_max: [30] } });
+    assert.deepEqual(days, [{ date: "2026-10-22", high: 74, low: 54, condition: "Rain", rainChance: 30 }]);
+  });
+
+  it("has no forecast for a day it doesn't reach, rather than today's", () => {
+    const out = handleToolCall("get_weather", { date: "2026-11-30" }, { ...snap, forecast: [{ date: "2026-10-06", high: 62, low: 48, condition: "Rain" }] }, true);
+    assert.deepEqual(out.output, { error: "No forecast for that day yet." });
   });
 });
