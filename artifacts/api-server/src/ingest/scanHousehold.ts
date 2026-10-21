@@ -4,7 +4,7 @@ import { getFreshOutlookAccessToken } from "../calendarSync";
 import { storage } from "../storage";
 import { applyIngestedMail } from "./saveMail";
 import { gmailNewsletterQuery, INBOX_INITIAL_DAYS, INBOX_NEWSLETTER_LIMIT, INBOX_RECENT_DAYS, latestPerSender, mergeMailboxes, type InboundMessage } from "./parse";
-import { inboxBlockReason, inboxMailFailure, inboxScanEnabled, shareScan } from "./process";
+import { inboxBlockReason, inboxMailFailure, inboxScanEnabled, savedGmailIds, shareScan } from "./process";
 import { beginHouseholdScan, emptyTally, finishHouseholdScan, noteLastRead, SCAN_BEAT_MS, type MailboxRead, type MailTally } from "./scanProgress";
 import { claimInboxScan, finishInboxScanRecord, noteInboxScanRunning, requestInboxScan } from "./scanState";
 
@@ -153,6 +153,7 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanR
   const messages: InboundMessage[] = [];
   const mailboxes: MailboxRead[] = [];
   const mine = (ownerId: string, list: InboundMessage[]) => list.map((message) => ({ ...message, ownerProfileIds: [ownerId] }));
+  const saved = await storage.getChoresByUser(userId);
   let connected = 0;
   let needsReconnect = false;
   let mailProblem: "scope" | "unavailable" | null = null;
@@ -170,7 +171,8 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanR
       const box: MailboxRead = { address: tokens.email || owner.id, emails: 0 };
       mailboxes.push(box);
       try {
-        const recent = await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry, days);
+        const seen = savedGmailIds(saved, owner.id);
+        const recent = await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry, days, undefined, seen);
         box.emails += recent.length;
         messages.push(...mine(owner.id, recent));
         if (days >= INBOX_INITIAL_DAYS) {
@@ -178,7 +180,7 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanR
           const older = latestPerSender(await google.listInbox(tokens.accessToken, tokens.refreshToken ?? undefined, tokens.email || owner.id, tokens.tokenExpiry, days, {
             query: gmailNewsletterQuery(),
             limit: INBOX_NEWSLETTER_LIMIT,
-          }));
+          }, seen));
           box.emails += older.length;
           messages.push(...mine(owner.id, older));
         }
@@ -201,6 +203,6 @@ async function scanOnce(userId: string, days = INBOX_RECENT_DAYS): Promise<ScanR
       }
     }
   }
-  const saved = await applyIngestedMail(userId, mergeMailboxes(messages), audience);
-  return { ...saved, connected, needsReconnect, mailProblem, mailboxes };
+  const applied = await applyIngestedMail(userId, mergeMailboxes(messages), audience);
+  return { ...applied, connected, needsReconnect, mailProblem, mailboxes };
 }

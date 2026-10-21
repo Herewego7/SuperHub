@@ -83,9 +83,40 @@ function mailReason(err: object): string {
   return error?.errors?.[0]?.reason || (error?.status === "PERMISSION_DENIED" ? "" : error?.status) || "";
 }
 
+/**
+ * Google or Microsoft asking us to slow down. Gmail sends it as 429, or as
+ * 403 with a rate-limit reason, which used to read as a missing permission
+ * and flag the mailbox for reconnecting (2026-10-21).
+ */
+export function mailRateLimited(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  if (mailStatus(err) === 429) return true;
+  const reason = mailReason(err);
+  if (/^(rateLimitExceeded|userRateLimitExceeded|quotaExceeded|RESOURCE_EXHAUSTED)$/.test(reason)) return true;
+  const message = err instanceof Error ? err.message : "";
+  return /quota exceeded|rate limit/i.test(message);
+}
+
+/**
+ * Runs one mail call, waiting and trying again when Google says we're going
+ * too fast. Gmail and Outlook both say so. A busy first read hit the per-minute quota and skipped mail
+ * (2026-10-20); waiting a few seconds lets it go on.
+ */
+export async function politely<T>(call: () => Promise<T>, waits: readonly number[] = [2000, 5000, 15000, 30000]): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await call();
+    } catch (err) {
+      if (!mailRateLimited(err) || attempt >= waits.length) throw err;
+      await new Promise((resolve) => setTimeout(resolve, waits[attempt]));
+    }
+  }
+}
+
 /** A dead token is auth. Mail scope missing is scope. Gmail switched off for the project is unavailable. */
 export function inboxMailFailure(err: unknown): "auth" | "scope" | "unavailable" | "skip" {
   if (!err || typeof err !== "object") return "skip";
+  if (mailRateLimited(err)) return "skip";
   const reason = mailReason(err);
   if (reason === "accessNotConfigured") return "unavailable";
   if (reason === "insufficientPermissions") return "scope";
@@ -433,6 +464,21 @@ export function mailLines(message: InboundMessage, name?: string): string {
     ? `${message.provider}:${owner}:${message.messageId}`
     : "";
   return line("Name", name) + line("Sender", message.fromName) + line("Sent", message.receivedAt) + (mail ? `Mail: ${mail}\n` : "");
+}
+
+/**
+ * Gmail message ids this mailbox owner's mail already became items from, so a
+ * scan doesn't download them again. A keyword placeholder (no Plan line) is
+ * left out, so its email is read again and the placeholder replaced.
+ */
+export function savedGmailIds(rows: { description?: string | null }[], ownerProfileId: string): Set<string> {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (!/(?:^|\n)Plan: (?:newsletter|keydate|todo)(?:\n|$)/.test(row.description ?? "")) continue;
+    const where = slipMail(row.description);
+    if (where?.provider === "gmail" && where.ownerProfileId === ownerProfileId) ids.add(where.messageId);
+  }
+  return ids;
 }
 
 /** Where a saved item's original email lives, read from its own note. */

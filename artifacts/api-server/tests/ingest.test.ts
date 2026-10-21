@@ -4,14 +4,14 @@ import { emailTodoOnDay } from "../src/scheduler/eveningPlan.ts";
 import { mailKindsOf, stoppedKinds } from "../src/ingest/mailKinds.ts";
 import { acceptSchool, choresDismissedBySlip, deviceAlert, knownDomains, mailEventStart, prefilterDrop, dismissSlip, eventsDismissedBySlip, gmailScopeGranted, graphNextLink, holdSchoolEvent, inboxBlockReason, inboxFailure, inboxListStopped, inboxMailFailure, inboxScanEnabled, inboxTokenExpiry, ingestMessages, mailWorthSaving, muteSender, schoolEventStart, shareScan, slipDate, slipDayOffset, slipSender, withoutDismissedChores, withoutDismissedSlips } from "../src/ingest/process.ts";
 import { clientMessages, fileParts, gmailInboxQuery, gmailNewsletterQuery, gmailPayload, gmailWebLink, inboxFetchLimit, inboxSinceIso, latestPerSender, mergeMailboxes, outlookAttachments, outlookToInbound, outlookWebLink, readableText, toInbound } from "../src/ingest/parse.ts";
-import { muteNewsletter, newsletterMuted, openLettersFrom, openMailFrom, slipHeader, unmuteNewsletter, unmuteSender } from "../src/ingest/process.ts";
+import { inboxMailFailure, mailRateLimited, muteNewsletter, newsletterMuted, openLettersFrom, openMailFrom, politely, savedGmailIds, slipHeader, unmuteNewsletter, unmuteSender } from "../src/ingest/process.ts";
 import { inboxOwnerFixes } from "../src/ingest/owners.ts";
 
 test("a catch-up scan reads 30 days, and the regular check stays at 2", () => {
   assert.match(gmailInboxQuery(30), /^newer_than:30d /);
   assert.match(gmailInboxQuery(2), /^newer_than:2d /);
-  assert.equal(inboxFetchLimit(30), 500);
-  assert.equal(inboxFetchLimit(2), 100);
+  assert.equal(inboxFetchLimit(30), 2000);
+  assert.equal(inboxFetchLimit(2), 300);
   assert.match(gmailNewsletterQuery(), /newer_than:60d older_than:30d/);
   assert.match(gmailNewsletterQuery(), /unsubscribe/);
   const latest = latestPerSender([
@@ -631,4 +631,39 @@ test("statements and bills read as billing, in the mail's words or the to-do's",
   for (const said of ["Pay for the field trip by Friday", "Review the report card with Ava", "Mission statement for the PTA", "Sign the zoo trip form"]) {
     assert.ok(!mailKindsOf({ subject: said }).includes("billing"), said);
   }
+});
+
+
+// A 500-message cap left a busy inbox's older mail unread, and Gmail's
+// "slow down" read as a missing permission (2026-10-21).
+test("mail already saved as an item isn't downloaded again, but a placeholder's is", () => {
+  const rows = [
+    { description: "From: a@school.org\nPlan: todo\nRef: r1\nMail: gmail:dad:m1\nSign the form." },
+    { description: "From: a@school.org\nPlan: keydate\nRef: r2\nMail: gmail:mom:m2\nPicture day." },
+    { description: "From: b@shop.com\nMail: gmail:dad:m3\nSubject placeholder." },
+    { description: "From: c@x.com\nPlan: todo\nRef: r4\nMail: outlook:dad:m4\nOutlook item." },
+  ];
+  assert.deepEqual([...savedGmailIds(rows, "dad")], ["m1"]);
+  assert.deepEqual([...savedGmailIds(rows, "mom")], ["m2"]);
+});
+
+test("a rate limit is not a missing permission, and is waited out", async () => {
+  const limited403 = { response: { status: 403, data: { error: { errors: [{ reason: "userRateLimitExceeded" }] } } } };
+  const quota429 = { response: { status: 429 } };
+  const scope403 = { response: { status: 403, data: { error: { errors: [{ reason: "insufficientPermissions" }] } } } };
+  assert.equal(mailRateLimited(limited403), true);
+  assert.equal(mailRateLimited(quota429), true);
+  assert.equal(mailRateLimited(scope403), false);
+  assert.equal(inboxMailFailure(limited403), "skip", "a 403 rate limit doesn't ask to reconnect");
+  assert.equal(inboxMailFailure(scope403), "scope");
+
+  let calls = 0;
+  const answer = await politely(async () => {
+    calls += 1;
+    if (calls < 3) throw quota429;
+    return "read";
+  }, [1, 1, 1]);
+  assert.equal(answer, "read");
+  assert.equal(calls, 3);
+  await assert.rejects(politely(async () => { throw scope403; }, [1]), "other errors aren't retried");
 });

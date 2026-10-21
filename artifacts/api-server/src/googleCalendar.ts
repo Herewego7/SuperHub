@@ -1,6 +1,6 @@
 import { google, calendar_v3 } from 'googleapis';
 import { attachFiles, fileParts, fullMessageText, gmailInboxQuery, gmailPayload, header, inboxFetchLimit, INBOX_RECENT_DAYS, messageText, ORIGINAL_MAX_CHARS, parseAddress, threadLines, toInbound, type InboundMessage } from './ingest/parse';
-import { gmailScopeGranted, inboxFailure, inboxListStopped, inboxMailFailure, inboxTokenExpiry } from './ingest/process';
+import { gmailScopeGranted, inboxFailure, inboxListStopped, inboxMailFailure, inboxTokenExpiry, politely } from './ingest/process';
 
 // Calendar plus read-only mail. No userinfo.email/userinfo.profile. Those
 // identity scopes are what makes Google's consent screen read as
@@ -324,7 +324,11 @@ export class GoogleCalendarService {
     };
   }
 
-  async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string, tokenExpiry?: Date | string | null, days = INBOX_RECENT_DAYS, scope?: { query: string; limit: number }): Promise<InboundMessage[]> {
+  /**
+   * Pages through the window's mail. `skip` holds message ids already saved as
+   * items, which are not downloaded again.
+   */
+  async listInbox(accessToken: string, refreshToken: string | undefined, accountId: string, tokenExpiry?: Date | string | null, days = INBOX_RECENT_DAYS, scope?: { query: string; limit: number }, skip: ReadonlySet<string> = new Set()): Promise<InboundMessage[]> {
     const oauth2Client = this.gmailAuth(accessToken, refreshToken, tokenExpiry);
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
     const limit = scope?.limit ?? inboxFetchLimit(days);
@@ -332,19 +336,19 @@ export class GoogleCalendarService {
     let pageToken: string | undefined;
     while (ids.length < limit) {
       try {
-        const listed = await gmail.users.messages.list({
+        const listed = await politely(() => gmail.users.messages.list({
           userId: "me",
           q: scope?.query ?? gmailInboxQuery(days),
           maxResults: Math.min(50, limit - ids.length),
           pageToken,
-        });
+        }));
         const before = ids.length;
         for (const item of listed.data.messages ?? []) {
-          if (item.id && !ids.includes(item.id)) ids.push(item.id);
+          if (item.id && !skip.has(item.id) && !ids.includes(item.id)) ids.push(item.id);
           if (ids.length >= limit) break;
         }
         pageToken = listed.data.nextPageToken ?? undefined;
-        if (!pageToken || ids.length === before) break;
+        if (!pageToken || (ids.length === before && !(listed.data.messages ?? []).length)) break;
       } catch (err) {
         if (!inboxListStopped(err, ids.length)) throw err;
         console.warn("Inbox list stopped early:", err instanceof Error ? err.message : err);
@@ -354,11 +358,11 @@ export class GoogleCalendarService {
     const out: InboundMessage[] = [];
     for (const id of ids) {
       try {
-        const full = await gmail.users.messages.get({
+        const full = await politely(() => gmail.users.messages.get({
           userId: "me",
           id,
           format: "full",
-        });
+        }));
         const payload = gmailPayload(full.data.payload);
         const inbound = toInbound({
           id,
@@ -372,7 +376,7 @@ export class GoogleCalendarService {
           let data = file.data;
           if (!data && file.attachmentId) {
             try {
-              const got = await gmail.users.messages.attachments.get({ userId: "me", messageId: id, id: file.attachmentId });
+              const got = await politely(() => gmail.users.messages.attachments.get({ userId: "me", messageId: id, id: file.attachmentId! }));
               data = got.data.data ?? undefined;
             } catch (err) {
               console.warn("Attachment skipped:", err instanceof Error ? err.message : err);
@@ -383,7 +387,8 @@ export class GoogleCalendarService {
         attachFiles(inbound, files);
         if (full.data.threadId) {
           try {
-            const thread = await gmail.users.threads.get({ userId: "me", id: full.data.threadId, format: "full" });
+            const threadId = full.data.threadId;
+            const thread = await politely(() => gmail.users.threads.get({ userId: "me", id: threadId, format: "full" }));
             const rows = (thread.data.messages ?? []).map((item) => {
               const part = gmailPayload(item.payload);
               const from = parseAddress(header({ id: item.id ?? "", payload: part }, "From"));

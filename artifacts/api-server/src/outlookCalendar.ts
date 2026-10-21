@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { outlookInstancesToDelete } from "./lib/recurrenceRule";
 import { attachFiles, decodeEntities, inboxFetchLimit, inboxSinceIso, INBOX_RECENT_DAYS, ORIGINAL_MAX_CHARS, outlookAttachments, outlookToInbound, outlookWebLink, readableText, stripQuotedReply, threadLines, type InboundMessage } from "./ingest/parse";
-import { graphNextLink, inboxListStopped } from "./ingest/process";
+import { graphNextLink, inboxListStopped, politely } from "./ingest/process";
 
 const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
 
@@ -228,10 +228,12 @@ export class OutlookCalendarService {
     while (url && out.length < limit) {
       let response;
       try {
-        response = await graph.get(url, {
+        const page = url;
+        const query = params;
+        response = await politely(() => graph.get(page, {
           headers: { Authorization: `Bearer ${accessToken}` },
-          params,
-        });
+          params: query,
+        }));
       } catch (err) {
         if (!inboxListStopped(err, out.length)) throw err;
         console.warn("Outlook inbox list stopped early:", err instanceof Error ? err.message : err);

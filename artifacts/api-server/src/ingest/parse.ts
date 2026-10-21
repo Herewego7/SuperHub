@@ -263,14 +263,19 @@ export function mergeMailboxes(messages: InboundMessage[]): InboundMessage[] {
   return out;
 }
 
-export const INBOX_SCAN_LIMIT = 100;
+/**
+ * Each pass pages through its whole window, the way Bot Life walks 30 days.
+ * The limits only guard against a runaway mailbox; a 500 cap on the first
+ * catch-up left a busy inbox's older mail unread (2026-10-21).
+ */
+export const INBOX_SCAN_LIMIT = 300;
 /** The regular check. The first catch-up is the last 30 days, same as Bot Life's mail backfill. */
 export const INBOX_RECENT_DAYS = 2;
 export const INBOX_INITIAL_DAYS = 30;
-export const INBOX_INITIAL_LIMIT = 500;
+export const INBOX_INITIAL_LIMIT = 2000;
 /** Newsletters only, after the 30-day mail catch-up, same as Bot Life. */
 export const INBOX_NEWSLETTER_DAYS = 60;
-export const INBOX_NEWSLETTER_LIMIT = 200;
+export const INBOX_NEWSLETTER_LIMIT = 500;
 
 /** All Mail, same as Bot Life, so school mail a filter or an archive moved out of the inbox is still read. */
 export function gmailInboxQuery(days: number): string {

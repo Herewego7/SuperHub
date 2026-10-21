@@ -21,12 +21,14 @@ describe("daily content completions across households", { skip: !apiTestsEnabled
 
   test("one person's day holds only their own completions", async () => {
     const { storage } = await import("../../src/storage.ts");
-    const day = new Date();
+    const date = new Date().toISOString().slice(0, 10);
+    // Noon of the day the server reads `date` as, in this process's time zone.
+    const day = new Date(date);
+    day.setHours(12, 0, 0, 0);
     for (const who of [ava, ben]) {
       const content = await storage.createDailyContent({ userId: who.userId, type: "mission", title: `${who.email} mission`, content: "Be kind." });
       await storage.createDailyContentCompletion({ contentId: content.id, profileId: who.profileId, completedAt: day });
     }
-    const date = day.toISOString().slice(0, 10);
     const rows = await api.json<{ profileId: string }[]>(ava, `/api/daily-content-completions?profileId=${ava.profileId}&date=${date}`);
     assert.ok(rows.length > 0, "Ava's completion is there");
     assert.deepEqual([...new Set(rows.map((row) => row.profileId))], [ava.profileId], "and nobody else's");
