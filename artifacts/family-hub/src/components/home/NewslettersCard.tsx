@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, EyeOff } from "lucide-react";
 import { issueDateLabel, newsletterInitials, PLAN_NEWSLETTERS } from "@/lib/homeDay";
 import { noteBullets } from "@/lib/slipMail";
 import { HomeCard } from "./HomeCard";
+import { PersonChips } from "./PersonChips";
 import type { HomeModel, Letters } from "./useHomeDay";
 
 const LOGO_INKS = ["#2F5E9E", "#C0392B", "#2E7355", "#5E8FAD", "#9A4E2A"];
@@ -70,19 +71,41 @@ function NewsletterRow({ home, letters }: { home: HomeModel; letters: Letters })
           );
         })}
       </div>
-      {count > 1 && (
-        <div className="flex items-center gap-2 px-3 pb-2">
-          <span data-testid="home-newsletter-position" className="text-xs text-[#6e6e78]">{at + 1} of {count}</span>
-          <span className="flex items-center gap-1" aria-hidden="true">
-            {letters.issues.map((issue, index) => (
-              <span key={issue.id} data-testid="home-newsletter-dot" data-active={index === at} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: index === at ? "#5E8FAD" : "#b9cfdb" }} />
-            ))}
-          </span>
-          <button type="button" className="ml-auto py-1 text-xs font-semibold text-[#5E8FAD]" onClick={() => home.setSheet({ chore: letters.issues[0], mode: "issues", letters })}>
-            All issues
+      {/* Who it's for and a way to stop showing it, on every newsletter, not
+          only inside All issues (2026-10-21). */}
+      <div className="flex items-center gap-2 px-3 pb-2" data-testid="home-newsletter-footer">
+        {count > 1 && (
+          <>
+            <span data-testid="home-newsletter-position" className="text-xs text-[#6e6e78]">{at + 1} of {count}</span>
+            <span className="flex items-center gap-1" aria-hidden="true">
+              {letters.issues.map((issue, index) => (
+                <span key={issue.id} data-testid="home-newsletter-dot" data-active={index === at} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: index === at ? "#5E8FAD" : "#b9cfdb" }} />
+              ))}
+            </span>
+            <button type="button" className="py-1 text-xs font-semibold text-[#5E8FAD]" onClick={() => home.setSheet({ chore: letters.issues[0], mode: "issues", letters })}>
+              All issues
+            </button>
+          </>
+        )}
+        <PersonChips
+          home={home}
+          profileIds={letters.issues[0]?.profileIds}
+          title={letters.name}
+          onPick={(ids) => home.reassignLetters(letters, ids)}
+          sender={letters.sender}
+        />
+        {letters.sender && (
+          <button
+            type="button"
+            data-testid="home-newsletter-hide"
+            aria-label={`Stop showing ${letters.name}`}
+            className="grid h-7 w-7 shrink-0 place-items-center text-[#6e6e78]"
+            onClick={() => void home.askHideLetters(letters)}
+          >
+            <EyeOff className="h-4 w-4" aria-hidden="true" />
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </li>
   );
 }

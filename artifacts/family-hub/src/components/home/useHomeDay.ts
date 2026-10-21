@@ -444,6 +444,19 @@ export function useHomeDay(props: HomeDayProps) {
       })
       .catch(() => toast({ title: "Couldn't remember that sender", description: "This to-do moved, but new mail from them may not." }));
   };
+  /** Hand every issue of a newsletter to someone; the sender's later issues follow. */
+  const reassignLetters = (letters: Letters, ids: string[]) => {
+    const [first, ...rest] = letters.issues;
+    if (!first) return;
+    reassign(first, ids);
+    if (rest.length === 0) return;
+    rest.forEach((issue) => assign.mutate({ choreId: issue.id, profileIds: ids }));
+    setHandPicked((current) => {
+      const next = new Set([...current, ...rest.map((issue) => issue.id)]);
+      try { localStorage.setItem(HAND_PICKED_KEY, JSON.stringify([...next].slice(-500))); } catch { /* private mode */ }
+      return next;
+    });
+  };
   const removeTodo = useMutation({
     mutationFn: async (choreId: string) => {
       await apiRequest("DELETE", `/api/chores/${choreId}`);
@@ -674,7 +687,7 @@ export function useHomeDay(props: HomeDayProps) {
     snoozeItem,
     checkOff, uncheck, removeRow, askStopEmails, filtersOpen, setFiltersOpen, kindsOff, setKind, stoppedSenders, resumeSender,
     saveSchool, complete, undo, assign, reassign, removeTodo, removeItem, stopEmails, addToCalendar, removeFromCalendar,
-    newsletters, visibleNewsletters, hideLetters, askHideLetters,
+    newsletters, visibleNewsletters, hideLetters, askHideLetters, reassignLetters,
     keyDates, visibleKeys,
     openTodos, doneTodos, folded, visibleTodos,
     cleared, ackCleared,

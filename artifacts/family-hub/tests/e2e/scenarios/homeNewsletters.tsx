@@ -35,7 +35,16 @@ export function setup(): void {
     baselineRoutes({
       "/api/auth/user": { id: "u1", email: "test@test.com", onboardingCompletedAt: new Date().toISOString(), createdAt: new Date().toISOString() },
       "/api/calendar-settings": { shareOriginals: false, mutedNewsletters: [] },
-      "/api/chores": () => ok(chores),
+      "/api/chores": (url: string, opts?: RequestInit) => {
+        if (opts?.method === "PATCH") {
+          const id = new URL(url, window.location.origin).pathname.split("/").pop();
+          const body = JSON.parse(opts.body as string);
+          (window as unknown as { __patched?: unknown[] }).__patched = [...((window as unknown as { __patched?: unknown[] }).__patched ?? []), { id, ...body }];
+          chores = chores.map((chore) => (chore.id === id ? { ...chore, ...body } : chore));
+          return ok(chores.find((chore) => chore.id === id));
+        }
+        return ok(chores);
+      },
       "/api/ingest/newsletter/hide": (_url: string, opts?: RequestInit) => {
         const body = JSON.parse(opts?.body as string);
         (window as unknown as { __hideCalls: unknown[] }).__hideCalls.push(body);

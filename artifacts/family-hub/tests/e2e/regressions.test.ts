@@ -6567,6 +6567,37 @@ test("School Newsletters: one swipeable row per newsletter, with its place, its 
   }
 });
 
+// Newsletters had no way to say who they're for or to be removed, short of
+// opening All issues (2026-10-21).
+test("School Newsletters: each row shows who it's for, can be handed to someone, and can be hidden", async () => {
+  const page = await openScenarioTouch("homeNewsletters", { width: 390, height: 844 });
+  try {
+    const weekly = page.getByTestId("home-newsletter").filter({ hasText: "Lincoln Weekly" });
+    await weekly.waitFor({ timeout: 15_000 });
+    await weekly.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    const chip = weekly.getByTestId("home-todo-chip").first();
+    assert.equal((await chip.textContent())?.trim(), "Dad");
+    await weekly.getByRole("button", { name: /Lincoln Weekly is for Dad/ }).click();
+    await page.getByTestId("home-assign-person").filter({ hasText: "Ava" }).click();
+    await page.waitForTimeout(800);
+    const patched = await page.evaluate("window.__patched") as { id: string; profileIds?: string[] }[];
+    const moved = new Set(patched.filter((row) => row.profileIds?.join() === "kid1").map((row) => row.id));
+    assert.equal(moved.size, 3, `every issue moves to Ava (${JSON.stringify(patched)})`);
+    // It's Ava's now: it leaves Dad's Home, and shows under All with her chip.
+    await weekly.waitFor({ state: "detached", timeout: 5000 });
+    await page.getByTestId("profile-all family").click();
+    await weekly.waitFor({ timeout: 5000 });
+    assert.equal((await weekly.getByTestId("home-todo-chip").first().textContent())?.trim(), "Ava");
+
+    await weekly.getByTestId("home-newsletter-hide").click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Stop showing", exact: true }).click();
+    await weekly.waitFor({ state: "detached", timeout: 3000 });
+    await page.screenshot({ path: "/tmp/claude-0/-home-user-SuperHub/2b253c11-8315-54a6-aa7f-8016004bbf90/scratchpad/newsletters.png" });
+  } finally {
+    await page.context().close();
+  }
+});
+
 /** The colors down an event row's person strip, top to bottom. */
 async function stripColors(row: Locator): Promise<string[]> {
   return row.getByTestId("event-strip").locator("[data-color]").evaluateAll((segments) => segments.map((segment) => getComputedStyle(segment).backgroundColor));
