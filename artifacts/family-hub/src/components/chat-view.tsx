@@ -22,9 +22,11 @@ type Props = {
   people?: ChatPerson[];
   /** Points at the person picker, from the chat's label. */
   onPickPerson?: () => void;
+  /** The on-screen keyboard is up for the chat box, so the app can make room. */
+  onTyping?: (typing: boolean) => void;
 };
 
-export function ChatView({ profileKey, isChild, revision, profileReady, onSent, people = [], onPickPerson }: Props) {
+export function ChatView({ profileKey, isChild, revision, profileReady, onSent, people = [], onPickPerson, onTyping }: Props) {
   const owner = chatOwner(people);
   const [draft, setDraft] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -1224,6 +1226,10 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent, 
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder={`Ask or tell SuperHub anything for ${owner.forWhom}`}
+          // A touch screen's keyboard covers half the screen; the header and
+          // tab bar step aside while typing (2026-10-21).
+          onFocus={() => { if (window.matchMedia?.("(pointer: coarse)").matches) onTyping?.(true); }}
+          onBlur={() => onTyping?.(false)}
           className="min-w-0 flex-1 rounded-full border border-border bg-white px-4 py-2.5 text-sm"
         />
         <button type="submit" aria-label="Send" disabled={thinking || !draft.trim()} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#5E8FAD] text-sm text-white disabled:opacity-40">↑</button>

@@ -611,6 +611,11 @@ export default function FamilyHub() {
   // too, so its panel fits on screen without the page scrolling.
   const [weatherBarEl, setWeatherBarEl] = useState<HTMLElement | null>(null);
   const [weatherBarH, setWeatherBarH] = useState(0);
+  // Typing in Chat on a phone: the keyboard takes half the screen, so the
+  // weather bar, profile header and tab bar step aside and the conversation
+  // keeps the rest (2026-10-21).
+  const [chatTyping, setChatTyping] = useState(false);
+  const typingInChat = chatTyping && activeTab === "chat";
   useLayoutEffect(() => {
     if (!weatherBarEl) return;
     const measure = () => {
@@ -1139,7 +1144,7 @@ export default function FamilyHub() {
       {/* Weather/time bar — topmost element at rest; its wrapper's
           safe-area-inset-top padding drops it just below the notch cover so
           its content isn't clipped behind the island. */}
-      <div ref={setWeatherBarEl} style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+      <div ref={setWeatherBarEl} style={{ paddingTop: "env(safe-area-inset-top, 0px)", ...(typingInChat ? { display: "none" } : {}) }}>
         <WeatherWidget />
       </div>
 
@@ -1153,7 +1158,7 @@ export default function FamilyHub() {
         id="app-sticky-header"
         ref={setStickyHeaderEl}
         className="sticky z-50 bg-background/80 sticky-nav border-b border-black/[0.06]"
-        style={{ top: "env(safe-area-inset-top, 0px)" }}
+        style={{ top: "env(safe-area-inset-top, 0px)", ...(typingInChat ? { display: "none" } : {}) }}
       >
         <div className="container mx-auto px-3 sm:px-6 py-1 sm:py-1.5">
 
@@ -1551,7 +1556,11 @@ export default function FamilyHub() {
       <main
         className={`w-full max-w-screen-2xl mx-auto px-3 sm:px-6 pt-3 overflow-x-hidden ${activeTab === "chat" ? "flex flex-col" : ""}`}
         style={{
-          paddingBottom: activeTab === "chat"
+          // With the header gone, the notch is the top edge.
+          ...(typingInChat ? { paddingTop: "calc(0.75rem + env(safe-area-inset-top, 0px))" } : {}),
+          paddingBottom: typingInChat
+            ? "0.5rem"
+            : activeTab === "chat"
             ? "calc(5.75rem + env(safe-area-inset-bottom, 0px))"
             : "calc(10.5rem + env(safe-area-inset-bottom, 0px))",
           ...(activeTab === "calendar"
@@ -1905,6 +1914,7 @@ export default function FamilyHub() {
               onSent={() => setChatRevision((n) => n + 1)}
               people={chatPeople}
               onPickPerson={() => spotlight("profile-strip")}
+              onTyping={setChatTyping}
             />
           </Suspense>
         )}
@@ -2047,7 +2057,7 @@ export default function FamilyHub() {
           shell, so it can never cover the login or onboarding screens. */}
       <ScreensaverOverlay />
 
-      <nav className="superhub-tabbar" aria-label="Sections" data-testid="bottom-tab-bar">
+      <nav className="superhub-tabbar" aria-label="Sections" data-testid="bottom-tab-bar" style={typingInChat ? { display: "none" } : undefined}>
         {visibleNavTabs.map((tab) => {
           const TabIcon = tab.icon;
           const selected = activeTab === tab.id;

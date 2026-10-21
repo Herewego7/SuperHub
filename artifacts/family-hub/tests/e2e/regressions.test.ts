@@ -6866,6 +6866,36 @@ test("Chat says whose chat it is: a label with their photo, the box's grey text,
   }
 });
 
+// With the keyboard up, the profile header and tab bar left the conversation a
+// sliver of the screen (2026-10-21). They step aside while typing.
+test("Chat: typing on a phone hides the header and tab bar, and they come back after", async () => {
+  const page = await openScenarioTouch("familyHub", { width: 390, height: 844 });
+  try {
+    await page.getByTestId("profile-dad").click({ timeout: 15_000 });
+    await page.getByTestId("chat-tab").click();
+    const composer = page.getByTestId("chat-composer");
+    await composer.waitFor({ timeout: 10_000 });
+    await composer.focus();
+    // About what's left above an iPhone keyboard.
+    await page.setViewportSize({ width: 390, height: 470 });
+    await page.waitForTimeout(400);
+    assert.equal(await page.locator("#app-sticky-header").isVisible(), false, "the profile header steps aside");
+    assert.equal(await page.getByTestId("bottom-tab-bar").isVisible(), false, "the tab bar steps aside");
+    assert.equal(await page.getByTestId("chat-owner").isVisible(), true, "whose chat it is still shows");
+    const log = await page.getByTestId("chat-greeting").boundingBox();
+    assert.ok(log && log.y >= 0 && log.y < 200, `the conversation starts near the top (${log?.y})`);
+    await page.screenshot({ path: "/tmp/claude-0/-home-user-SuperHub/2b253c11-8315-54a6-aa7f-8016004bbf90/scratchpad/chat-typing.png" });
+
+    await composer.blur();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator("#app-sticky-header").isVisible(), true, "the header comes back");
+    assert.equal(await page.getByTestId("bottom-tab-bar").isVisible(), true, "the tab bar comes back");
+  } finally {
+    await page.context().close();
+  }
+});
+
 test("Screens on demand: a screen that fails to load reloads the app once, then opens", async () => {
   const { page, documents } = await openWithBrokenChat(false);
   try {
