@@ -146,3 +146,34 @@ export function appendUserMessage(profileKey: string, text: string): ChatBubble[
   localStorage.setItem(keyFor(profileKey), JSON.stringify(next));
   return next;
 }
+
+export type ChatPerson = { id: string; name: string; color: string; photoUrl?: string | null; isAllFamilyProfile?: boolean | null };
+
+/**
+ * Whose chat is showing, worded for its label, the box's grey text, and the
+ * first line of an empty chat. Each set of picked people has its own chat,
+ * which wasn't obvious from the Chat tab (2026-10-21).
+ */
+export function chatOwner(people: ChatPerson[]): { family: boolean; title: string; forWhom: string; intro: string } {
+  const named = people.filter((person) => !person.isAllFamilyProfile).map((person) => person.name.trim()).filter(Boolean);
+  if (named.length === 0 || people.some((person) => person.isAllFamilyProfile)) {
+    return {
+      family: true,
+      title: "Family chat",
+      forWhom: "the family",
+      intro: "This is the family's chat. Pick one person at the top to see their own chat.",
+    };
+  }
+  const forWhom = named.length === 1
+    ? named[0]
+    : named.length <= 3
+      ? `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`
+      : `${named.length} people`;
+  const title = named.length <= 3 ? `${forWhom}'s chat` : `Chat for ${forWhom}`;
+  return {
+    family: false,
+    title,
+    forWhom,
+    intro: `This is ${named.length <= 3 ? `${forWhom}'s` : "their"} chat. Pick someone else at the top to see their chat.`,
+  };
+}

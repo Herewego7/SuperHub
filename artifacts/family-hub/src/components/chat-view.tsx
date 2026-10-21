@@ -8,7 +8,8 @@ import { chatVisibleEvents, eventsForDayPlan, eventsForDrivingQuestion, openTodo
 import { withoutUnwatched } from "@/lib/outlookAttribution";
 import { assignedDinners, dinnerPlanReply, mealLinesIn, mealMove, sameMealName, mealSlotLabel, savedMealsReply, dinnerReply, dinnersForTheWeek, groceryAlreadyHave, groceryHaveAction, groceryHaveReply, proposedDinners, queueGroceryPrompts, statedDinners, wantsDinnerPlan, withSavedMeals, type GroceryPromptMeal } from "@/lib/mealCalendar";
 import type { Meal } from "@workspace/shared-types";
-import { appendUserMessage, pendingAfterPlan, readPendingConfirm, readThread, savePendingConfirm, threadWithPlan, type ChatBubble, type PendingConfirm } from "@/lib/chatThread";
+import { objectUrl } from "@/lib/apiBase";
+import { appendUserMessage, chatOwner, pendingAfterPlan, readPendingConfirm, readThread, savePendingConfirm, threadWithPlan, type ChatBubble, type ChatPerson, type PendingConfirm } from "@/lib/chatThread";
 import { PENDING_KEY, PLAN_KEY, PLAN_REPLY_KEY } from "@/lib/chatStaging";
 
 type Props = {
@@ -17,9 +18,14 @@ type Props = {
   revision: number;
   profileReady: boolean;
   onSent: () => void;
+  /** Who is picked, so the chat can say whose it is. The family profile when everyone or nobody is. */
+  people?: ChatPerson[];
+  /** Points at the person picker, from the chat's label. */
+  onPickPerson?: () => void;
 };
 
-export function ChatView({ profileKey, isChild, revision, profileReady, onSent }: Props) {
+export function ChatView({ profileKey, isChild, revision, profileReady, onSent, people = [], onPickPerson }: Props) {
+  const owner = chatOwner(people);
   const [draft, setDraft] = useState("");
   const [thinking, setThinking] = useState(false);
   const storedConfirm = readPendingConfirm(profileKey);
@@ -1129,6 +1135,9 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       <div className="max-w-[85%] rounded-2xl bg-white px-3 py-2 text-sm shadow-[0_2px_10px_rgba(42,24,80,0.07)]" data-testid="chat-greeting">
         {`Good ${part}, ${viewerName}. What can I take off your plate?`}
       </div>
+      {shown.length === 0 && (
+        <p data-testid="chat-owner-intro" className="px-1 text-xs text-[#6e6e78]">{owner.intro}</p>
+      )}
       {shown.length > 0 && (
         <ul className="flex flex-col gap-2">
           {shown.map((bubble) => (
@@ -1191,6 +1200,18 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         ))}
       </div>
       )}
+      <button
+        type="button"
+        data-testid="chat-owner"
+        aria-label={`${owner.title}. Pick someone else at the top to switch.`}
+        className="flex shrink-0 items-center gap-2 self-start rounded-full py-1 pr-2 text-left"
+        onClick={onPickPerson}
+      >
+        <span className="flex -space-x-2">
+          {(people.length > 0 ? people : []).slice(0, 3).map((person) => <ChatAvatar key={person.id} person={person} />)}
+        </span>
+        <span data-testid="chat-owner-name" className="text-sm font-medium text-[#1e1e24] dark:text-white">{owner.title}</span>
+      </button>
       <form
         className="flex shrink-0 items-end gap-2 pt-1"
         onSubmit={(event) => {
@@ -1202,13 +1223,21 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
           data-testid="chat-composer"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Ask or tell SuperHub anything"
+          placeholder={`Ask or tell SuperHub anything for ${owner.forWhom}`}
           className="min-w-0 flex-1 rounded-full border border-border bg-white px-4 py-2.5 text-sm"
         />
         <button type="submit" aria-label="Send" disabled={thinking || !draft.trim()} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#5E8FAD] text-sm text-white disabled:opacity-40">↑</button>
       </form>
     </div>
   );
+}
+
+/** A picked person's photo, or their initials on their color. */
+function ChatAvatar({ person }: { person: ChatPerson }) {
+  const ring = { border: `2px solid ${person.color}` };
+  if (person.photoUrl) return <img src={objectUrl(person.photoUrl)} alt="" className="h-6 w-6 rounded-full bg-white object-cover" style={ring} />;
+  const initials = person.name.split(/\s+/).map((word) => word[0] ?? "").join("").slice(0, 2).toUpperCase();
+  return <span className="grid h-6 w-6 place-items-center rounded-full text-[10px] font-semibold text-white ring-2 ring-white" style={{ background: person.color }}>{initials || "?"}</span>;
 }
 
 function chatRichText(text: string) {

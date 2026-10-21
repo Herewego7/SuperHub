@@ -822,6 +822,12 @@ export default function FamilyHub() {
     queryKey: ["/api/profiles"],
   });
   const chatProfileKey = [...selectedProfiles].sort().join(",") || "family";
+  // Whose chat is showing, for its label. Everyone picked, or nobody, is the family's chat.
+  const chatRegular = profiles.filter((p) => !p.isAllFamilyProfile && p.isActive !== false);
+  const chatPicked = chatRegular.filter((p) => selectedProfiles.includes(p.id));
+  const chatPeople = chatPicked.length === 0 || chatPicked.length === chatRegular.length
+    ? profiles.filter((p) => p.isAllFamilyProfile)
+    : chatPicked;
   const chatIsChild = profiles.filter((p) => selectedProfiles.includes(p.id) && !p.isAllFamilyProfile).every((p) => p.role === "child" || p.isChild) &&
     profiles.some((p) => selectedProfiles.includes(p.id) && !p.isAllFamilyProfile);
   const sendChatFromMenu = () => {
@@ -1163,6 +1169,7 @@ export default function FamilyHub() {
             )}
           <div
             ref={profileStripRef}
+            id="profile-strip"
             // py-1/-my-1: overflow-x on its own computes overflow-y to `auto`
             // too (the spec won't leave one axis visible while the other
             // isn't), so this strip clips vertically — which sheared the top
@@ -1896,6 +1903,8 @@ export default function FamilyHub() {
               revision={chatRevision}
               profileReady={hasInitialized}
               onSent={() => setChatRevision((n) => n + 1)}
+              people={chatPeople}
+              onPickPerson={() => spotlight("profile-strip")}
             />
           </Suspense>
         )}

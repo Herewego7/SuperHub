@@ -6810,6 +6810,31 @@ async function waitForDocuments(page: Page, documents: () => number, count: numb
   for (let waited = 0; documents() < count && waited < 10_000; waited += 250) await page.waitForTimeout(250);
 }
 
+// Each set of picked people has its own chat, and nothing on the tab said
+// whose was showing (2026-10-21).
+test("Chat says whose chat it is: a label with their photo, the box's grey text, and a first line", async () => {
+  const page = await openScenario("familyHub", { width: 390, height: 844 });
+  try {
+    await page.getByTestId("profile-dad").click({ timeout: 15_000 });
+    await page.getByTestId("chat-tab").click();
+    const owner = page.getByTestId("chat-owner");
+    await owner.waitFor({ timeout: 10_000 });
+    assert.equal(await owner.getByTestId("chat-owner-name").textContent(), "Dad's chat");
+    assert.equal(await page.getByTestId("chat-composer").getAttribute("placeholder"), "Ask or tell SuperHub anything for Dad");
+    assert.match(await page.getByTestId("chat-owner-intro").textContent() ?? "", /This is Dad's chat\. Pick someone else at the top/);
+    const box = await owner.boundingBox();
+    const composer = await page.getByTestId("chat-composer").boundingBox();
+    assert.ok(box && composer && box.y + box.height <= composer.y + 1, "the label sits above the box");
+    await page.screenshot({ path: "/tmp/claude-0/-home-user-SuperHub/2b253c11-8315-54a6-aa7f-8016004bbf90/scratchpad/chat-owner.png" });
+
+    await page.getByTestId("profile-all family").click();
+    await page.getByTestId("chat-owner").filter({ hasText: "Family chat" }).waitFor({ timeout: 5000 });
+    assert.equal(await page.getByTestId("chat-composer").getAttribute("placeholder"), "Ask or tell SuperHub anything for the family");
+  } finally {
+    await page.close();
+  }
+});
+
 test("Screens on demand: a screen that fails to load reloads the app once, then opens", async () => {
   const { page, documents } = await openWithBrokenChat(false);
   try {

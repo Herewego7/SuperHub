@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bumpUnread, clearedUnread, pendingAfterPlan, pendingConfirmFrom, threadWithPlan, unreadCount, unreadFor } from "../../src/lib/chatThread";
+import { bumpUnread, chatOwner, clearedUnread, pendingAfterPlan, pendingConfirmFrom, threadWithPlan, unreadCount, unreadFor } from "../../src/lib/chatThread";
 
 test("a notification reply sits under the plan", () => {
   const thread = threadWithPlan(
@@ -45,4 +45,19 @@ test("a seeded unread reply is a badge count", () => {
   assert.equal(unreadCount("1"), 1);
   assert.equal(unreadCount("no"), 0);
   assert.equal(unreadCount(null), 0);
+});
+
+// Each set of picked people has its own chat; the tab now says whose (2026-10-21).
+test("the chat says whose it is", () => {
+  const mom = { id: "m", name: "Mom", color: "#f00" };
+  const ava = { id: "a", name: "Ava", color: "#0f0" };
+  const ben = { id: "b", name: "Ben", color: "#00f" };
+  const dad = { id: "d", name: "Dad", color: "#000" };
+  const family = { id: "f", name: "All Family", color: "#888", isAllFamilyProfile: true };
+  assert.deepEqual(chatOwner([mom]), { family: false, title: "Mom's chat", forWhom: "Mom", intro: "This is Mom's chat. Pick someone else at the top to see their chat." });
+  assert.equal(chatOwner([mom, ava]).title, "Mom and Ava's chat");
+  assert.equal(chatOwner([mom, ava, ben]).forWhom, "Mom, Ava and Ben");
+  assert.equal(chatOwner([mom, ava, ben, dad]).title, "Chat for 4 people");
+  assert.equal(chatOwner([family]).title, "Family chat");
+  assert.equal(chatOwner([]).forWhom, "the family");
 });
