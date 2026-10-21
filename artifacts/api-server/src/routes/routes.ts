@@ -2107,7 +2107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const details = await storage.getProfileStreakDetails(profileId);
-      res.json({ profileId, streak: details.streak, ...details });
+      res.json({ profileId, ...details });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch streak" });
     }
@@ -2318,7 +2318,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Sanitize: only public-safe fields.
       const profiles = (await storage.getProfilesByUser(userId))
         .filter((p) => !p.isAllFamilyProfile)
-        .map((p) => ({ id: p.id, name: p.name, color: p.color, emoji: p.emoji }));
+        .map((p) => ({ id: p.id, name: p.name, color: p.color }));
       const now = new Date();
       const weekStart = new Date(now);
       weekStart.setHours(0, 0, 0, 0);
@@ -5132,7 +5132,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("Failed to fetch weather data");
       }
       
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as {
+        current_weather?: { temperature?: number; weathercode?: number };
+        daily?: { time?: string[]; weathercode?: number[]; temperature_2m_max?: number[]; temperature_2m_min?: number[] };
+      };
       
       // Get location name from settings or use reverse geocoding
       let locationName = "Unknown Location";
@@ -5144,7 +5147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`
           );
           if (geoResponse.ok) {
-            const geoData = await geoResponse.json();
+            const geoData = await geoResponse.json() as { city?: string; locality?: string; principalSubdivision?: string };
             locationName = geoData.city || geoData.locality || geoData.principalSubdivision || "Unknown Location";
           }
         } catch (geoError) {

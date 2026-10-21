@@ -21,6 +21,7 @@ function link(partial: Partial<EventCalendarSync>): EventCalendarSync {
     externalCalendarId: "primary",
     syncState: "synced",
     lastError: null,
+    dismissedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...partial,

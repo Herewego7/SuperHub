@@ -302,7 +302,7 @@ export function registerPushRoutes(app: Express): void {
     const updated = await db
       .update(nativePushTokens)
       .set({ notificationPrefs: parsed.data.notificationPrefs, lastSeenAt: new Date() })
-      .where(and(eq(nativePushTokens.id, req.params.id), eq(nativePushTokens.userId, userId)))
+      .where(and(eq(nativePushTokens.id, String(req.params.id)), eq(nativePushTokens.userId, userId)))
       .returning();
     if (updated.length === 0) return res.status(404).json({ error: "Not found" });
     res.json({ notificationPrefs: updated[0].notificationPrefs });
@@ -319,7 +319,7 @@ export function registerPushRoutes(app: Express): void {
         .delete(nativePushTokens)
         .where(
           and(
-            eq(nativePushTokens.id, req.params.id),
+            eq(nativePushTokens.id, String(req.params.id)),
             eq(nativePushTokens.userId, userId),
           ),
         )
@@ -395,7 +395,7 @@ export function registerPushRoutes(app: Express): void {
     const updated = await db
       .update(pushSubscriptions)
       .set({ notificationPrefs: parsed.data.notificationPrefs, lastSeenAt: new Date() })
-      .where(and(eq(pushSubscriptions.id, req.params.id), eq(pushSubscriptions.userId, userId)))
+      .where(and(eq(pushSubscriptions.id, String(req.params.id)), eq(pushSubscriptions.userId, userId)))
       .returning();
     if (updated.length === 0) return res.status(404).json({ error: "Not found" });
     res.json({ notificationPrefs: updated[0].notificationPrefs });
@@ -412,7 +412,7 @@ export function registerPushRoutes(app: Express): void {
         .delete(pushSubscriptions)
         .where(
           and(
-            eq(pushSubscriptions.id, req.params.id),
+            eq(pushSubscriptions.id, String(req.params.id)),
             eq(pushSubscriptions.userId, userId),
           ),
         )

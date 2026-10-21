@@ -102,7 +102,7 @@ export function registerHealthReminderRoutes(app: Express): void {
     const updates: Record<string, unknown> = { ...parsed.data };
     if (parsed.data.startsAt) updates.startsAt = new Date(parsed.data.startsAt);
     if (parsed.data.endsAt !== undefined) updates.endsAt = parsed.data.endsAt ? new Date(parsed.data.endsAt) : null;
-    const updated = await storage.updateHealthReminder(req.params.id, updates, userId);
+    const updated = await storage.updateHealthReminder(String(req.params.id), updates, userId);
     if (!updated) return res.status(404).json({ error: "Not found" });
     return res.json(updated);
   });
@@ -110,7 +110,7 @@ export function registerHealthReminderRoutes(app: Express): void {
   app.delete("/api/health-reminders/:id", isAuthenticated, async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthenticated" });
-    const ok = await storage.deleteHealthReminder(req.params.id, userId);
+    const ok = await storage.deleteHealthReminder(String(req.params.id), userId);
     if (!ok) return res.status(404).json({ error: "Not found" });
     return res.status(204).send();
   });
@@ -118,7 +118,7 @@ export function registerHealthReminderRoutes(app: Express): void {
   app.post("/api/health-reminders/:id/pause", isAuthenticated, async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthenticated" });
-    const updated = await storage.updateHealthReminder(req.params.id, { isPaused: true }, userId);
+    const updated = await storage.updateHealthReminder(String(req.params.id), { isPaused: true }, userId);
     if (!updated) return res.status(404).json({ error: "Not found" });
     return res.json(updated);
   });
@@ -126,7 +126,7 @@ export function registerHealthReminderRoutes(app: Express): void {
   app.post("/api/health-reminders/:id/resume", isAuthenticated, async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthenticated" });
-    const updated = await storage.updateHealthReminder(req.params.id, { isPaused: false }, userId);
+    const updated = await storage.updateHealthReminder(String(req.params.id), { isPaused: false }, userId);
     if (!updated) return res.status(404).json({ error: "Not found" });
     return res.json(updated);
   });
@@ -201,7 +201,7 @@ export function registerHealthReminderRoutes(app: Express): void {
         return res.status(400).json({ error: "Invalid byProfileId" });
       }
     }
-    const updated = await storage.acknowledgeHealthReminderEvent(req.params.id, userId, byProfileId);
+    const updated = await storage.acknowledgeHealthReminderEvent(String(req.params.id), userId, byProfileId);
     if (!updated) return res.status(404).json({ error: "Not found" });
     return res.json(updated);
   });
@@ -211,7 +211,7 @@ export function registerHealthReminderRoutes(app: Express): void {
     if (!userId) return res.status(401).json({ error: "Unauthenticated" });
     const minutes = Math.min(240, Math.max(1, Number(req.body?.minutes) || 15));
     const until = new Date(Date.now() + minutes * 60_000);
-    const updated = await storage.snoozeHealthReminderEvent(req.params.id, userId, until);
+    const updated = await storage.snoozeHealthReminderEvent(String(req.params.id), userId, until);
     if (!updated) return res.status(404).json({ error: "Not found" });
     return res.json(updated);
   });

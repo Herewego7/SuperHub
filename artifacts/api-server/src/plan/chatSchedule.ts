@@ -165,7 +165,7 @@ function whoLabel(who: ChoreDraft["who"], profiles: ScheduleProfile[]): string {
   return names.length > 0 ? names.join(", ") : "no one";
 }
 
-function optionNames(profiles: ScheduleProfile[]): string {
+function optionNames(profiles: Pick<ScheduleProfile, "name">[]): string {
   const names = profiles.map((person) => person.name.trim()).filter(Boolean);
   if (names.length === 0) return "everyone, or no one";
   if (names.length === 1) return `${names[0]}, everyone, or no one`;

@@ -39,7 +39,7 @@ function historyOf(body: unknown): ChatHistory {
 
 type PlacedDinner = { id: string; name: string; date: string; slot: string; ingredients: { id: string; item: string; quantity?: string | null }[] };
 type DinnerRow = { id: string; date: string; slot: string; name: string; notes?: string | null; recipeUrl?: string | null; directions?: string | null; sourceName?: string | null };
-type SavedDinner = DinnerRow;
+type SavedDinner = Omit<DinnerRow, "date" | "slot">;
 type SavedIngredient = { savedMealId: string; item: string; quantity?: string | null; displayOrder?: number | null };
 
 async function placeDinners(userId: string, dinners: DinnerNight[]): Promise<{ meals: PlacedDinner[]; added: string[] }> {

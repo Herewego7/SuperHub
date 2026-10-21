@@ -618,7 +618,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
         setDraft("");
         return;
       }
-      if (!("profileIds" in drivingChange)) {
+      if (!drivingChange.profileIds) {
         next.push({ id: `${Date.now()}-r`, role: "assistant", text: drivingChange.reply });
         localStorage.setItem(`superhub_chat_thread_${profileKey}`, JSON.stringify(next));
         setBubbles(next);
@@ -691,7 +691,8 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
     const plan = tools.includes("get_plan")
       ? dayReply(text, {
           chores: planChores,
-          events: planEvents.map((event) => ({
+          // An event without a start time can't be placed in the day.
+          events: planEvents.filter((event): event is typeof event & { startTime: string | Date } => !!event.startTime).map((event) => ({
             ...event,
             drivers: (event.drivingProfileIds ?? [])
               .map((id) => profiles.find((person) => person.id === id)?.name)
@@ -974,7 +975,7 @@ export function ChatView({ profileKey, isChild, revision, profileReady, onSent }
       return;
     }
     const assigned = tools.includes("assign") ? assignChange(text, talkChores, profiles) : null;
-    if (assigned && "choreId" in assigned) {
+    if (assigned?.choreId) {
       replyAfter(
         apiRequest("PATCH", `/api/chores/${assigned.choreId}`, { profileIds: assigned.profileIds }).then(() => {
           void queryClient.invalidateQueries({ queryKey: ["/api/chores"] });

@@ -152,6 +152,8 @@ export type InsertProfile = {
   // COPPA / children's data (parental consent fields are set server-side only)
   isChild?: boolean | null;
   birthYear?: number | null;
+  school?: string | null;
+  facts?: string[] | null;
 };
 
 // ====== Event ======

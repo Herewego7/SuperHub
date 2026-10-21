@@ -102,7 +102,7 @@ function whenLabel(value: string | Date, zone: string, allDay: boolean): string 
 }
 
 /** App events plus Google, Outlook, and subscribed calendars, without listing a copied event twice. */
-export function eventsForChat<T extends { id: string; externalId?: string | null }>(local: T[], outside: T[]): T[] {
+export function eventsForChat<L extends { id: string; externalId?: string | null }, O extends { id: string; externalId?: string | null }>(local: L[], outside: O[]): (L | O)[] {
   const known = new Set(local.flatMap((event) => [event.id, event.externalId].filter((value): value is string => !!value)));
   return [...local, ...outside.filter((event) => !known.has(event.id) && (!event.externalId || !known.has(event.externalId)))];
 }

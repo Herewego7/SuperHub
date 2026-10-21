@@ -197,7 +197,7 @@ export type HorizonEvent = {
 const SPECIAL_DAY = /\b(birthday|bday|anniversary|holiday|graduation|recital|tournament|picture day)\b/i;
 
 /** A series that comes around at least weekly is a routine. A birthday is not. */
-export function routineSeriesIds(events: HorizonEvent[]): Set<string> {
+export function routineSeriesIds(events: Pick<HorizonEvent, "title" | "startTime" | "recurringEventId">[]): Set<string> {
   const bySeries = new Map<string, number[]>();
   for (const event of events) {
     const series = event.recurringEventId;

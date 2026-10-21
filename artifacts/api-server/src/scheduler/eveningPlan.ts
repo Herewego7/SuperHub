@@ -144,7 +144,7 @@ function outlookWhen(part: { dateTime?: string; timeZone?: string } | null | und
 }
 
 /** The same event seen through two connected accounts is one line. A saved app event has no external id and stays. */
-export function uniqueExternalRows<T extends { externalId?: string | null }>(rows: T[]): T[] {
+export function uniqueExternalRows<T extends { title: string; externalId?: string | null }>(rows: T[]): T[] {
   const seen = new Set<string>();
   return rows.filter((row) => {
     const key = row.externalId;
@@ -608,13 +608,16 @@ export function eventClockTitle(title: string, startTime: Date, tz: string, allD
   return `${title}, ${hours}:${String(minutes).padStart(2, "0")} ${suffix}`;
 }
 
-export function planDayEvents<T extends Parameters<typeof expandRecurringEvents>[0][number]>(
+export function planDayEvents<T extends { startTime: Date | string }>(
   events: T[],
   target: string,
   tz: string,
   now?: Date,
 ): T[] {
-  return expandRecurringEvents(events, now).filter((event) => localDate(new Date(event.startTime), tz) === target) as T[];
+  // Google, Outlook and iCal rows carry no recurrenceType, so the expansion
+  // passes them through as they are; only saved repeating events multiply.
+  const expanded = expandRecurringEvents(events as unknown as Parameters<typeof expandRecurringEvents>[0], now) as unknown as T[];
+  return expanded.filter((event) => localDate(new Date(event.startTime), tz) === target);
 }
 
 export function planTitle(isChild: boolean, timing: string | null | undefined): string {
@@ -814,7 +817,7 @@ async function planTextFor(profile: PlanPerson, now: Date, tz: string, target: s
         driverIdsOf(event).map((id) => family.get(id)).filter((name): name is string => !!name),
       ),
       description: event.description,
-      movedFrom: moveLabel(event.movedFrom, now),
+      movedFrom: moveLabel((event as { movedFrom?: string | null }).movedFrom ?? null, now),
       source: event.source,
       driving: driverIdsOf(event).includes(profile.id),
       who: otherNames(event.profileIds),
@@ -834,6 +837,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
   if (candidates.length === 0) return false;
   for (const profile of candidates) {
     if (!profile.userId || !profile.eveningPlanTime) continue;
+    const person: PlanPerson = { ...profile, userId: profile.userId };
     if (pushesForProfile({ planTime: profile.eveningPlanTime, dailyBriefTime: profile.dailyBriefTime }).includes("daily-brief")) continue;
     const settings = await storage.getCalendarSettingsByUser(profile.userId);
     const loc = await db.select().from(locationSettings).where(eq(locationSettings.userId, profile.userId)).limit(1);
@@ -849,7 +853,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
       const previous = planSnapshotBody(savedKeys, profile.id, day);
       if (previous && !savedKeys.includes(morningKey)) {
         try {
-          const nextBody = await planTextFor(profile, now, tz, day, settings?.dismissedSlipKeys ?? []);
+          const nextBody = await planTextFor(person, now, tz, day, settings?.dismissedSlipKeys ?? []);
           const added = changedPlanLines(previous, nextBody);
           if (added.length > 0 && await storage.claimPlanKey(profile.userId, morningKey, day)) {
             const note = morningNoteText(added);
@@ -885,7 +889,7 @@ export async function runEveningPlanTick(now: Date = new Date()): Promise<boolea
     if (!claimed) continue;
     try {
       const target = profile.eveningPlanTiming === "morningOf" ? day : nextDayKey(day);
-      const body = await polishPlanBody(await planTextFor(profile, now, tz, target, settings?.dismissedSlipKeys ?? []));
+      const body = await polishPlanBody(await planTextFor(person, now, tz, target, settings?.dismissedSlipKeys ?? []));
       const when = profile.eveningPlanTiming === "morningOf" ? "today" : "tomorrow";
       const title = planTitle(profile.role === "child" || profile.isChild === true, profile.eveningPlanTiming);
       const chat = planChatText(title, planLookahead(when, body.split("\n")), body);

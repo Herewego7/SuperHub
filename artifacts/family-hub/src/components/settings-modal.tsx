@@ -1095,7 +1095,7 @@ function PersonCalendarTypeSection({
   calendarAssignments: any[];
   pendingAudiences: Record<string, string[]>;
   setPendingAudiences: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
-  saveCalendarAssignmentMutation: ReturnType<typeof useMutation<any, Error, { calendarId: string; profileId: string; profileIds: string[]; calendarType: "google" | "outlook"; calendarName: string; calendarColor: string; emailAddress: string }>>;
+  saveCalendarAssignmentMutation: ReturnType<typeof useMutation<any, Error, { calendarId: string; profileId: string; profileIds?: string[]; calendarType: "google" | "outlook"; calendarName: string; calendarColor: string; emailAddress: string }>>;
   onReconnect: (profileId: string) => void;
   /** Controlled by the single chevron on the unified per-person row above —
    * this component no longer owns its own expand/collapse state. */
@@ -1638,9 +1638,11 @@ export function CalendarConnectionsSection({
 
   // Calendar assignment mutation (supports both Google and Outlook)
   const saveCalendarAssignmentMutation = useMutation({
-    mutationFn: async ({ calendarId, profileId, calendarType, calendarName, calendarColor, emailAddress }: { 
+    mutationFn: async ({ calendarId, profileId, profileIds, calendarType, calendarName, calendarColor, emailAddress }: { 
       calendarId: string; 
       profileId: string; 
+      /** Everyone the calendar is for. It used to be dropped here, so only the first person picked was saved (2026-10-21). */
+      profileIds?: string[];
       calendarType: 'google' | 'outlook';
       calendarName: string;
       calendarColor: string;
@@ -1649,6 +1651,7 @@ export function CalendarConnectionsSection({
       const response = await apiRequest("POST", "/api/calendar-assignments", {
         calendarId,
         profileId,
+        ...(profileIds ? { profileIds } : {}),
         calendarType,
         calendarName,
         calendarColor,
@@ -3449,7 +3452,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                       placeholder="Profile name"
                       className="h-8"
                       data-testid="profile-name-input"
-                      disabled={editingProfile?.isAllFamilyProfile}
+                      disabled={!!editingProfile?.isAllFamilyProfile}
                     />
                   </div>
                   <div>
@@ -3462,7 +3465,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                       maxLength={2}
                       className="h-8"
                       data-testid="profile-initials-input"
-                      disabled={editingProfile?.isAllFamilyProfile}
+                      disabled={!!editingProfile?.isAllFamilyProfile}
                     />
                   </div>
                 </div>

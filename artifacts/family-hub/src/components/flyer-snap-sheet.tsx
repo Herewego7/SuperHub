@@ -156,7 +156,7 @@ export function FlyerSnapSheet({ open, onOpenChange, onImported, onViewDate }: F
             }
           } else {
             const now = new Date();
-            now.setMinutes(0, 0, 0, 0);
+            now.setMinutes(0, 0, 0);
             start = now.toISOString();
             end = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
           }

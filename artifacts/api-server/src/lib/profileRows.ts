@@ -22,7 +22,7 @@ function columnsWithoutFacts() {
 }
 
 function withEmptyFacts(row: Record<string, unknown>): Profile {
-  return { ...row, facts: [] } as Profile;
+  return { ...row, facts: [] } as unknown as Profile;
 }
 
 export async function loadProfiles(where?: SQL): Promise<Profile[]> {

@@ -99,7 +99,7 @@ export function assignChange(
   text: string,
   chores: { id: string; title: string }[],
   profiles: { id: string; name: string }[],
-): { choreId: string; profileIds: string[]; reply: string } | { reply: string } | null {
+): { choreId: string; profileIds: string[]; reply: string } | { choreId?: undefined; reply: string } | null {
   const match = text.trim().match(/^assign\s+(.+?)\s+to\s+(.+?)\.?$/i);
   if (!match) return null;
   const title = match[1].trim();
@@ -769,7 +769,7 @@ export function driverChange(
   text: string,
   profiles: { id: string; name: string }[],
   selfName?: string | null,
-): { title: string; profileIds: string[]; reply: string } | { title: string; reply: string } | null {
+): { title: string; profileIds: string[]; reply: string } | { title: string; profileIds?: undefined; reply: string } | null {
   const trimmed = text.trim();
   const self = trimmed.match(/^(?:i'm|i am)\s+driving\s+(.+?)\.?$/i);
   if (self?.[1]?.trim()) {

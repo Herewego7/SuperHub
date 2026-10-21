@@ -1713,7 +1713,7 @@ export function PeopleView({ selectedProfiles, profiles, selectedDate, onNavigat
     googleCalendarQueries.forEach((query, idx) => {
       const profileId = gcProfiles[idx]?.id;
       if (!profileId) return;
-      const gcEvents: any[] = query.data || [];
+      const gcEvents: any[] = (query.data as any[] | undefined) || [];
       gcEvents.forEach((gcEvent: any) => {
         if (seenGoogleIds.has(gcEvent.id)) return;
         seenGoogleIds.add(gcEvent.id);
@@ -1771,7 +1771,7 @@ export function PeopleView({ selectedProfiles, profiles, selectedDate, onNavigat
     outlookCalendarQueries.forEach((query, idx) => {
       const profileId = outlookProfiles[idx]?.id;
       if (!profileId) return;
-      const outlookEvents: any[] = query.data || [];
+      const outlookEvents: any[] = (query.data as any[] | undefined) || [];
       outlookEvents.forEach((oe: any) => {
         const { start: startTime, end: endTime } = parseOutlookEventDates(oe);
 

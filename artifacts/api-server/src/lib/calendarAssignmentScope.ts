@@ -35,7 +35,7 @@ export function assignmentsVisibleToFamily<T extends ScopedAssignment>(
  * `profileId` is the first person, which is what the existing unique key uses.
  * `audienceProfileIds` is the full list.
  */
-export function eventsOnWatchedCalendars<T extends { googleCalendarId?: string | null; outlookCalendarId?: string | null }>(
+export function eventsOnWatchedCalendars<T extends { title: string; googleCalendarId?: string | null; outlookCalendarId?: string | null }>(
   events: T[],
   assignments: { calendarId: string; watched?: boolean | null; isActive?: boolean | null }[],
 ): T[] {
