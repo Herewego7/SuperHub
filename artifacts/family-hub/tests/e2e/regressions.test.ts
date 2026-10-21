@@ -1254,23 +1254,22 @@ test("Parent PIN checklist: recommended items are grouped and checked by default
   }
 });
 
-test("Quick Tour: demo frames show the real tab bar, and no stale 'To-Dos is off by default' copy remains", async () => {
-  // 2026-08-27: the tour's demos previously had no tab bar at all — just a
-  // family-bar + card content, reading as a cropped fragment rather than
-  // the real app. Rebuilt to include the actual Home/Cal/Chores/To-Dos/Meals
-  // tab row (plus the date-nav row) under every demo, and trimmed the
-  // outdated "To-Dos is off by default, turn it on in Settings" language now
-  // that To-Dos ships visible by default.
+test("Quick Tour: demo frames show the real tab bar, and no stale To-Dos tab copy remains", async () => {
+  // 2026-08-27: the tour's demos previously had no tab bar at all. Rebuilt
+  // with the real tab row under every demo. 2026-10-21: the bar is Home, Cal,
+  // Chores, Meals and Chat, and to-dos live on Home, so no tip may still
+  // promise a To-Dos tab.
   const page = await openScenario("onboardingTour");
   try {
     // Tip 3 (last) is the one whose demo shows the Chores tab explicitly.
     await page.locator('button[aria-label="Go to tip 3"]').click();
-    await page.getByText("Chores and To-Dos each get their own tab").waitFor({ state: "visible" });
+    await page.getByText("Chores have a tab; to-dos are on Home").waitFor({ state: "visible" });
 
     const bodyText = await page.evaluate(() => document.body.innerText);
-    for (const label of ["Home", "Cal", "Chores", "To-Dos", "Meals"]) {
+    for (const label of ["Home", "Cal", "Chores", "Meals", "Chat"]) {
       assert.ok(bodyText.includes(label), `tab bar should show "${label}"`);
     }
+    assert.ok(!/To-Dos tab|own tab/i.test(bodyText), "no copy should promise a To-Dos tab");
     assert.ok(!/off by default/i.test(bodyText), "no copy should say To-Dos is off by default anymore");
     assert.ok(!/turn it on in Settings/i.test(bodyText), "no copy should tell people to turn To-Dos on in Settings anymore");
   } finally {
@@ -6540,6 +6539,10 @@ test("School Newsletters: one swipeable row per newsletter, with its place, its 
     assert.equal(await rows.filter({ hasText: "PTA News" }).getByTestId("home-newsletter-position").count(), 0, "a single issue needs no count");
 
     const track = weekly.getByTestId("home-newsletter-track");
+    // Mid-screen first: near the bottom the floating tab bar sits over the
+    // row, and the finger landed on the bar instead (2026-10-21).
+    await track.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await page.waitForTimeout(300);
     const box = (await track.boundingBox())!;
     await touchSwipeAcross(page, box.x + box.width - 30, box.y + box.height / 2, box.x + 30);
     await position.filter({ hasText: "2 of 3" }).waitFor({ timeout: 3000 });

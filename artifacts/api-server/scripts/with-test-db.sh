@@ -49,7 +49,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Starting a throwaway Postgres on port $PORT…"
+echo "Starting a throwaway Postgres on port ${PORT}…"
 run_pg "$PG_BIN/initdb -D $DATA_DIR/data -U postgres --auth=trust" >/dev/null
 run_pg "$PG_BIN/pg_ctl -D $DATA_DIR/data -o '-p $PORT -k $DATA_DIR' -l $DATA_DIR/log start" >/dev/null
 

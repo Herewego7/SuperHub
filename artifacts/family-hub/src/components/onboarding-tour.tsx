@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Plus, Star, Check, Calendar, StickyNote, HeartPulse, ChevronRight, ListTodo, Camera, CheckSquare, Home, UtensilsCrossed, ChevronLeft } from "lucide-react";
+import { Plus, Star, Check, Calendar, StickyNote, HeartPulse, ChevronRight, ListTodo, Camera, CheckSquare, Home, UtensilsCrossed, ChevronLeft, MessageCircle } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Animated feature tour ("Quick Tour") — a small set of self-contained,
@@ -111,13 +111,13 @@ const MINI_TABS = [
   { id: "home", icon: Home, label: "Home" },
   { id: "calendar", icon: Calendar, label: "Cal" },
   { id: "chores", icon: ListTodo, label: "Chores" },
-  { id: "todos", icon: CheckSquare, label: "To-Dos" },
   { id: "meals", icon: UtensilsCrossed, label: "Meals" },
+  { id: "chat", icon: MessageCircle, label: "Chat" },
 ] as const;
 
-// Static tab-pill row — matches the app's real nav (Home / Cal / Chores /
-// To-Dos / Meals) so a demo's active tab is visible alongside the others,
-// not just implied.
+// Static tab row — matches the app's real bottom bar (Home / Cal / Chores /
+// Meals / Chat) so a demo's active tab is visible alongside the others,
+// not just implied. To-Dos left the bar for Home's Today's To-dos (2026-10).
 function MiniTabRow({ active }: { active: (typeof MINI_TABS)[number]["id"] }) {
   return (
     <div className="flex items-center justify-center gap-1 px-1.5 py-1.5 border-b border-border bg-card/40">
@@ -324,37 +324,36 @@ function PlusButtonDemo() {
 // ── Demo 3: the Tasks tab (chores + to-dos + rewards) ────────────────────────
 function TasksDemo() {
   // 0 idle · 1 move to a chore checkbox · 2 tap (check) · 3 star flies to
-  // counter · 4 move to the To-Dos tab pill · 5 tap it (switches tabs) ·
-  // 6 hold on the To-Dos tab's own content — so the demo actually shows both
-  // tabs the tip talks about, not just Chores.
+  // counter · 4 move to the Home tab · 5 tap it (switches tabs) · 6 hold on
+  // Home's Today's To-dos — so the demo shows both places the tip names.
   const phase = usePhaseLoop(7, 1300);
   const checked = phase >= 2;
   const flying = phase === 3;
-  const onTodos = phase >= 5;
+  const onHome = phase >= 5;
   const todoTapping = phase === 5;
   // Chore-checkbox position measured directly against the real rendered
-  // checkbox (not hand-guessed). The To-Dos tab pill's position is estimated
-  // the same way ProfileBarDemo estimates an avatar's x (item index 3 of 5,
+  // checkbox (not hand-guessed). The Home tab's position is estimated the
+  // same way ProfileBarDemo estimates an avatar's x (item index 0 of 5,
   // evenly spread) — good enough for a stylized demo, not meant to be
   // pixel-exact.
   const cur =
     phase === 0 ? { x: 50, y: 3 }
     : phase <= 3 ? { x: 13, y: 47 }
-    : { x: 69, y: 18 }; // the "To-Dos" tab pill
+    : { x: 27, y: 18 }; // the "Home" tab
   const tapping = phase === 2 || todoTapping;
 
   return (
     <DemoFrame>
-      <MiniAppChrome active={onTodos ? "todos" : "chores"} />
-      {onTodos ? (
+      <MiniAppChrome active={onHome ? "home" : "chores"} />
+      {onHome ? (
         <>
           <div className="flex items-center justify-between px-3 h-8 border-b border-border bg-card/70">
-            <span className="text-xs font-bold text-foreground">To-Dos</span>
+            <span className="text-xs font-bold text-foreground">Home</span>
             <span className="text-[10px] text-muted-foreground">1 left</span>
           </div>
           <div className="p-2.5 space-y-2">
             <div className="rounded-xl border border-border bg-card p-2">
-              <p className="text-[10px] font-bold text-sky-500 uppercase tracking-wide mb-1.5">☑️ To-Dos</p>
+              <p className="text-[10px] font-bold text-sky-500 uppercase tracking-wide mb-1.5">☑️ Today's To-dos</p>
               <div className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5">
                 <span className="w-4 h-4 rounded-full border-2 border-muted-foreground/50 shrink-0" />
                 <span className="text-[11px] text-foreground">📚 Read a book</span>
@@ -434,8 +433,8 @@ const TIPS: Tip[] = [
   },
   {
     key: "tasks",
-    title: "Chores and To-Dos each get their own tab",
-    body: "Chores holds regular, target and bonus chores plus Rewards. To-Dos is for one-offs.",
+    title: "Chores have a tab; to-dos are on Home",
+    body: "Chores holds regular, target and bonus chores plus Rewards. One-off to-dos, including ones from email, are in Today's To-dos on Home.",
     Demo: TasksDemo,
   },
 ];

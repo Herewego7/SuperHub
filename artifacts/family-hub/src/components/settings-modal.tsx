@@ -2291,91 +2291,6 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
   const [roleChangePinInput, setRoleChangePinInput] = useState("");
   const [roleChangePinError, setRoleChangePinError] = useState("");
 
-  // Tab drag-to-reorder state (pointer-events based — works reliably inside modals)
-  const buildOrder = (base: string[] | undefined) => {
-    const arr = base && base.length > 0 ? base : ALL_TABS.map(t => t.id);
-    const withHome = arr.includes('home') ? arr : ['home', ...arr];
-    // Append any known tabs not yet in the saved order (e.g. newly added tabs)
-    const allKnownIds = ALL_TABS.map(t => t.id);
-    const missing = allKnownIds.filter(id => !withHome.includes(id));
-    return [...withHome, ...missing];
-  };
-  const [localTabOrder, setLocalTabOrderState] = useState<string[]>(() => buildOrder(tabOrder));
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [ghostPos, setGhostPos] = useState<{ x: number; y: number } | null>(null);
-  const dragStateRef = useRef<{
-    id: string;
-    order: string[];
-    offsetX: number;
-    offsetY: number;
-  } | null>(null);
-  const tabListRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (dragId) return;
-    setLocalTabOrderState(buildOrder(tabOrder));
-  }, [tabOrder]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Attach window-level listeners when a drag is active
-  useEffect(() => {
-    if (!dragId) return;
-
-    const onMove = (e: PointerEvent) => {
-      if (!dragStateRef.current) return;
-      const { offsetX, offsetY } = dragStateRef.current;
-      setGhostPos({ x: e.clientX - offsetX, y: e.clientY - offsetY });
-
-      // reorder based on pointer Y vs item rects
-      const { id } = dragStateRef.current;
-      let targetId: string | null = null;
-      tabListRef.current?.querySelectorAll<HTMLElement>('[data-tab-id]').forEach(el => {
-        const tid = el.dataset.tabId!;
-        if (tid === id) return;
-        const rect = el.getBoundingClientRect();
-        const mid = rect.top + rect.height / 2;
-        if (e.clientY >= rect.top && e.clientY < rect.bottom) targetId = tid;
-        void mid;
-      });
-      if (!targetId) return;
-      const next = [...dragStateRef.current.order];
-      const from = next.indexOf(id);
-      const to = next.indexOf(targetId);
-      if (from === -1 || to === -1) return;
-      next.splice(from, 1);
-      next.splice(to, 0, id);
-      dragStateRef.current.order = next;
-      setLocalTabOrderState(next);
-      setTabOrder?.(next);
-    };
-
-    const onUp = () => {
-      if (dragStateRef.current) setTabOrder?.(dragStateRef.current.order);
-      dragStateRef.current = null;
-      setDragId(null);
-      setGhostPos(null);
-    };
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-  }, [dragId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleGripPointerDown = (e: React.PointerEvent, id: string) => {
-    e.preventDefault();
-    // Capture the pointer so move/up events keep firing even if the finger
-    // drifts off the small handle (key for smooth dragging on touch screens).
-    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
-    // anchor ghost so grip icon sits right under the cursor
-    const offsetX = 10;
-    const offsetY = 16;
-    dragStateRef.current = { id, order: [...localTabOrder], offsetX, offsetY };
-    setDragId(id);
-    setGhostPos({ x: e.clientX - offsetX, y: e.clientY - offsetY });
-  };
-
   // ── Profile drag-to-reorder ─────────────────────────────────────────────
   const PROFILE_ORDER_KEY = "familyHub_profileOrder";
   const getProfileOrder = () => { try { return JSON.parse(localStorage.getItem(PROFILE_ORDER_KEY) || "[]"); } catch { return []; } };
@@ -2647,23 +2562,6 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
     // collapse/switch sections afterward without being snapped back.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
-
-  // Scrolls to and briefly rings the matching row in Tab Order & Visibility
-  // — used by the feature-nudge sheet's "Turn it on" button so it lands on
-  // the exact checkbox, not just the general Display & Layout section.
-  const [highlightedTabId, setHighlightedTabId] = useState<string | null>(null);
-  useEffect(() => {
-    if (!isOpen || !initialHighlightTabId) return;
-    setHighlightedTabId(initialHighlightTabId);
-    const t = setTimeout(() => {
-      const el = document.querySelector(`[data-tab-id="${initialHighlightTabId}"]`);
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-      spotlight(`tab-visibility-row-${initialHighlightTabId}`);
-    }, 250);
-    const clear = setTimeout(() => setHighlightedTabId(null), 3000);
-    return () => { clearTimeout(t); clearTimeout(clear); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, initialHighlightTabId]);
 
   // Drives the collapsing family-name row in the sticky header (see below).
   // Wired with React's own onScroll on the list rather than an addEventListener
@@ -3121,16 +3019,6 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
       });
     }
   }, [locationSettings]);
-
-  const handleTabVisibilityToggle = (tabId: string, visible: boolean) => {
-    if (!setHiddenTabs) return;
-    if (visible) {
-      setHiddenTabs(hiddenTabs.filter(id => id !== tabId));
-    } else {
-      setHiddenTabs([...hiddenTabs.filter(id => id !== tabId), tabId]);
-    }
-  };
-
 
   const handleLocationSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -4378,79 +4266,9 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                     );
                   })}
                 </div>
-                <div ref={tabListRef}>
-                {FIXED_NAV_IDS.map(tabId => {
-                  const tab = ALL_TABS.find(t => t.id === tabId);
-                  if (!tab) return null;
-                  const isVisible = tab.alwaysVisible || !hiddenTabs.includes(tabId);
-                  const isDragging = dragId === tabId;
-                  return (
-                    <div
-                      key={tabId}
-                      id={`tab-visibility-row-${tabId}`}
-                      data-tab-id={tabId}
-                      className={`flex items-center gap-2 px-2.5 py-2 rounded-md mb-1 select-none transition-all duration-300 ${
-                        isDragging
-                          ? 'opacity-30 bg-primary/10 scale-95'
-                          : highlightedTabId === tabId
-                            ? 'bg-primary/10 ring-2 ring-primary'
-                            : 'bg-background/60 hover:bg-background'
-                      }`}
-                    >
-                      <Checkbox
-                        id={`tab-${tabId}`}
-                        checked={isVisible}
-                        disabled={tab.alwaysVisible}
-                        onCheckedChange={tab.alwaysVisible ? undefined : (checked) => handleTabVisibilityToggle(tabId, !!checked)}
-                        onClick={(e) => e.stopPropagation()}
-                        data-testid={`tab-visibility-${tabId}`}
-                      />
-                      <Label
-                        htmlFor={`tab-${tabId}`}
-                        className={`text-sm select-none flex-1 ${tab.alwaysVisible ? 'cursor-default' : 'cursor-pointer'}`}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {tab.label}
-                        {tab.alwaysVisible && (
-                          <span className="ml-2 text-[11px] text-muted-foreground font-normal">
-                            Always shown
-                          </span>
-                        )}
-                      </Label>
-                    </div>
-                  );
-                })}
-                </div>
-                {/* Ghost card — portalled to body to escape modal transform stacking context */}
-                {dragId && ghostPos && (() => {
-                  const tab = ALL_TABS.find(t => t.id === dragId);
-                  if (!tab) return null;
-                  return createPortal(
-                    <div
-                      style={{ position: 'fixed', left: ghostPos.x, top: ghostPos.y, pointerEvents: 'none', zIndex: 9999, width: 180 }}
-                      className="flex items-center gap-2 px-2.5 py-2 rounded-md bg-card border border-primary shadow-2xl opacity-95 rotate-1"
-                    >
-                      <GripVertical className="w-4 h-4 text-primary flex-shrink-0" />
-                      <span className="text-sm font-medium">{tab.label}</span>
-                    </div>,
-                    document.body
-                  );
-                })()}
-                {/* Icons-only nav — for when enough tabs are turned on that
-                    the labeled pill row no longer fits on one line without
-                    scrolling; hiding the text shrinks it back down. */}
-                <div className="flex items-center justify-between gap-2 mt-2 px-2.5 py-2 rounded-md bg-background/60">
-                  <div>
-                    <Label htmlFor="nav-icons-only" className="text-sm cursor-pointer">Icons only in nav bar</Label>
-                  </div>
-                  <Switch
-                    id="nav-icons-only"
-                    checked={navIconsOnly}
-                    onCheckedChange={(checked) => setNavIconsOnly?.(checked)}
-                    data-testid="nav-icons-only-toggle"
-                  />
-                </div>
-                {/* Default Tab — compact inline selector directly below the drag list */}
+                {/* The bar's five tabs are fixed (2026-10). The hide, reorder and
+                    icons-only controls that were here changed nothing on it,
+                    so only the default tab is left to choose. */}
                 <div className="flex items-center gap-2 mt-2 px-1">
                   <span className="text-xs text-muted-foreground whitespace-nowrap">Default tab:</span>
                   <Select value={defaultTab} onValueChange={(val) => setDefaultTab?.(val)}>

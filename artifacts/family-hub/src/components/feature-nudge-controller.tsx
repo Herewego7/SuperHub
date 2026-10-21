@@ -14,9 +14,9 @@ const RESHOW_AFTER_DAYS = 365;
 // Preferred order: the three cards shown in the original mockup come first;
 // the other three are substitutes for whichever of the first three turns out
 // to already be set up for this family.
+// "todos" is never offered: To-Dos is no longer a tab to turn on (2026-10).
 const PRIORITY_ORDER: FeatureNudgeId[] = [
   "notifications",
-  "todos",
   "starInsights",
   "perPerson",
   "shareLinks",

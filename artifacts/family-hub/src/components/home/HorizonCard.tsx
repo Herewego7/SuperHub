@@ -31,7 +31,8 @@ export function HorizonCard({ home }: { home: HomeModel }) {
                 colors={row.profileIds.length > 0 ? eventStrip(row, home.colorPeople) : [row.color]}
                 time={(
                   <>
-                    {planDateLabel(new Date(row.startTime), null)}
+                    {/* Date and time each keep to one line; "Thu, Oct 22" wrapped to three in the fixed column (2026-10-21). */}
+                    <span className="block">{planDateLabel(new Date(row.startTime), null)}</span>
                     {!row.allDay && <span className="block">{new Date(row.startTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>}
                   </>
                 )}

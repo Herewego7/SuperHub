@@ -865,8 +865,10 @@ export class DatabaseStorage implements IStorage {
           eq(chores.userId, userId),
           eq(chores.taskType, "todo"),
           isNull(chores.archivedAt),
-          sql`exists (select 1 from chore_completions cc where cc.chore_id = ${chores.id} and cc.completed_at < ${cutoff})`,
-          sql`not exists (select 1 from chore_completions cc2 where cc2.chore_id = ${chores.id} and cc2.completed_at >= ${cutoff})`,
+          // The cutoff goes in as UTC, the way completed_at is stored; a raw
+          // Date is sent in the server's local time.
+          sql`exists (select 1 from chore_completions cc where cc.chore_id = ${chores.id} and cc.completed_at < ${cutoff.toISOString()}::timestamptz at time zone 'UTC')`,
+          sql`not exists (select 1 from chore_completions cc2 where cc2.chore_id = ${chores.id} and cc2.completed_at >= ${cutoff.toISOString()}::timestamptz at time zone 'UTC')`,
         ),
       )
       .returning({ id: chores.id });

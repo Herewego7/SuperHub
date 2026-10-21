@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { and, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, lt } from "drizzle-orm";
 import { db } from "../db";
 import { oauthTransactions } from "@workspace/db";
 import { logger } from "./logger";
@@ -190,7 +190,10 @@ export async function consumeOAuthTransaction(
         eq(oauthTransactions.stateHash, stateHash),
         eq(oauthTransactions.provider, provider),
         isNull(oauthTransactions.consumedAt),
-        sql`${oauthTransactions.expiresAt} > ${now}`,
+        // gt() writes `now` the way the column stores times (UTC). A raw
+        // sql`> ${now}` sent the server's local time, so off UTC an expired
+        // state was still accepted for hours (2026-10-21).
+        gt(oauthTransactions.expiresAt, now),
       ),
     )
     .returning();

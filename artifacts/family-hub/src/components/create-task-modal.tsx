@@ -406,7 +406,7 @@ export function CreateTaskModal({ open, onOpenChange, profiles, selectedProfiles
       } else if (failed === 0) {
         toast({
           title: `${succeeded} ${noun}${succeeded === 1 ? "" : "s"}${subNote} created`,
-          description: `${subsFailed} sub-to-do${subsFailed === 1 ? "" : "s"} didn't save — add ${subsFailed === 1 ? "it" : "them"} from the To-Dos tab.`,
+          description: `${subsFailed} sub-to-do${subsFailed === 1 ? "" : "s"} didn't save — add ${subsFailed === 1 ? "it" : "them"} from Today's To-dos on Home.`,
           variant: "destructive",
         });
         close();

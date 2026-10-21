@@ -12,7 +12,7 @@
     "test:node": "DATABASE_URL=\"${DATABASE_URL:-postgres://test:test@localhost:5432/testdb}\" tsx --test tests/*.test.ts",
     "test:scripts": "DATABASE_URL=\"${DATABASE_URL:-postgres://test:test@localhost:5432/testdb}\" tsx src/calendarSyncPlan.test.ts && DATABASE_URL=\"${DATABASE_URL:-postgres://test:test@localhost:5432/testdb}\" tsx src/lib/apns.test.ts && DATABASE_URL=\"${DATABASE_URL:-postgres://test:test@localhost:5432/testdb}\" tsx src/replit_integrations/auth/rateLimit.test.ts && DATABASE_URL=\"${DATABASE_URL:-postgres://test:test@localhost:5432/testdb}\" tsx src/replit_integrations/auth/resetToken.test.ts && DATABASE_URL=\"${DATABASE_URL:-postgres://test:test@localhost:5432/testdb}\" tsx src/replit_integrations/auth/password.test.ts",
     "test": "pnpm run test:node && pnpm run test:scripts",
-    "test:api": "tsx --test --test-force-exit tests/api/**/*.test.ts",
+    "test:api": "TZ=America/Chicago tsx --test --test-force-exit --test-concurrency=1 tests/api/**/*.test.ts",
     "test:api:db": "./scripts/with-test-db.sh pnpm run test:api"
   },
   "dependencies": {

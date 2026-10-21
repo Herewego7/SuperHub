@@ -40,7 +40,7 @@ export function EventRow({ colors, title, time, detail, chips, tinted, dashed, o
   const body = (
     <>
       <PersonStrip colors={colors} />
-      {time !== undefined && <span data-testid="event-time" className="w-[4.25rem] shrink-0 text-xs leading-5 text-[#6e6e78]">{time}</span>}
+      {time !== undefined && <span data-testid="event-time" className="min-w-[4.25rem] shrink-0 whitespace-nowrap text-xs leading-5 text-[#6e6e78]">{time}</span>}
       <span className="min-w-0 flex-1">
         <span className="block font-medium leading-5">{title}</span>
         {detail && <span className="mt-0.5 block text-[#6e6e78]">{detail}</span>}
