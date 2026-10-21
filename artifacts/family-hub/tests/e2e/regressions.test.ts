@@ -7080,11 +7080,13 @@ test("Home never shows a password reset, sources fit their chip, and Email filte
     await linkedin.waitFor({ timeout: 10_000 });
     assert.equal(await page.getByTestId("home-todo-reset").count(), 0, "a password reset is never a to-do");
     assert.equal((await linkedin.getByTestId("home-todo-source").textContent())?.trim(), "LinkedIn");
-    // Kinds of email are a filter for all mail, kept on Home: a button on the
-    // card, and a separate row in an item's menu (2026-10-20).
+    // Kinds of email are a filter for all mail, kept on Home: the button on the
+    // card, and not in an item's menu (2026-10-21).
     await page.getByRole("button", { name: /More actions for Respond to Roderick/ }).click();
     assert.equal(await page.getByTestId("home-todo-stop-kind").count(), 0, "no per-item kind picker");
-    await page.getByTestId("home-todo-email-filters").click();
+    assert.equal(await page.getByTestId("home-todo-email-filters").count(), 0, "no Email filters row in the item menu");
+    await page.keyboard.press("Escape");
+    await page.getByTestId("home-email-filters-button").first().click();
     const filters = page.getByTestId("home-email-filters");
     const social = filters.getByTestId("home-kind-social");
     await social.waitFor({ timeout: 5000 });

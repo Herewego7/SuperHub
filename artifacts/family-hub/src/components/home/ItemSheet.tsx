@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, SlidersHorizontal } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { Chore } from "@workspace/shared-types";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { apiRequest } from "@/lib/queryClient";
@@ -60,7 +60,6 @@ export function ItemSheet({ home }: { home: HomeModel }) {
             onClaim={() => { if (personId) home.reassign(sheet.chore, [personId]); setSheet(null); }}
             onRemove={() => removeRow(sheet.chore)}
             onStopEmails={() => { setSheet(null); void askStopEmails(sheet.chore); }}
-            onEmailSettings={() => { setSheet(null); home.setFiltersOpen(true); }}
             onCalendar={() => {
               const span = mailSpan(`${sheet.chore.title}\n${sheet.chore.description ?? ""}`, now);
               if (kept[sheet.chore.id]) removeFromCalendar.mutate({ choreId: sheet.chore.id, eventId: kept[sheet.chore.id] });
@@ -228,7 +227,7 @@ export function ReadFullEmail({ chore, viewer }: { chore: Chore; viewer: string 
   );
 }
 
-function ActionList({ chore, keyDate, personId, people, added, onEdit, onSnooze, onClaim, onRemove, onStopEmails, onEmailSettings, onCalendar, onSave }: {
+function ActionList({ chore, keyDate, personId, people, added, onEdit, onSnooze, onClaim, onRemove, onStopEmails, onCalendar, onSave }: {
   chore: Chore;
   keyDate: boolean;
   personId?: string | null;
@@ -239,8 +238,6 @@ function ActionList({ chore, keyDate, personId, people, added, onEdit, onSnooze,
   onClaim: () => void;
   onRemove: () => void;
   onStopEmails: () => void;
-  /** Filters for every email, not this one: kinds of email to skip. */
-  onEmailSettings: () => void;
   onCalendar: () => void;
   onSave: (offer: { profileId: string; school: string }) => void;
 }) {
@@ -272,16 +269,6 @@ function ActionList({ chore, keyDate, personId, people, added, onEdit, onSnooze,
           </span>
         </button>
       ))}
-      {isMail && (
-        // Set apart from the rows above, which act on this one item.
-        <button type="button" data-testid="home-todo-email-filters" className="mt-2 flex items-center gap-3 rounded-xl bg-[#F1F1F4] px-3 py-3 text-left dark:bg-white/10" onClick={onEmailSettings}>
-          <SlidersHorizontal className="h-4 w-4 shrink-0 text-[#6e6e78]" aria-hidden="true" />
-          <span>
-            <span className="block text-[15px]">Email filters</span>
-            <span className="mt-0.5 block text-xs text-[#6e6e78]">For all email: kinds to skip from every sender, like reviews or promotions.</span>
-          </span>
-        </button>
-      )}
     </div>
   );
 }
