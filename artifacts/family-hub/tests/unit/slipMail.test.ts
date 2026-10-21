@@ -155,3 +155,19 @@ test("statements and bills read as billing, in the mail's words or the to-do's",
     assert.ok(!mailKindsOf({ subject: said }).includes("billing"), said);
   }
 });
+
+// "The U.S." and "government ordered..." became two bullets (2026-10-21).
+test("initials and a lowercase next word don't end a bullet", () => {
+  assert.deepEqual(noteBullets("Hackers breached OpenCode Console. The U.S. government ordered civilian agencies to remove DeepSeek AI. Meta's Muse AI app reached 10 million U.S. downloads in just 40 days. OpenAI outlined three endgames."), [
+    "Hackers breached OpenCode Console.",
+    "The U.S. government ordered civilian agencies to remove DeepSeek AI.",
+    "Meta's Muse AI app reached 10 million U.S. downloads in just 40 days.",
+    "OpenAI outlined three endgames.",
+  ]);
+  assert.deepEqual(noteBullets("Anthropic plans a fund. U.S. prosecutors revealed new ties. Meet in Washington, D.C. on Friday."), [
+    "Anthropic plans a fund.",
+    "U.S. prosecutors revealed new ties.",
+    "Meet in Washington, D.C. on Friday.",
+  ]);
+  assert.deepEqual(noteBullets("Bring a lunch. Wear sneakers."), ["Bring a lunch.", "Wear sneakers."]);
+});

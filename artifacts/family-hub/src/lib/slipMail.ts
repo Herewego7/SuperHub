@@ -32,13 +32,25 @@ export function slipQuote(description: string | null | undefined): string {
 
 const ABBREVIATION = /\b(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|vs|etc|No|Rm|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|a\.m|p\.m|e\.g|i\.e)\.$/i;
 
+/** Initials like U.S., U.K. or D.C., whose periods don't end a sentence. */
+const INITIALS = /(?:^|[^A-Za-z])(?:[A-Za-z]\.){2,}$/;
+
+/**
+ * A period that doesn't end the sentence: an abbreviation, initials, or one
+ * followed by a lowercase word. "The U.S. government ordered..." was split
+ * into "The U.S." and "government ordered..." (2026-10-21).
+ */
+function joinsPrevious(previous: string, next: string): boolean {
+  return ABBREVIATION.test(previous) || INITIALS.test(previous) || /^[a-z]/.test(next);
+}
+
 /** The note as a list: one line per line it was written on, and one per sentence within a line. */
 export function noteBullets(description: string | null | undefined): string[] {
   const out: string[] = [];
   for (const line of slipText(description).split("\n")) {
     const pieces: string[] = [];
     for (const piece of line.replace(/^\s*[-•*]\s+/, "").split(/(?<=[.!?])\s+/)) {
-      if (pieces.length && ABBREVIATION.test(pieces[pieces.length - 1])) pieces[pieces.length - 1] += ` ${piece}`;
+      if (pieces.length && joinsPrevious(pieces[pieces.length - 1], piece)) pieces[pieces.length - 1] += ` ${piece}`;
       else pieces.push(piece);
     }
     out.push(...pieces.map((piece) => piece.trim()).filter(Boolean));
