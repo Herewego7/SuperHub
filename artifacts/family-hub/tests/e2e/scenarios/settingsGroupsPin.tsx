@@ -26,6 +26,12 @@ export function setup(): void {
         redemptionMode: "both", pointsMode: "per_chore", completionBonusPoints: 10,
         centsPerPoint: 8, minCashoutPoints: 80, currencySymbol: "$",
       },
+      "/api/profiles/dad": (_url: string, opts?: RequestInit) => {
+        if (opts?.method === "PATCH") {
+          try { (window as any).__profilePatch = JSON.parse(String(opts.body)); } catch {}
+        }
+        return ok(profiles[0]);
+      },
       "/api/custom-profile-groups/reorder": (_url: string, opts?: RequestInit) => {
         try { (window as any).__reorderCalls.push(JSON.parse(String(opts?.body)).orderedIds); } catch {}
         return ok({});

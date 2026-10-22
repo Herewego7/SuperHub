@@ -1,5 +1,12 @@
 import { getTableColumns, type SQL } from "drizzle-orm";
-import { db, profiles, type InsertProfile, type Profile } from "@workspace/db";
+import { db, pool, profiles, type InsertProfile, type Profile } from "@workspace/db";
+
+/**
+ * Profile columns added after the live database last took schema changes.
+ * Startup adds them; until it has, reads and writes carry on without them
+ * instead of failing every profile query.
+ */
+const LATE_COLUMNS = ["facts", "food"] as const;
 
 export function factsColumnMissing(error: unknown): boolean {
   const seen = new Set<unknown>();
@@ -12,22 +19,49 @@ export function factsColumnMissing(error: unknown): boolean {
     else if (typeof current === "object" && "message" in current) texts.push(String((current as { message: unknown }).message));
     current = typeof current === "object" && current && "cause" in current ? (current as { cause?: unknown }).cause : undefined;
   }
-  return /column ["']facts["'](?: of relation ["'][^"']+["'])? does not exist/i.test(texts.join(" "));
+  // Postgres names it either way: column "food" of relation "profiles", or
+  // column profiles.food when the query qualifies it.
+  return /column (?:["']?\w+["']?\.)?["']?(?:facts|food)["']?(?: of relation ["'][^"']+["'])? does not exist/i.test(texts.join(" "));
 }
 
 function columnsWithoutFacts() {
-  const columns = getTableColumns(profiles);
-  const { facts: _facts, ...rest } = columns;
-  return rest;
+  const columns: Record<string, unknown> = { ...getTableColumns(profiles) };
+  for (const name of LATE_COLUMNS) delete columns[name];
+  return columns as Omit<ReturnType<typeof getTableColumns<typeof profiles>>, (typeof LATE_COLUMNS)[number]>;
 }
 
 function withEmptyFacts(row: Record<string, unknown>): Profile {
-  return { ...row, facts: [] } as unknown as Profile;
+  return { ...row, facts: [], food: [] } as unknown as Profile;
+}
+
+/**
+ * Adds the late columns the moment a query finds one missing, so the query can
+ * simply run again. An insert names every column, so leaving one out was never
+ * possible there: creating the All Family profile failed (2026-10-22).
+ */
+async function addLateColumns(): Promise<boolean> {
+  try {
+    await pool.query("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS facts text[] NOT NULL DEFAULT '{}'::text[]");
+    await pool.query("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS food text[] NOT NULL DEFAULT '{}'::text[]");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Runs a profile query; if a late column is missing, adds it and runs it once more. */
+async function healing<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!factsColumnMissing(error) || !(await addLateColumns())) throw error;
+    return run();
+  }
 }
 
 export async function loadProfiles(where?: SQL): Promise<Profile[]> {
   try {
-    return where ? await db.select().from(profiles).where(where) : await db.select().from(profiles);
+    return await healing(() => (where ? db.select().from(profiles).where(where) : db.select().from(profiles)));
   } catch (error) {
     if (!factsColumnMissing(error)) throw error;
     const columns = columnsWithoutFacts();
@@ -38,7 +72,7 @@ export async function loadProfiles(where?: SQL): Promise<Profile[]> {
 
 export async function insertProfileRow(values: InsertProfile): Promise<Profile> {
   try {
-    const [profile] = await db.insert(profiles).values(values).returning();
+    const [profile] = await healing(() => db.insert(profiles).values(values).returning());
     return profile;
   } catch (error) {
     if (!factsColumnMissing(error)) throw error;
@@ -52,12 +86,12 @@ export async function updateProfileRow(
   where: SQL,
 ): Promise<Profile | undefined> {
   try {
-    const [profile] = await db.update(profiles).set(values).where(where).returning();
+    const [profile] = await healing(() => db.update(profiles).set(values).where(where).returning());
     return profile;
   } catch (error) {
     if (!factsColumnMissing(error)) throw error;
-    if (values.facts) throw error;
-    const { facts: _facts, ...rest } = values;
+    if (values.facts || values.food) throw error;
+    const { facts: _facts, food: _food, ...rest } = values;
     const [profile] = await db.update(profiles).set(rest).where(where).returning(columnsWithoutFacts());
     return profile ? withEmptyFacts(profile) : undefined;
   }

@@ -1,7 +1,7 @@
 import buildApp from "./app";
 import { logger } from "./lib/logger";
 import { pool } from "@workspace/db";
-import { ensureReadMailTable, repairSettingsTables } from "./db/repairSettings";
+import { ensureProfileFood, ensureReadMailTable, repairSettingsTables } from "./db/repairSettings";
 
 const rawPort = process.env["PORT"];
 
@@ -23,6 +23,7 @@ try {
   const done = [
     ...await repairSettingsTables((sql) => pool.query(sql)),
     ...await ensureReadMailTable((sql) => pool.query(sql)),
+    ...await ensureProfileFood((sql) => pool.query(sql)),
   ];
   if (done.length > 0) logger.info({ done }, "Repaired settings tables");
 } catch (err) {

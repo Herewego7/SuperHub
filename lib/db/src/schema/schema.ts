@@ -88,6 +88,9 @@ export const profiles = pgTable("profiles", {
   email: text("email"),
   school: text("school"),
   facts: text("facts").array().notNull().default(sql`'{}'::text[]`),
+  // Food likes, dislikes, allergies and favorites, one per line. On the All
+  // Family profile they're the whole household's rules (vegetarian, gluten-free).
+  food: text("food").array().notNull().default(sql`'{}'::text[]`),
   initials: text("initials").notNull(),
   isActive: boolean("is_active").default(true),
   isAllFamilyProfile: boolean("is_all_family_profile").default(false),

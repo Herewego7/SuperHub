@@ -161,3 +161,52 @@ describe("the forecast chat reads", () => {
     assert.deepEqual(out.output, { error: "No forecast for that day yet." });
   });
 });
+
+// Meal planning knew the Meal Ideas' names and nothing about the family's
+// food (2026-10-22).
+describe("chat and the family's food", () => {
+  const fed: ChatSnapshot = {
+    ...snap,
+    now: new Date("2026-10-22T15:00:00Z"),
+    family: { id: "all", food: ["Gluten-free", "No mushrooms"] },
+    profiles: [
+      { id: "dad", name: "Dad", food: ["Loves tacos"], role: "parent" },
+      { id: "liam", name: "Liam", food: ["No spicy food"], role: "child", isChild: true },
+    ],
+    meals: [
+      { name: "Tacos", date: "2026-10-20", mealType: "dinner" },
+      { name: "Chili", date: "2026-08-01", mealType: "dinner" },
+      { name: "Pizza", date: "2026-10-25", mealType: "dinner" },
+    ],
+    savedMeals: [{ id: "m1", name: "Lasagna", ingredients: [{ item: "noodles" }, { item: "ricotta" }, { item: "beef" }] }],
+  };
+
+  it("sees the family's rules, each person's food, recent dinners, and Meal Ideas ingredients", () => {
+    const briefing = chatBriefing(fed);
+    assert.match(briefing, /Family food rules \(everyone, never break these\):\n- Gluten-free\n- No mushrooms/);
+    assert.match(briefing, /Dad, parent, food: Loves tacos/);
+    assert.match(briefing, /Liam, child, food: No spicy food/);
+    assert.match(briefing, /Recent dinners:\n- 2026-10-20: Tacos/);
+    const recent = briefing.split("Recent dinners:\n")[1]?.split("\n\n")[0] ?? "";
+    assert.equal(recent, "- 2026-10-20: Tacos", "only past dinners from the last 8 weeks");
+    assert.match(briefing, /- Lasagna \(noodles, ricotta, beef\)/);
+  });
+
+  it("plans with them only for an open question, and keeps rules and allergies firm", () => {
+    const prompt = chatSystemPrompt(fed);
+    assert.match(prompt, /open question about meals/);
+    assert.match(prompt, /A specific request, like put tacos on Tuesday[^.]*is not open: just do it/);
+    assert.match(prompt, /never suggest a meal that breaks a family food rule or anyone's allergy/);
+  });
+
+  it("remembers food for one person or the whole family, after a yes", () => {
+    const asked = handleToolCall("remember_food", { profileId: "family", food: "Vegetarian" }, fed, false);
+    assert.equal(asked.action, null, "asks first");
+    const family = handleToolCall("remember_food", { profileId: "family", food: "Vegetarian", confirmed: true }, fed, true);
+    assert.deepEqual(family.action, { kind: "remember_food", profileId: "all", food: ["Gluten-free", "No mushrooms", "Vegetarian"] });
+    const person = handleToolCall("remember_food", { profileId: "liam", food: "Hates olives", confirmed: true }, fed, true);
+    assert.deepEqual(person.action, { kind: "remember_food", profileId: "liam", food: ["No spicy food", "Hates olives"] });
+    const kid = handleToolCall("remember_food", { profileId: "family", food: "Pizza every night", confirmed: true }, { ...fed, isChild: true }, true);
+    assert.equal(kid.action, null, "a child can't set the family's rules");
+  });
+});

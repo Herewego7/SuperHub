@@ -2514,6 +2514,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
     isChild: false,
     school: "",
     facts: "",
+    food: "",
   });
   // For the kid-restrictions "you need a Parent PIN" nudge in the profile form.
   const { data: profileFormRewardSettings } = useQuery<RewardSettings>({ queryKey: ["/api/reward-settings"] });
@@ -2652,7 +2653,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
       toast({ title: "Profile created successfully!" });
       setIsAddingProfile(false);
       const nextColor = getNextColor();
-      setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "", facts: "" });
+      setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "", facts: "", food: "" });
     },
     onError: (err: any) => {
       toast({ title: err?.message || "Failed to create profile", variant: "destructive" });
@@ -2686,7 +2687,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
       }
       setEditingProfile(null);
       const nextColor = getNextColor();
-      setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "", facts: "" });
+      setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "", facts: "", food: "" });
     },
     onError: (err: any) => {
       toast({ title: err?.message || "Failed to update profile", variant: "destructive" });
@@ -2877,6 +2878,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
           isChild: formData.role === "child" ? formData.isChild : false,
           school: savedSchool(formData.school),
           facts: savedFacts(formData.facts),
+          food: savedFacts(formData.food),
         },
       });
       if (grantConsent) await grantConsentMutation.mutateAsync(editingProfile.id);
@@ -2971,6 +2973,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
       isChild: !!profile.isChild,
       school: profile.school ?? "",
       facts: (profile.facts ?? []).join("\n"),
+      food: (profile.food ?? []).join("\n"),
     });
     setIsAddingProfile(false);
   };
@@ -2986,7 +2989,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
     setEditingProfile(null);
     setInitialsTouched(false);
     const nextColor = getNextColor();
-    setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "", facts: "" });
+    setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "", facts: "", food: "" });
   };
 
   const cancelEdit = () => {
@@ -2994,7 +2997,7 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
     setIsAddingProfile(false);
     setInitialsTouched(false);
     const nextColor = getNextColor();
-    setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "", facts: "" });
+    setFormData({ name: "", color: nextColor, initials: "", email: "", photoUrl: null, role: "adult", isChild: false, school: "", facts: "", food: "" });
   };
 
   const handleImageUploadComplete = (result: { objectPath: string }) => {
@@ -3771,6 +3774,23 @@ export function SettingsModal({ isOpen, onClose, profiles, hiddenTabs = [], setH
                               </div>
                             </>
                           )}
+                          {/* Food: what Chat plans meals around. On All Family it's the
+                              household's rules, for everyone (2026-10-22). */}
+                          <div>
+                            <Label htmlFor="edit-food" className="text-sm">{editingProfile?.isAllFamilyProfile ? "Family food rules" : "Food"}</Label>
+                            <textarea
+                              id="edit-food"
+                              value={formData.food}
+                              onChange={(e) => setFormData({ ...formData, food: e.target.value })}
+                              placeholder={editingProfile?.isAllFamilyProfile ? "Vegetarian\nGluten-free\nNo mushrooms" : "Loves tacos\nNo spicy food\nPeanut allergy"}
+                              rows={3}
+                              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                              data-testid="profile-food-input"
+                            />
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              {editingProfile?.isAllFamilyProfile ? "One per line. Chat never plans a meal that breaks these." : "One per line: likes, dislikes, allergies, favorite meals."}
+                            </p>
+                          </div>
 
                                                     <div className="flex items-start gap-3">
 <div className="flex justify-center shrink-0">

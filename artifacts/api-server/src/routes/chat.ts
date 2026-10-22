@@ -253,6 +253,10 @@ async function applyAction(userId: string, action: ChatAction): Promise<{ meals:
     await storage.updateProfile(action.profileId, { facts: action.facts }, userId);
     return { meals: [], added: [] };
   }
+  if (action.kind === "remember_food") {
+    await storage.updateProfile(action.profileId, { food: action.food }, userId);
+    return { meals: [], added: [] };
+  }
   if (action.kind === "set_school") {
     await storage.updateProfile(action.profileId, { school: action.school }, userId);
     return { meals: [], added: [] };
@@ -308,7 +312,7 @@ function changedKeys(actions: ChatAction[]): string[] {
   for (const action of actions) {
     if (action.kind === "create_task" || action.kind === "create_chore" || action.kind === "complete_task" || action.kind === "assign" || action.kind === "not_relevant") keys.add("chores");
     if (action.kind === "create_event" || action.kind === "update_event" || action.kind === "delete_event") keys.add("events");
-    if (action.kind === "remember_fact" || action.kind === "set_school") keys.add("profiles");
+    if (action.kind === "remember_fact" || action.kind === "remember_food" || action.kind === "set_school") keys.add("profiles");
     if (action.kind === "grocery_have" || action.kind === "grocery_add" || action.kind === "grocery_remove" || action.kind === "grocery_check") keys.add("groceries");
     if (action.kind === "plan_dinners") {
       keys.add("meals");
@@ -536,11 +540,16 @@ export function registerChatRoutes(app: Express): void {
         timeZone: location?.timezone || "America/Chicago",
         firstName: account?.firstName || people[0]?.name || "there",
         isChild,
-        profiles: people.map((profile: { id: string; name: string; school?: string | null; facts?: string[] | null; role?: string | null; isChild?: boolean | null }) => ({
+        family: (() => {
+          const all = profiles.find((profile: { isAllFamilyProfile?: boolean | null }) => profile.isAllFamilyProfile) as { id: string; food?: string[] | null } | undefined;
+          return all ? { id: all.id, food: all.food } : null;
+        })(),
+        profiles: people.map((profile: { id: string; name: string; school?: string | null; facts?: string[] | null; food?: string[] | null; role?: string | null; isChild?: boolean | null }) => ({
           id: profile.id,
           name: profile.name,
           school: profile.school,
           facts: profile.facts,
+          food: profile.food,
           role: profile.role,
           isChild: profile.isChild,
         })),

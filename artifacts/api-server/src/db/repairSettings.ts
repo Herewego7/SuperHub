@@ -89,3 +89,11 @@ export async function ensureReadMailTable(query: Query): Promise<string[]> {
   await query("CREATE INDEX IF NOT EXISTS read_mail_user_idx ON read_mail (user_id)");
   return done;
 }
+
+/** The profiles food column (2026-10-22). Without it every profile read would fall back, so add it on start. */
+export async function ensureProfileFood(query: Query): Promise<string[]> {
+  const has = await query("SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'profiles' AND column_name = 'food'");
+  if (has.rows.length > 0) return [];
+  await query("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS food text[] NOT NULL DEFAULT '{}'::text[]");
+  return ["added profiles.food"];
+}

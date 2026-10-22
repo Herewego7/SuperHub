@@ -13,6 +13,8 @@ export type ChatProfile = {
   name: string;
   school?: string | null;
   facts?: string[] | null;
+  /** Food likes, dislikes, allergies, favorites. */
+  food?: string[] | null;
   role?: string | null;
   isChild?: boolean | null;
 };
@@ -45,6 +47,8 @@ export type ChatSnapshot = {
   firstName: string;
   isChild: boolean;
   profiles: ChatProfile[];
+  /** The All Family profile: its food lines are the household's rules. */
+  family?: { id: string; food?: string[] | null } | null;
   events: ChatEvent[];
   chores: ChatChore[];
   doneIds: string[];
@@ -67,6 +71,7 @@ export type ChatAction =
   | { kind: "update_event"; eventId: string; patch: Record<string, unknown> }
   | { kind: "delete_event"; eventId: string }
   | { kind: "remember_fact"; profileId: string; facts: string[] }
+  | { kind: "remember_food"; profileId: string; food: string[] }
   | { kind: "set_school"; profileId: string; school: string | null }
   | { kind: "assign"; choreId: string; profileIds: string[] }
   | { kind: "grocery_have"; name: string }
@@ -79,7 +84,7 @@ export type ChatAction =
   | { kind: "feedback"; text: string };
 
 const ADULT_ONLY = new Set(["mute_sender", "mark_not_relevant", "search", "get_newsletters"]);
-const NEEDS_YES = new Set(["delete_event", "remember_fact", "forget_school", "mute_sender", "mark_not_relevant", "plan_dinners"]);
+const NEEDS_YES = new Set(["delete_event", "remember_fact", "remember_food", "forget_school", "mute_sender", "mark_not_relevant", "plan_dinners"]);
 
 export function userSaidYes(text: string): boolean {
   return /^(yes|yeah|yep|yup|sure|ok|okay|do it|confirm|please do|go ahead)\b/i.test(text.trim());
@@ -131,6 +136,7 @@ export function chatBriefing(snap: ChatSnapshot): string {
     if (person.role) bits.push(person.role);
     if (person.school) bits.push(`school ${person.school}`);
     if (!snap.isChild && person.facts?.length) bits.push(`facts: ${person.facts.join("; ")}`);
+    if (person.food?.length) bits.push(`food: ${person.food.join("; ")}`);
     return bits.join(", ");
   });
   const horizon = snap.now.getTime() + 14 * 86400000;
@@ -162,6 +168,15 @@ export function chatBriefing(snap: ChatSnapshot): string {
     .filter((meal) => meal.date >= today)
     .slice(0, 8)
     .map((meal) => `- ${meal.date}: ${meal.name}`);
+  // The last eight weeks of dinners, so a plan knows the regulars and doesn't
+  // repeat last week (2026-10-22).
+  const since = localKey(new Date(snap.now.getTime() - 56 * 86400000), zone);
+  const recent = snap.meals
+    .filter((meal) => (meal.mealType === "dinner" || !meal.mealType) && meal.date < today && meal.date >= since)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 40)
+    .map((meal) => `- ${meal.date}: ${meal.name}`);
+  const familyFood = (snap.family?.food ?? []).filter((line) => line.trim());
   const days = snap.celebrations.slice(0, 12).map((row) => `- ${row.name} ${row.type || "birthday"} ${row.monthDay}`);
   return [
     `People:\n${people.join("\n") || "(none)"}`,
@@ -169,7 +184,12 @@ export function chatBriefing(snap: ChatSnapshot): string {
     `Open to-dos:\n${todos.join("\n") || "(none)"}`,
     `Chores:\n${chores.join("\n") || "(none)"}`,
     `Dinners:\n${dinners.join("\n") || "(none planned)"}`,
-    `Saved meals:\n${(snap.savedMeals ?? []).map((meal) => meal.name).slice(0, 40).join(", ") || "(none saved)"}`,
+    `Family food rules (everyone, never break these):\n${familyFood.map((line) => `- ${line}`).join("\n") || "(none saved)"}`,
+    `Recent dinners:\n${recent.join("\n") || "(none in the last 8 weeks)"}`,
+    `Saved meals (Meal Ideas):\n${(snap.savedMeals ?? []).slice(0, 40).map((meal) => {
+      const main = (meal.ingredients ?? []).slice(0, 6).map((row) => row.item).filter(Boolean);
+      return `- ${meal.name}${main.length ? ` (${main.join(", ")})` : ""}`;
+    }).join("\n") || "(none saved)"}`,
     `Browse Meal Ideas, dinners: ${dinnerIdeaNames()}`,
     `Birthdays and anniversaries:\n${days.join("\n") || "(none saved)"}`,
     `Groceries:\n${snap.groceries.slice(0, 40).map((item) => `- ${item.name}${item.quantity ? ` (${item.quantity})` : ""}${item.checked ? " (checked)" : ""}`).join("\n") || "(none)"}`,
@@ -201,7 +221,10 @@ export function chatSystemPrompt(snap: ChatSnapshot): string {
     "- plan_dinners only adds meals. It cannot move or remove one. Never call it for a move (\"move it to Saturday\") or a change to a meal already planned; say the app moves a meal when they write Move, the meal's name, to, and the day, like Move Culver's to Saturday, or that they can drag it on the Meals tab. A question is never a meal to add.",
     "- To add a breakfast or lunch, call plan_dinners with that slot; \"add pancakes and sausage to breakfast tomorrow\" is one meal, Pancakes and sausage, at breakfast. To plan dinners, call plan_dinners with a date (YYYY-MM-DD) and a name for each night. Use a saved meal name when one fits, otherwise a Browse Meal Ideas name, exactly. A week you are suggesting is also a list, one line each, like Wednesday: Tacos. Stop there. The app asks them to confirm, and only that yes writes the Meals tab and adds that meal's ingredients to the grocery list. Say a dinner is on the plan only after plan_dinners returns ok. Never say you added a dinner or a grocery when that tool did not.",
     "- The Groceries section is the current list. add_grocery, remove_grocery, and check_grocery change it. get_meal reads ingredients from a saved meal or Browse Meal Ideas. Say what changed only after the tool returns ok.",
-    "- Before delete_event, remember_fact, forget_school, mute_sender, mark_not_relevant, or plan_dinners, ask first. Call the tool with confirmed=true only after they say yes.",
+    "- Food: never suggest a meal that breaks a family food rule or anyone's allergy; if a saved meal needs a swap to fit (gluten-free noodles), say so. Personal likes and dislikes are preferences: work around them, and say so when a meal doesn't suit someone.",
+    "- When they ask an open question about meals, like plan this week's dinners or what should we eat, plan it with them: first ask one or two short questions (how many nights they're cooking, nights out, anything they're craving), unless they already said. Look at the calendar for busy nights. Then suggest a few dinners, mostly from their Meal Ideas, one line each with a short reason that names who it suits or which night it fits, and avoid repeating last week's recent dinners. Offer to adjust before calling plan_dinners. A specific request, like put tacos on Tuesday or add pancakes to breakfast tomorrow, is not open: just do it.",
+    "- When they mention a food preference, offer to remember it with remember_food: ask whether it's for the whole family or one person. Use family for everyone.",
+    "- Before delete_event, remember_fact, remember_food, forget_school, mute_sender, mark_not_relevant, or plan_dinners, ask first. Call the tool with confirmed=true only after they say yes.",
     "- Events that live on Google, Outlook, or an iCal feed cannot be deleted or moved here. The tool will say to hand that off.",
     "- Use search, get_plan, get_newsletters, get_profile, and get_weather instead of guessing. For weather somewhere other than home, pass place and say the place name the tool returns. For a place, call maps_link and include its url. create_reminder puts a reminder on the plan. send_feedback sends a note to the makers.",
     "- Tonight means 8:00 PM unless they name a time.",
@@ -228,6 +251,7 @@ export function toolDeclarations(isChild: boolean): { name: string; description:
     { name: "update_event", description: "Change a SuperHub event's title, time, place, or who it is for.", parameters: obj({ eventId: str, title: str, start: str, end: str, location: str, profileIds: ids }, ["eventId"]) },
     { name: "delete_event", description: "Delete a SuperHub event after the user says yes.", parameters: obj({ eventId: str, confirmed: { type: "boolean" } }, ["eventId"]) },
     { name: "remember_fact", description: "Remember one fact about a person, after they say yes.", parameters: obj({ profileId: str, fact: str, confirmed: { type: "boolean" } }, ["profileId", "fact"]) },
+    { name: "remember_food", description: "Remember a food like, dislike, allergy, or rule, after they say yes. profileId is a person's id, or family for the whole household (vegetarian, gluten-free, nobody likes mushrooms).", parameters: obj({ profileId: str, food: str, confirmed: { type: "boolean" } }, ["profileId", "food"]) },
     { name: "set_school", description: "Save a person's school.", parameters: obj({ profileId: str, school: str }, ["profileId", "school"]) },
     { name: "forget_school", description: "Clear a person's school after they say yes.", parameters: obj({ profileId: str, confirmed: { type: "boolean" } }, ["profileId"]) },
     { name: "assign", description: "Assign a chore or to-do to people.", parameters: obj({ choreId: str, profileIds: ids }, ["choreId", "profileIds"]) },
@@ -365,6 +389,18 @@ export function handleToolCall(
     if (!facts.some((item) => item.toLowerCase() === fact.toLowerCase())) facts.push(fact);
     return { output: { ok: true, name: person.name }, action: { kind: "remember_fact", profileId: person.id, facts }, handoff: false };
   }
+  if (name === "remember_food") {
+    const target = textArg(input, "profileId");
+    const food = textArg(input, "food").slice(0, 200);
+    if (target.toLowerCase() === "family" && snap.isChild) return { output: { error: "A grown-up sets the family's food rules." }, action: null, handoff: false };
+    const family = target.toLowerCase() === "family" ? snap.family : null;
+    const person = family ? null : snap.profiles.find((item) => item.id === target);
+    const owner = family ?? person;
+    if (!owner || !food) return { output: { error: "I need a person (or family) and the food." }, action: null, handoff: false };
+    const lines = [...(owner.food ?? [])];
+    if (!lines.some((item) => item.toLowerCase() === food.toLowerCase())) lines.push(food);
+    return { output: { ok: true, name: person?.name ?? "the family" }, action: { kind: "remember_food", profileId: owner.id, food: lines.slice(-30) }, handoff: false };
+  }
   if (name === "set_school" || name === "forget_school") {
     const person = snap.profiles.find((item) => item.id === textArg(input, "profileId"));
     if (!person) return { output: { error: "I don't see that person." }, action: null, handoff: false };
@@ -458,7 +494,7 @@ export function handleToolCall(
     const who = textArg(input, "name").toLowerCase();
     const people = who ? snap.profiles.filter((person) => person.name.toLowerCase() === who) : snap.profiles;
     if (who && people.length === 0) return { output: { error: "I don't see that person." }, action: null, handoff: false };
-    return { output: { people: people.map((person) => ({ name: person.name, school: person.school ?? null, facts: person.facts ?? [] })) }, action: null, handoff: false };
+    return { output: { people: people.map((person) => ({ name: person.name, school: person.school ?? null, facts: person.facts ?? [], food: person.food ?? [] })), familyFood: snap.family?.food ?? [] }, action: null, handoff: false };
   }
   if (name === "get_weather") {
     const day = textArg(input, "date");

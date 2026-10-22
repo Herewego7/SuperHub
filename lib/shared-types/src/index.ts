@@ -36,6 +36,8 @@ export type Profile = {
   email: string | null;
   school?: string | null;
   facts?: string[] | null;
+  /** Food likes, dislikes, allergies, favorites. On All Family, the household's rules. */
+  food?: string[] | null;
   initials: string;
   isActive: boolean | null;
   isAllFamilyProfile: boolean | null;
@@ -154,6 +156,7 @@ export type InsertProfile = {
   birthYear?: number | null;
   school?: string | null;
   facts?: string[] | null;
+  food?: string[] | null;
 };
 
 // ====== Event ======

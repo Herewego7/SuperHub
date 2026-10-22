@@ -2758,6 +2758,29 @@ test("Settings: the role-change PIN dialog opens with its field focused", async 
 });
 
 // ---------------------------------------------------------------------------
+// Each person has a Food box Chat plans meals around: one line per item,
+// saved as a list (2026-10-22).
+// ---------------------------------------------------------------------------
+test("Settings: a person's Food box saves one item per line", async () => {
+  const page = await openScenario("settingsGroupsPin");
+  try {
+    await page.locator('[data-testid="settings-modal"]').waitFor({ state: "visible", timeout: 15000 });
+    await page.locator('[data-section-id="people"] button').first().click();
+    await page.waitForTimeout(900);
+    await page.getByTestId("edit-profile-dad").click();
+    const food = page.getByTestId("profile-food-input");
+    await food.waitFor({ state: "visible", timeout: 8000 });
+    await food.fill("Loves tacos\n\n  No mushrooms  ");
+    await page.getByTestId("save-profile-button").first().click();
+    await page.waitForTimeout(800);
+    const body = await page.evaluate(() => (window as any).__profilePatch);
+    assert.deepEqual(body?.food, ["Loves tacos", "No mushrooms"]);
+  } finally {
+    await page.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // The Help / Knowledge Base panel couldn't be scrolled on a touch device —
 // not the article list, not an open article. Radix installs its
 // react-remove-scroll lock on the *Overlay*, shard-ed to that dialog's own
