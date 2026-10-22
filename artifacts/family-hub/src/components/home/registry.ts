@@ -11,7 +11,7 @@ import { Calendar, CalendarPlus, Car, ListTodo, MessageSquareHeart, Newspaper, T
 export const HOME_CARDS = [
   { id: "todos", name: "To-Dos", icon: ListTodo },
   { id: "keyDates", name: "Key Dates to Add", icon: CalendarPlus },
-  { id: "newsletters", name: "School Newsletters", icon: Newspaper },
+  { id: "newsletters", name: "Newsletters", icon: Newspaper },
   { id: "schedule", name: "Today's Schedule", icon: Calendar },
   { id: "driving", name: "Driving", icon: Car },
   { id: "horizon", name: "On the Horizon", icon: Telescope },

@@ -85,6 +85,7 @@ import * as liveRefresh from "./scenarios/liveRefresh";
 import * as homeGoogleEvent from "./scenarios/homeGoogleEvent";
 import * as homeInbox from "./scenarios/homeInbox";
 import * as homeNewsletters from "./scenarios/homeNewsletters";
+import * as homeNewsletterGroups from "./scenarios/homeNewsletterGroups";
 import * as homeSchedule from "./scenarios/homeSchedule";
 import * as settingsStopped from "./scenarios/settingsStopped";
 
@@ -177,6 +178,7 @@ const SCENARIOS: Record<string, { setup: () => void; Component: React.ComponentT
   homeGoogleEvent,
   homeInbox,
   homeNewsletters,
+  homeNewsletterGroups,
   homeSchedule,
   settingsStopped,
 };

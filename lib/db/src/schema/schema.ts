@@ -368,6 +368,9 @@ export const calendarSettings = pgTable("calendar_settings", {
   mutedSenders: jsonb("muted_senders").$type<string[]>().notNull().default([]),
   // "sender|newsletter name" pairs whose future issues are skipped. Other mail from that sender still comes through.
   mutedNewsletters: jsonb("muted_newsletters").$type<string[]>().notNull().default([]),
+  // Newsletters shown together as one: groups the family made or renamed, and
+  // newsletters (or "a||b" pairs) never to combine on their own (2026-10-22).
+  newsletterGrouping: jsonb("newsletter_grouping").$type<{ groups: { id: string; name: string | null; members: string[] }[]; apart: string[] }>().notNull().default({ groups: [], apart: [] }),
   dismissedSlipKeys: jsonb("dismissed_slip_keys").$type<string[]>().notNull().default([]),
   planSentKeys: jsonb("plan_sent_keys").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at").defaultNow(),

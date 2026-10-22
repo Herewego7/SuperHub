@@ -105,6 +105,8 @@ function LetterView({ home, chore, letters, canRead }: { home: HomeModel; chore:
 
 /** Every issue of one newsletter from the last 30 days, newest first. */
 function IssueList({ home, letters }: { home: HomeModel; letters: Letters }) {
+  // A combined newsletter says who sent each issue.
+  const fromOf = letters.members.length > 1 ? new Map(letters.members.flatMap((member) => member.issues.map((issue) => [issue.id, member.name] as const))) : null;
   return (
     <>
       <SheetHeader><SheetTitle>{letters.name}</SheetTitle></SheetHeader>
@@ -117,6 +119,7 @@ function IssueList({ home, letters }: { home: HomeModel; letters: Letters }) {
               <button type="button" className="flex w-full items-start gap-3 py-3 text-left" onClick={() => home.setSheet({ chore: issue, mode: "letter", letters })}>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px] font-medium">{issueDateLabel(issue)}</span>
+                  {fromOf && <span className="block truncate text-xs text-[#6e6e78]">{fromOf.get(issue.id)}</span>}
                   {first && <span className="mt-0.5 line-clamp-2 text-sm text-[#6e6e78]">{first}</span>}
                 </span>
                 <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-[#a0a0a8]" aria-hidden="true" />

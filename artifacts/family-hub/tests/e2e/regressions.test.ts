@@ -6563,6 +6563,86 @@ test("Home to-dos: an item's sheet lists its note as bullets, and its own parent
   }
 });
 
+// ---------------------------------------------------------------------------
+// One school or church mails from several addresses, and each was its own
+// row, so a few newsletters looked like many (2026-10-22). Obvious matches
+// combine on their own, a less clear one is asked about on the row, and a
+// row can be combined, renamed and separated from its ⋯ menu.
+// ---------------------------------------------------------------------------
+function newsletterRow(page: Page, name: string) {
+  return page.getByTestId("home-newsletter").filter({ has: page.locator(`[data-testid="home-newsletter-issue"][aria-label^="${name},"]`) });
+}
+
+test("Newsletters: one school's or church's senders show as one row, and a less clear match is asked about", async () => {
+  const page = await openScenarioTouch("homeNewsletterGroups", { width: 390, height: 844 });
+  try {
+    const rows = page.getByTestId("home-newsletter");
+    await rows.first().waitFor({ timeout: 15_000 });
+    await page.locator('[data-home-card="newsletters"]').getByRole("button", { name: "View all" }).click();
+    assert.equal(await rows.count(), 4, "Lincoln, Grace, the boosters and Forward Future");
+
+    const lincoln = newsletterRow(page, "Lincoln Weekly");
+    assert.equal(await lincoln.getByTestId("home-newsletter-dot").count(), 3, "the weekly's two issues and the PTA's one");
+    const lines = await lincoln.getByTestId("home-newsletter-when").allTextContents();
+    assert.ok(lines.some((line) => line.startsWith("PTA News · ")), `each issue says who sent it: ${lines.join(" | ")}`);
+    assert.equal(await newsletterRow(page, "Grace Weekly").getByTestId("home-newsletter-dot").count(), 3);
+
+    const ask = lincoln.getByTestId("home-newsletter-suggestion");
+    assert.match((await ask.textContent()) ?? "", /Same as Lincoln Boosters\?/);
+    await ask.getByTestId("home-newsletter-suggestion-yes").click();
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="home-newsletter"]').length === 3, undefined, { timeout: 5000 });
+    const saved = (await page.evaluate(() => (window as any).__grouping)) as { groups: { members: string[] }[] };
+    assert.equal(saved.groups.length, 1);
+    assert.equal(saved.groups[0].members.length, 3, "the weekly, the PTA and the boosters");
+    assert.equal(await page.getByTestId("home-newsletter-suggestion").count(), 0);
+  } finally {
+    await page.context().close();
+  }
+});
+
+test("Newsletters: a row can be renamed, separated, combined by hand, and hidden as a whole", async () => {
+  const page = await openScenarioTouch("homeNewsletterGroups", { width: 390, height: 844 });
+  try {
+    const rows = page.getByTestId("home-newsletter");
+    await rows.first().waitFor({ timeout: 15_000 });
+    await page.locator('[data-home-card="newsletters"]').getByRole("button", { name: "View all" }).click();
+
+    // Rename the church's combined row.
+    await newsletterRow(page, "Grace Weekly").getByTestId("home-newsletter-more").click();
+    await page.getByTestId("home-newsletter-rename").click();
+    const input = page.getByTestId("home-newsletter-rename-input");
+    await input.fill("Grace Church");
+    await page.getByTestId("home-newsletter-rename-save").click();
+    await newsletterRow(page, "Grace Church").waitFor({ timeout: 5000 });
+
+    // Separate it back into its two senders.
+    await newsletterRow(page, "Grace Church").getByTestId("home-newsletter-more").click();
+    await page.getByTestId("home-newsletter-separate").click();
+    await newsletterRow(page, "Grace Youth").waitFor({ timeout: 5000 });
+    await newsletterRow(page, "Grace Weekly").waitFor();
+
+    // Combine two by hand.
+    await newsletterRow(page, "Forward Future").getByTestId("home-newsletter-more").click();
+    await page.getByTestId("home-newsletter-combine").click();
+    const dialog = page.getByTestId("home-newsletter-combine-dialog");
+    await dialog.getByLabel("Grace Youth").check();
+    await page.getByTestId("home-newsletter-combine-save").click();
+    await page.waitForFunction(() => {
+      const row = [...document.querySelectorAll('[data-testid="home-newsletter"]')].find((el) => el.querySelector('[aria-label^="Forward Future,"]'));
+      return row?.querySelectorAll('[data-testid="home-newsletter-dot"]').length === 2;
+    }, undefined, { timeout: 5000 });
+
+    // Hiding a combined row stops every sender in it.
+    await newsletterRow(page, "Lincoln Weekly").getByTestId("home-newsletter-hide").click();
+    await page.getByRole("button", { name: "Stop showing" }).click();
+    await page.waitForFunction(() => (window as any).__hideCalls.length === 2, undefined, { timeout: 5000 });
+    const calls = (await page.evaluate(() => (window as any).__hideCalls)) as { address: string }[];
+    assert.deepEqual(calls.map((call) => call.address).sort(), ["news@lincoln.org", "pta@lincoln.org"]);
+  } finally {
+    await page.context().close();
+  }
+});
+
 /** A real finger dragged sideways, for anything the browser scrolls natively. */
 async function touchSwipeAcross(page: Page, x1: number, y: number, x2: number, steps = 10): Promise<void> {
   const cdp = await page.context().newCDPSession(page);
@@ -6574,7 +6654,7 @@ async function touchSwipeAcross(page: Page, x1: number, y: number, x2: number, s
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
 }
 
-test("School Newsletters: one swipeable row per newsletter, with its place, its issues and its highlights", async () => {
+test("Newsletters: one swipeable row per newsletter, with its place, its issues and its highlights", async () => {
   const page = await openScenarioTouch("homeNewsletters", { width: 390, height: 844 });
   try {
     const rows = page.getByTestId("home-newsletter");
@@ -6587,7 +6667,7 @@ test("School Newsletters: one swipeable row per newsletter, with its place, its 
     assert.equal(await weekly.getByTestId("home-newsletter-dot").count(), 3);
     assert.equal(await activeDot(), 0);
     assert.equal(await weekly.getByTestId("home-newsletter-highlight").first().textContent(), "Picture day is coming up.", "each issue leads with its first highlight");
-    assert.equal(await rows.filter({ hasText: "PTA News" }).getByTestId("home-newsletter-position").count(), 0, "a single issue needs no count");
+    assert.equal(await rows.filter({ hasText: "Troop 12 News" }).getByTestId("home-newsletter-position").count(), 0, "a single issue needs no count");
 
     const track = weekly.getByTestId("home-newsletter-track");
     // Mid-screen first: near the bottom the floating tab bar sits over the
@@ -6620,7 +6700,7 @@ test("School Newsletters: one swipeable row per newsletter, with its place, its 
 
 // Newsletters had no way to say who they're for or to be removed, short of
 // opening All issues (2026-10-21).
-test("School Newsletters: each row shows who it's for, can be handed to someone, and can be hidden", async () => {
+test("Newsletters: each row shows who it's for, can be handed to someone, and can be hidden", async () => {
   const page = await openScenarioTouch("homeNewsletters", { width: 390, height: 844 });
   try {
     const weekly = page.getByTestId("home-newsletter").filter({ hasText: "Lincoln Weekly" });

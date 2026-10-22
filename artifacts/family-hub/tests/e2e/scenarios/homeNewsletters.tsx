@@ -4,7 +4,7 @@ import FamilyHub from "@/pages/family-hub";
 import { installMockApi, baselineRoutes, ok } from "../mockApi";
 
 // Two newsletters in Dad's mailbox: three issues of the school's weekly from
-// the last three weeks, and one from the PTA. "Stop showing" calls land in
+// the last three weeks, and one from a scout troop. "Stop showing" calls land in
 // window.__hideCalls.
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -26,7 +26,7 @@ let chores = [
   issue("w1", "This week at Lincoln", "Lincoln Weekly", "news@lincoln.org", "Lincoln Elementary", 1, "Picture day is coming up. Bring a canned good for the food drive.\nThe book fair opens in the library.", 0),
   issue("w2", "Last week at Lincoln", "Lincoln Weekly", "news@lincoln.org", "Lincoln Elementary", 8, "Thank you for a great open house. Spirit wear orders are due.", 1),
   issue("w3", "Lincoln news", "Lincoln Weekly", "news@lincoln.org", "Lincoln Elementary", 15, "Welcome back, families. Car line starts at the side door.", 2),
-  issue("p1", "PTA update", "PTA News", "pta@lincoln.org", "Lincoln PTA", 3, "Volunteers are needed for the fall festival.", 3),
+  issue("p1", "Troop update", "Troop 12 News", "leader@troop12scouts.org", "Troop 12", 3, "Volunteers are needed for the fall festival.", 3),
 ];
 
 export function setup(): void {

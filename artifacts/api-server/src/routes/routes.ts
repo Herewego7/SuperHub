@@ -3199,6 +3199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mealsOnCalendar: false,
         mutedSenders: [],
         mutedNewsletters: [],
+        newsletterGrouping: { groups: [], apart: [] },
         dismissedSlipKeys: [],
       };
       res.json(defaultSettings);
@@ -3283,6 +3284,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating family calendar:", error);
       res.status(500).json({ error: "Failed to update family calendar" });
+    }
+  });
+
+  // Which newsletters show together on Home. The whole arrangement is sent
+  // each time: it is small, and the app is what works out the groups.
+  const newsletterGroupingSchema = z.object({
+    groups: z.array(z.object({
+      id: z.string().min(1).max(80),
+      name: z.string().trim().max(80).nullable(),
+      members: z.array(z.string().min(1).max(400)).min(1).max(40),
+    })).max(100),
+    apart: z.array(z.string().min(1).max(900)).max(400),
+  });
+  app.patch("/api/calendar-settings/newsletter-grouping", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req);
+      const parsed = newsletterGroupingSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Invalid newsletter grouping" });
+      const settings = await storage.updateCalendarSettings({ newsletterGrouping: parsed.data, userId });
+      res.json(settings);
+    } catch (error) {
+      console.error("Error saving newsletter grouping:", error);
+      res.status(500).json({ error: "Failed to save newsletter grouping" });
     }
   });
 

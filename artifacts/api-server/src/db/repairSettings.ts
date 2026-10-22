@@ -32,6 +32,7 @@ export const SETTINGS_COLUMNS: [name: string, definition: string][] = [
   ["meals_on_calendar", "boolean NOT NULL DEFAULT false"],
   ["muted_senders", "jsonb NOT NULL DEFAULT '[]'::jsonb"],
   ["muted_newsletters", "jsonb NOT NULL DEFAULT '[]'::jsonb"],
+  ["newsletter_grouping", "jsonb NOT NULL DEFAULT '{\"groups\":[],\"apart\":[]}'::jsonb"],
   ["dismissed_slip_keys", "jsonb NOT NULL DEFAULT '[]'::jsonb"],
   ["plan_sent_keys", "jsonb NOT NULL DEFAULT '[]'::jsonb"],
   ["created_at", "timestamp DEFAULT now()"],

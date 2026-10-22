@@ -6,6 +6,7 @@ import type { Chore, ChoreCompletion, Meal } from "@workspace/shared-types";
 import type { FamilyEvent } from "@/lib/familyEvents";
 import { recentShoutoutsQuery, type DailyContentAssignment, type DailyContentItem, type Shoutout } from "@/components/recent-shoutouts-card";
 import { type NewsletterGroup, dinnerName, driverNamesFor, drivesOnHomeDay, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonMail, horizonWithoutChecked, mailClockParts, mailKeyDates, mailOffCalendar, mailVisibleToKid, clearedTodos, newsletterGroups, newsletterRowIds, notesForHome, PLAN_KEY_DATES, PLAN_NEWSLETTERS, PLAN_TODO_FOLD, planTodoRows, plainEventDetail, praiseForHome, schoolEmailNames, schoolSlipsHeldOnHome, todosForHome } from "@/lib/homeDay";
+import { type CombinedLetters, type NewsletterGrouping, EMPTY_GROUPING, combineNewsletters, combineRows, declinePair, renameRow, separateRow } from "@/lib/newsletterGroups";
 import { pointsProfileId } from "@/lib/chatTools";
 import { confirmDialog } from "@/lib/confirmDialog";
 import { hapticLight } from "@/lib/haptics";
@@ -46,7 +47,7 @@ export type HomeDayProps = {
   openNotesKey?: number;
 };
 
-export type Letters = NewsletterGroup<Chore>;
+export type Letters = CombinedLetters<Chore>;
 export type SheetState = { chore: Chore; mode: "actions" | "snooze" | "source" | "letter" | "issues"; keyDate?: boolean; letters?: Letters };
 
 const SNOOZE_KEY = "superhub_home_snooze";
@@ -155,7 +156,7 @@ export function useHomeDay(props: HomeDayProps) {
   };
   const now = new Date();
   const dayKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
-  const { data: calendarSettings } = useQuery<{ shareOriginals?: boolean | null; familyCalendarId?: string | null; mutedNewsletters?: string[] | null; mutedSenders?: string[] | null; dismissedSlipKeys?: string[] | null }>({
+  const { data: calendarSettings } = useQuery<{ shareOriginals?: boolean | null; familyCalendarId?: string | null; mutedNewsletters?: string[] | null; mutedSenders?: string[] | null; dismissedSlipKeys?: string[] | null; newsletterGrouping?: NewsletterGrouping | null }>({
     queryKey: ["/api/calendar-settings"],
   });
   const { data: celebrations = [] } = useQuery<{ name: string; monthDay: string; year?: number | null; type?: string | null; customLabel?: string | null }[]>({
@@ -273,7 +274,7 @@ export function useHomeDay(props: HomeDayProps) {
   // sat in one item's menu, where it read as a choice about that email, then
   // in Settings, where nobody would find it (2026-10-20).
   const [filtersOpen, setFiltersOpen] = useState(false);
-  type MailSettings = { mutedSenders?: string[] | null; dismissedSlipKeys?: string[] | null } | undefined;
+  type MailSettings = { mutedSenders?: string[] | null; dismissedSlipKeys?: string[] | null; newsletterGrouping?: NewsletterGrouping | null } | undefined;
   const editSettings = (change: (old: NonNullable<MailSettings>) => NonNullable<MailSettings>) =>
     queryClient.setQueryData<MailSettings>(["/api/calendar-settings"], (old) => (old ? change(old) : old));
   /** Turn a kind off (skip it from every sender, and clear its open items) or back on (future mail only). */
@@ -316,8 +317,11 @@ export function useHomeDay(props: HomeDayProps) {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] }),
   });
   const hideLetters = useMutation({
+    // A combined row stops every newsletter in it.
     mutationFn: async (letters: Letters) => {
-      await apiRequest("POST", "/api/ingest/newsletter/hide", { address: letters.sender, name: letters.muteName });
+      for (const member of letters.members) {
+        if (member.sender) await apiRequest("POST", "/api/ingest/newsletter/hide", { address: member.sender, name: member.muteName });
+      }
     },
     onMutate: (letters) => {
       const ids = new Set(letters.issues.map((issue) => issue.id));
@@ -463,11 +467,27 @@ export function useHomeDay(props: HomeDayProps) {
       })
       .catch(() => toast({ title: "Couldn't remember that sender", description: "This to-do moved, but new mail from them may not." }));
   };
-  /** Hand every issue of a newsletter to someone; the sender's later issues follow. */
+  // The whole arrangement is saved each time; the change shows at once.
+  const saveGrouping = useMutation({
+    mutationFn: async (next: NewsletterGrouping) => {
+      await apiRequest("PATCH", "/api/calendar-settings/newsletter-grouping", next);
+    },
+    onMutate: (next) => editSettings((old) => ({ ...old, newsletterGrouping: next })),
+    onError: () => toast({ title: "Couldn't save that", description: "Check your connection and try again." }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["/api/calendar-settings"] }),
+  });
+  const currentGrouping = () => queryClient.getQueryData<{ newsletterGrouping?: NewsletterGrouping | null }>(["/api/calendar-settings"])?.newsletterGrouping ?? EMPTY_GROUPING;
+  const combineLetters = (rows: Letters[], name: string | null = null) => saveGrouping.mutate(combineRows(currentGrouping(), rows, name, newGroupId()));
+  const renameLetters = (row: Letters, name: string) => saveGrouping.mutate(renameRow(currentGrouping(), row, name.trim(), newGroupId()));
+  const separateLetters = (row: Letters) => saveGrouping.mutate(separateRow(currentGrouping(), row));
+  const declineLetters = (pair: string) => saveGrouping.mutate(declinePair(currentGrouping(), pair));
+  /** Hand every issue of a newsletter to someone; each sender's later issues follow. */
   const reassignLetters = (letters: Letters, ids: string[]) => {
-    const [first, ...rest] = letters.issues;
-    if (!first) return;
-    reassign(first, ids);
+    const firsts = letters.members.map((member) => member.issues[0]).filter(Boolean);
+    if (firsts.length === 0) return;
+    firsts.forEach((issue) => reassign(issue, ids));
+    const leads = new Set(firsts.map((issue) => issue.id));
+    const rest = letters.issues.filter((issue) => !leads.has(issue.id));
     if (rest.length === 0) return;
     rest.forEach((issue) => assign.mutate({ choreId: issue.id, profileIds: ids }));
     setHandPicked((current) => {
@@ -527,9 +547,15 @@ export function useHomeDay(props: HomeDayProps) {
     .filter((todo) => todo.category !== "school_email" || !kindKeptOut(kindsOfChore(todo), kindsOff));
   const stillOpen = visibleChores.filter((todo) => !completions.some((completion) => completion.choreId === todo.id));
   const homeEvents = forPeople(events, selectedIds, familyIds, familyProfileId).filter((event) => mailVisibleToKid(event, kidName ?? null));
-  const newsletters = newsletterGroups(stillOpen, now, calendarSettings?.mutedNewsletters ?? [])
+  const letterSources = newsletterGroups(stillOpen, now, calendarSettings?.mutedNewsletters ?? [])
     .map((letters) => ({ ...letters, issues: letters.issues.filter((issue) => !hidden(issue.id)) }))
     .filter((letters) => letters.issues.length > 0);
+  const grouping = calendarSettings?.newsletterGrouping ?? EMPTY_GROUPING;
+  const { letters: newsletters, suggestion: letterSuggestion } = combineNewsletters(
+    letterSources,
+    grouping,
+    people.map((person) => person.school ?? "").filter(Boolean),
+  );
   const keyDates = mailKeyDates(
     stillOpen,
     homeEvents.filter((event) => !Object.values(kept).includes(event.id)),
@@ -700,6 +726,7 @@ export function useHomeDay(props: HomeDayProps) {
     checkOff, uncheck, removeRow, askStopEmails, filtersOpen, setFiltersOpen, kindsOff, setKind, stoppedSenders, resumeSender,
     saveSchool, complete, undo, assign, reassign, removeTodo, removeItem, stopEmails, addToCalendar, removeFromCalendar,
     newsletters, visibleNewsletters, hideLetters, askHideLetters, reassignLetters,
+    letterSuggestion, combineLetters, renameLetters, separateLetters, declineLetters,
     keyDates, visibleKeys,
     openTodos, doneTodos, folded, visibleTodos,
     cleared, ackCleared,
@@ -716,6 +743,10 @@ export function useHomeDay(props: HomeDayProps) {
 export type HomeModel = ReturnType<typeof useHomeDay>;
 
 const CLEARED_SEEN_KEY = "superhub_cleared_todos_seen";
+
+function newGroupId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
 const HAND_PICKED_KEY = "superhub_todo_hand_picked";
 const LOCAL_KINDS_KEY = "superhub_stopped_mail_kinds";
 const LOCAL_SENDERS_KEY = "superhub_stopped_senders";
