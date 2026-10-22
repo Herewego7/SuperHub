@@ -60,6 +60,21 @@ async function openScenario(
   return page;
 }
 
+/**
+ * Like openScenario, with the page's clock fixed at `hour` o'clock today.
+ * Home hides today's events once they end, so a fixture of evening events
+ * would otherwise pass in the morning and fail at night (2026-10-22).
+ */
+async function openScenarioAt(scenario: string, hour: number, minute = 0): Promise<Page> {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const when = new Date();
+  when.setHours(hour, minute, 0, 0);
+  await page.clock.setFixedTime(when);
+  await page.goto(`${BASE_URL}?scenario=${scenario}`);
+  await page.waitForTimeout(1200);
+  return page;
+}
+
 /** Like openScenario but in a touch-capable, mobile-emulating context —
  *  required for any assertion about real touch scrolling/gestures. */
 async function openScenarioTouch(
@@ -6607,6 +6622,25 @@ test("Newsletters: one school's or church's senders show as one row, and a less 
   }
 });
 
+// "View all" was one-way: a long list stayed long until the app was closed (2026-10-22).
+test("Newsletters: View all turns into Show less, which goes back to three", async () => {
+  const page = await openScenarioTouch("homeNewsletterGroups", { width: 390, height: 844 });
+  try {
+    const rows = page.getByTestId("home-newsletter");
+    await rows.first().waitFor({ timeout: 15_000 });
+    const toggle = page.getByTestId("home-show-all-newsletters");
+    assert.equal(await rows.count(), 3);
+    await toggle.click();
+    assert.equal(await rows.count(), 4);
+    assert.equal(await toggle.textContent(), "Show less");
+    await toggle.click();
+    assert.equal(await rows.count(), 3);
+    assert.equal(await toggle.textContent(), "View all");
+  } finally {
+    await page.context().close();
+  }
+});
+
 test("Newsletters: a row can be renamed, separated, combined by hand, and hidden as a whole", async () => {
   const page = await openScenarioTouch("homeNewsletterGroups", { width: 390, height: 844 });
   try {
@@ -6741,7 +6775,7 @@ async function stripColors(row: Locator): Promise<string[]> {
 }
 
 test("Today's Schedule: each row wears its person's color, a shared one shows each person, and an emailed time is dashed", async () => {
-  const page = await openScenario("homeSchedule");
+  const page = await openScenarioAt("homeSchedule", 12);
   try {
     await page.getByTestId("profile-all family").click({ timeout: 15_000 });
     const schedule = page.getByTestId("home-today-events");
@@ -6759,8 +6793,44 @@ test("Today's Schedule: each row wears its person's color, a shared one shows ea
   }
 });
 
+// Today's Schedule kept every event all day; one that has ended now leaves
+// it, while the one under way stays (2026-10-22).
+test("Today's Schedule: an event that has ended leaves, and the one under way stays", async () => {
+  const page = await openScenarioAt("homeSchedule", 18, 30);
+  try {
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    const rows = page.getByTestId("home-today-events").getByTestId("home-event");
+    await rows.first().waitFor({ timeout: 5000 });
+    const titles = (await rows.allTextContents()).join(" | ");
+    assert.doesNotMatch(titles, /Soccer practice/, "5–6 PM has ended by 6:30");
+    assert.match(titles, /Parent-teacher night/, "6–7 PM is under way");
+    assert.match(titles, /Family movie night/);
+  } finally {
+    await page.close();
+  }
+});
+
+// The page kept Home's scroll position, so the Calendar opened scrolled past
+// its own top (2026-10-22).
+test("Today's Schedule: Open in Calendar opens at the top of the Calendar", async () => {
+  const page = await openScenarioAt("homeSchedule", 12);
+  try {
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    const open = page.getByTestId("home-open-calendar");
+    await open.scrollIntoViewIfNeeded();
+    const before = await page.evaluate(() => document.getElementById("app-scroll-container")!.scrollTop);
+    assert.ok(before > 0, "Home should be scrolled down, or this proves nothing");
+    await open.click();
+    await page.getByTestId("upcoming-day").first().waitFor({ timeout: 10_000 });
+    await page.waitForTimeout(300);
+    assert.equal(await page.evaluate(() => document.getElementById("app-scroll-container")!.scrollTop), 0);
+  } finally {
+    await page.close();
+  }
+});
+
 test("Today's Schedule: Open in Calendar lands on the day Home is showing", async () => {
-  const page = await openScenario("homeSchedule");
+  const page = await openScenarioAt("homeSchedule", 12);
   try {
     await page.getByTestId("profile-all family").click({ timeout: 15_000 });
     await page.getByTestId("next-date-button").click();
@@ -6775,7 +6845,7 @@ test("Today's Schedule: Open in Calendar lands on the day Home is showing", asyn
 });
 
 test("Calendar Upcoming: day headers, each row in its person's color with a time column, and a tap opens the event", async () => {
-  const page = await openScenario("homeSchedule");
+  const page = await openScenarioAt("homeSchedule", 12);
   try {
     await page.getByTestId("profile-all family").click({ timeout: 15_000 });
     await page.getByTestId("calendar-tab").click();

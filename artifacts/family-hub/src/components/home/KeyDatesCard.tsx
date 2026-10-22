@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useAnimationControls, type PanInfo } from "fra
 import { AlarmClock, Calendar, CalendarPlus, Check, MoreVertical, Trash2, X } from "lucide-react";
 import { PLAN_KEY_DATES, planDateLabel } from "@/lib/homeDay";
 import { slipSender, slipSenderName } from "@/lib/slipMail";
-import { EmailFiltersButton, HomeCard } from "./HomeCard";
+import { EmailFiltersButton, HomeCard, ShowAllToggle } from "./HomeCard";
 import { SourceChip } from "./SourceChip";
 import type { HomeModel } from "./useHomeDay";
 
@@ -66,9 +66,7 @@ export function KeyDatesCard({ home }: { home: HomeModel }) {
           </AnimatePresence>
         </ul>
       )}
-      {keyDates.length > PLAN_KEY_DATES && !showAllKeys && (
-        <button type="button" className="mt-2 w-full rounded-full bg-[#F1F1F4] py-2 text-sm font-medium" onClick={() => setShowAllKeys(true)}>View all</button>
-      )}
+      {keyDates.length > PLAN_KEY_DATES && <ShowAllToggle id="keyDates" open={showAllKeys} onChange={setShowAllKeys} />}
       <AnimatePresence>
         {chosen.length > 0 && (
           <motion.div

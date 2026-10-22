@@ -5,7 +5,7 @@ import { slipSender, slipSenderName } from "@/lib/slipMail";
 import { SourceChip } from "./SourceChip";
 import { eventStrip } from "@/lib/eventColor";
 import { EventRow } from "@/components/event-row";
-import { HomeCard } from "./HomeCard";
+import { HomeCard, ShowAllToggle } from "./HomeCard";
 import { PersonChips } from "./PersonChips";
 import type { HomeModel } from "./useHomeDay";
 
@@ -80,8 +80,8 @@ export function HorizonCard({ home }: { home: HomeModel }) {
           })}
         </ul>
       )}
-      {comingEvents.length > PLAN_HORIZON && !showAllHorizon && (
-        <button type="button" className="mt-1 text-sm font-semibold text-[#5E8FAD]" onClick={() => setShowAllHorizon(true)}>Show {comingEvents.length - PLAN_HORIZON} more</button>
+      {comingEvents.length > PLAN_HORIZON && (
+        <ShowAllToggle id="horizon" open={showAllHorizon} onChange={setShowAllHorizon} more={`Show ${comingEvents.length - PLAN_HORIZON} more`} variant="link" />
       )}
       {onOpenCalendar && (
         <button type="button" className="mt-2 w-full rounded-full bg-[#F1F1F4] py-2 text-sm font-medium" onClick={onOpenCalendar}>View all</button>

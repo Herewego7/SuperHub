@@ -18,7 +18,12 @@ export function ScheduleCard({ home }: { home: HomeModel }) {
     .filter((event) => event.isAllDay !== true)
     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   const next = daysOut === 0 ? timed.find((event) => new Date(event.endTime ?? event.startTime) > now) : timed[0];
-  const count = todayEvents.length + offCalendar.length;
+  // Today, an event leaves once it has ended; all-day ones and the one under
+  // way stay. Earlier ones are a tap away in the Calendar (2026-10-22).
+  const shown = daysOut === 0
+    ? todayEvents.filter((event) => event.isAllDay === true || new Date(event.endTime ?? event.startTime) > now)
+    : todayEvents;
+  const count = shown.length + offCalendar.length;
   const summary = next
     ? `${daysOut === 0 ? "Next" : "First"}: ${clockOf(next.startTime)} ${next.title}`
     : count > 0 ? (count === 1 ? "1 event" : `${count} events`) : "Nothing on the calendar";
@@ -57,7 +62,7 @@ export function ScheduleCard({ home }: { home: HomeModel }) {
           {calendarStatus.failing.join(" and ")} couldn't sync
         </button>
       )}
-      {todayEvents.length === 0 && offCalendar.length === 0 ? (
+      {shown.length === 0 && offCalendar.length === 0 ? (
         calendarStatus && !calendarStatus.connected ? (
           <button type="button" onClick={onOpenCalendarSettings} className="text-left text-sm font-medium text-[#5E8FAD]" data-testid="connect-calendar-cta">
             Connect a calendar to see your events here
@@ -67,11 +72,11 @@ export function ScheduleCard({ home }: { home: HomeModel }) {
             Reconnect {calendarStatus.failing.join(" and ")} to see your events again
           </button>
         ) : (
-          <p className="text-sm text-muted-foreground">Nothing on the calendar.</p>
+          <p className="text-sm text-muted-foreground">{todayEvents.length > 0 ? "Nothing else on the calendar today." : "Nothing on the calendar."}</p>
         )
       ) : (
         <ul className="flex flex-col gap-2">
-          {todayEvents.map((event) => {
+          {shown.map((event) => {
             const chip = eventSourceChip(event.source, event.description);
             return (
               <li key={event.id}>

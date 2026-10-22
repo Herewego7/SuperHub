@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import { issueDateLabel, newsletterInitials, PLAN_NEWSLETTERS } from "@/lib/homeDay";
 import { noteBullets } from "@/lib/slipMail";
-import { HomeCard } from "./HomeCard";
+import { HomeCard, ShowAllToggle } from "./HomeCard";
 import { PersonChips } from "./PersonChips";
 import type { HomeModel, Letters } from "./useHomeDay";
 
@@ -29,9 +29,7 @@ export function NewslettersCard({ home }: { home: HomeModel }) {
           {visibleNewsletters.map((letters) => <NewsletterRow key={letters.key} home={home} letters={letters} />)}
         </ul>
       )}
-      {newsletters.length > PLAN_NEWSLETTERS && !showAllLetters && (
-        <button type="button" className="mt-2 w-full rounded-full bg-[#F1F1F4] py-2 text-sm font-medium" onClick={() => setShowAllLetters(true)}>View all</button>
-      )}
+      {newsletters.length > PLAN_NEWSLETTERS && <ShowAllToggle id="newsletters" open={showAllLetters} onChange={setShowAllLetters} />}
     </HomeCard>
   );
 }

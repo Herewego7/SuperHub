@@ -5,7 +5,7 @@ import { hapticSuccess } from "@/lib/haptics";
 import { hasCelebratedAllDone, markCelebratedAllDone } from "@/lib/allDoneCelebration";
 import { isKidContext } from "@/lib/parentGate";
 import { maybeRequestReview } from "@/lib/reviewPrompt";
-import { robustScrollIntoView, stickyHeaderOffset, waitForElement } from "@/lib/scroll";
+import { robustScrollIntoView, robustScrollToTop, stickyHeaderOffset, waitForElement } from "@/lib/scroll";
 import { useSpotlight } from "@/lib/spotlight";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Profile, ChoreCompletion, Chore, InsertEvent, isRequiredChoreTaskType } from "@workspace/shared-types";
@@ -629,7 +629,13 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
         onEditTodo={onEditChore}
         onDeleteTodo={onDeleteChore}
         onShiftDay={onShiftDay}
-        onOpenCalendar={() => setActiveTab("calendar")}
+        onOpenCalendar={() => {
+          // The page kept Home's scroll position, so the Calendar opened
+          // scrolled past its own top (2026-10-22). Start at the top; the
+          // day grid still scrolls itself to the current time.
+          setActiveTab("calendar");
+          setTimeout(() => robustScrollToTop("auto"), 0);
+        }}
         onOpenEvent={onNavigateToEvent}
         onRefresh={() => {
           void queryClient.invalidateQueries({ queryKey: ["/api/events"] });
