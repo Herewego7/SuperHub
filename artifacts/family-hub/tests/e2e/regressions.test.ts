@@ -6582,12 +6582,18 @@ test("Newsletters: one school's or church's senders show as one row, and a less 
     assert.equal(await rows.count(), 4, "Lincoln, Grace, the boosters and Forward Future");
 
     const lincoln = newsletterRow(page, "Lincoln Weekly");
-    assert.equal(await lincoln.getByTestId("home-newsletter-dot").count(), 3, "the weekly's two issues and the PTA's one");
+    assert.equal(await lincoln.getByTestId("home-newsletter-position").textContent(), "1 of 3", "the weekly's two issues and the PTA's one");
     const lines = await lincoln.getByTestId("home-newsletter-when").allTextContents();
     assert.ok(lines.some((line) => line.startsWith("PTA News · ")), `each issue says who sent it: ${lines.join(" | ")}`);
-    assert.equal(await newsletterRow(page, "Grace Weekly").getByTestId("home-newsletter-dot").count(), 3);
+    assert.equal(await newsletterRow(page, "Grace Weekly").getByTestId("home-newsletter-position").textContent(), "1 of 3");
+
+    // Each row's footer is one line, and so is the question (2026-10-22).
+    const heights = await page.getByTestId("home-newsletter-footer").evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
+    assert.ok(heights.every((h) => h <= 44), `a footer wrapped: ${heights.join(", ")}`);
+    if (process.env.SHOT) await page.locator('[data-home-card="newsletters"]').screenshot({ path: process.env.SHOT });
 
     const ask = lincoln.getByTestId("home-newsletter-suggestion");
+    assert.ok((await ask.boundingBox())!.height <= 48, "the question wrapped");
     assert.match((await ask.textContent()) ?? "", /Same as Lincoln Boosters\?/);
     await ask.getByTestId("home-newsletter-suggestion-yes").click();
     await page.waitForFunction(() => document.querySelectorAll('[data-testid="home-newsletter"]').length === 3, undefined, { timeout: 5000 });
@@ -6629,11 +6635,12 @@ test("Newsletters: a row can be renamed, separated, combined by hand, and hidden
     await page.getByTestId("home-newsletter-combine-save").click();
     await page.waitForFunction(() => {
       const row = [...document.querySelectorAll('[data-testid="home-newsletter"]')].find((el) => el.querySelector('[aria-label^="Forward Future,"]'));
-      return row?.querySelectorAll('[data-testid="home-newsletter-dot"]').length === 2;
+      return row?.querySelector('[data-testid="home-newsletter-position"]')?.textContent === "1 of 2";
     }, undefined, { timeout: 5000 });
 
     // Hiding a combined row stops every sender in it.
-    await newsletterRow(page, "Lincoln Weekly").getByTestId("home-newsletter-hide").click();
+    await newsletterRow(page, "Lincoln Weekly").getByTestId("home-newsletter-more").click();
+    await page.getByTestId("home-newsletter-hide").click();
     await page.getByRole("button", { name: "Stop showing" }).click();
     await page.waitForFunction(() => (window as any).__hideCalls.length === 2, undefined, { timeout: 5000 });
     const calls = (await page.evaluate(() => (window as any).__hideCalls)) as { address: string }[];
@@ -6662,10 +6669,7 @@ test("Newsletters: one swipeable row per newsletter, with its place, its issues 
     assert.equal(await rows.count(), 2, "one row per newsletter, not one per issue");
     const weekly = rows.filter({ hasText: "Lincoln Weekly" });
     const position = weekly.getByTestId("home-newsletter-position");
-    const activeDot = () => weekly.getByTestId("home-newsletter-dot").evaluateAll((dots) => dots.findIndex((dot) => dot.getAttribute("data-active") === "true"));
     assert.equal(await position.textContent(), "1 of 3");
-    assert.equal(await weekly.getByTestId("home-newsletter-dot").count(), 3);
-    assert.equal(await activeDot(), 0);
     assert.equal(await weekly.getByTestId("home-newsletter-highlight").first().textContent(), "Picture day is coming up.", "each issue leads with its first highlight");
     assert.equal(await rows.filter({ hasText: "Troop 12 News" }).getByTestId("home-newsletter-position").count(), 0, "a single issue needs no count");
 
@@ -6677,9 +6681,9 @@ test("Newsletters: one swipeable row per newsletter, with its place, its issues 
     const box = (await track.boundingBox())!;
     await touchSwipeAcross(page, box.x + box.width - 30, box.y + box.height / 2, box.x + 30);
     await position.filter({ hasText: "2 of 3" }).waitFor({ timeout: 3000 });
-    assert.equal(await activeDot(), 1, "the dots follow the swipe");
 
-    await weekly.getByRole("button", { name: "All issues" }).click();
+    // "2 of 3" is also the way to every issue.
+    await position.click();
     const sheet = page.getByRole("dialog");
     const issues = sheet.getByTestId("home-letter-issues").locator("li");
     await issues.first().waitFor({ timeout: 3000 });
@@ -6720,7 +6724,8 @@ test("Newsletters: each row shows who it's for, can be handed to someone, and ca
     await weekly.waitFor({ timeout: 5000 });
     assert.equal((await weekly.getByTestId("home-todo-chip").first().textContent())?.trim(), "Ava");
 
-    await weekly.getByTestId("home-newsletter-hide").click();
+    await weekly.getByTestId("home-newsletter-more").click();
+    await page.getByTestId("home-newsletter-hide").click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Stop showing", exact: true }).click();
     await weekly.waitFor({ state: "detached", timeout: 3000 });
     await page.screenshot({ path: "/tmp/claude-0/-home-user-SuperHub/2b253c11-8315-54a6-aa7f-8016004bbf90/scratchpad/newsletters.png" });

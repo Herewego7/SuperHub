@@ -928,7 +928,8 @@ export function newsletterGroups<T extends PlanChore>(todos: T[], now: Date, mut
     const key = issue.sender ? `${issue.sender}|${name ? nameKeyOf(name) : ""}` : `row:${issue.id}`;
     const group = groups.get(key) ?? {
       key,
-      name: name || issue.senderName || issue.sender || issue.title,
+      // With no name to go on, the site ("rivervalley.org") reads better than the full address.
+      name: name || issue.senderName || issue.sender?.split("@")[1] || issue.sender || issue.title,
       sender: issue.sender,
       muteName: name ?? "",
       issues: [],

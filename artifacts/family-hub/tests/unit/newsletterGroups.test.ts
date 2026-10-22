@@ -78,3 +78,12 @@ test("combine, rename and separate", () => {
   assert.equal(after.letters.length, 2);
   assert.equal(after.suggestion, null, "separated rows aren't offered right back");
 });
+
+test("two senders named only by their addresses aren't offered as the same", () => {
+  const church = source("info@rivervalley.org", "info@rivervalley.org");
+  const league = source("notifications@farmingtonbasketball.org", "notifications@farmingtonbasketball.org");
+  const { letters, suggestion } = combineNewsletters([church, league]);
+  assert.equal(letters.length, 2);
+  assert.equal(suggestion, null);
+  assert.deepEqual(distinctiveWords("info@rivervalley.org"), []);
+});

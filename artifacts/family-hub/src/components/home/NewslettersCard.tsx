@@ -62,7 +62,8 @@ function NewsletterRow({ home, letters }: { home: HomeModel; letters: Letters })
       >
         {letters.issues.map((issue, index) => {
           const first = noteBullets(issue.description)[0];
-          const when = combined ? `${fromOf.get(issue.id) ?? ""} · ${issueDateLabel(issue)}` : issueDateLabel(issue);
+          const from = fromOf.get(issue.id);
+          const when = combined && from && from !== letters.name ? `${from} · ${issueDateLabel(issue)}` : issueDateLabel(issue);
           return (
             <button
               key={issue.id}
@@ -83,21 +84,21 @@ function NewsletterRow({ home, letters }: { home: HomeModel; letters: Letters })
           );
         })}
       </div>
-      {/* Who it's for and a way to stop showing it, on every newsletter, not
-          only inside All issues (2026-10-21). */}
+      {/* One quiet line: where you are (tap for every issue), who it's for,
+          and ⋯ for everything else. Dots, All issues, ⋯ and the eye side by
+          side squeezed each other into three-line stacks (2026-10-22). */}
       <div className="flex items-center gap-2 px-3 pb-2" data-testid="home-newsletter-footer">
         {count > 1 && (
-          <>
-            <span data-testid="home-newsletter-position" className="text-xs text-[#6e6e78]">{at + 1} of {count}</span>
-            <span className="flex items-center gap-1" aria-hidden="true">
-              {letters.issues.map((issue, index) => (
-                <span key={issue.id} data-testid="home-newsletter-dot" data-active={index === at} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: index === at ? "#5E8FAD" : "#b9cfdb" }} />
-              ))}
-            </span>
-            <button type="button" className="py-1 text-xs font-semibold text-[#5E8FAD]" onClick={() => home.setSheet({ chore: letters.issues[0], mode: "issues", letters })}>
-              All issues
-            </button>
-          </>
+          <button
+            type="button"
+            data-testid="home-newsletter-position"
+            aria-label={`All ${count} issues of ${letters.name}`}
+            className="flex shrink-0 items-center gap-0.5 whitespace-nowrap py-1 text-xs font-semibold text-[#5E8FAD]"
+            onClick={() => home.setSheet({ chore: letters.issues[0], mode: "issues", letters })}
+          >
+            {at + 1} of {count}
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
         )}
         <PersonChips
           home={home}
@@ -109,7 +110,7 @@ function NewsletterRow({ home, letters }: { home: HomeModel; letters: Letters })
         {letters.sender && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" data-testid="home-newsletter-more" aria-label={`More for ${letters.name}`} className="grid h-7 w-7 shrink-0 place-items-center text-[#6e6e78]">
+              <button type="button" data-testid="home-newsletter-more" aria-label={`More for ${letters.name}`} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#6e6e78]">
                 <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
               </button>
             </DropdownMenuTrigger>
@@ -117,34 +118,27 @@ function NewsletterRow({ home, letters }: { home: HomeModel; letters: Letters })
               {others.length > 0 && <DropdownMenuItem data-testid="home-newsletter-combine" onSelect={() => setEditing("combine")}>Combine with…</DropdownMenuItem>}
               <DropdownMenuItem data-testid="home-newsletter-rename" onSelect={() => setEditing("rename")}>Rename</DropdownMenuItem>
               {combined && <DropdownMenuItem data-testid="home-newsletter-separate" onSelect={() => home.separateLetters(letters)}>Separate</DropdownMenuItem>}
+              <DropdownMenuItem data-testid="home-newsletter-hide" className="text-[#D93025] focus:text-[#D93025]" onSelect={() => void home.askHideLetters(letters)}>
+                <EyeOff className="mr-2 h-4 w-4" aria-hidden="true" />
+                Stop showing
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        {letters.sender && (
-          <button
-            type="button"
-            data-testid="home-newsletter-hide"
-            aria-label={`Stop showing ${letters.name}`}
-            className="grid h-7 w-7 shrink-0 place-items-center text-[#6e6e78]"
-            onClick={() => void home.askHideLetters(letters)}
-          >
-            <EyeOff className="h-4 w-4" aria-hidden="true" />
-          </button>
-        )}
       </div>
-      {/* A less clear match is asked about once, here (2026-10-22). */}
+      {/* A less clear match is asked about once, here, on one line (2026-10-22). */}
       {asked && (
         <div data-testid="home-newsletter-suggestion" className="flex items-center gap-2 border-t border-white/70 px-3 py-2 text-xs">
-          <span className="min-w-0 flex-1">Same as <span className="font-semibold">{asked.names[1]}</span>?</span>
+          <span className="min-w-0 flex-1 truncate">Same as <span className="font-semibold">{asked.names[1]}</span>?</span>
           <button
             type="button"
             data-testid="home-newsletter-suggestion-yes"
-            className="rounded-full bg-[#5E8FAD] px-3 py-1 font-semibold text-white"
+            className="shrink-0 rounded-full bg-[#5E8FAD] px-3 py-1 font-semibold text-white"
             onClick={() => home.combineLetters(home.newsletters.filter((row) => asked.keys.includes(row.key)))}
           >
             Combine
           </button>
-          <button type="button" data-testid="home-newsletter-suggestion-no" className="px-2 py-1 font-semibold text-[#5E8FAD]" onClick={() => home.declineLetters(asked.pair)}>
+          <button type="button" data-testid="home-newsletter-suggestion-no" className="shrink-0 px-2 py-1 font-semibold text-[#5E8FAD]" onClick={() => home.declineLetters(asked.pair)}>
             No
           </button>
         </div>

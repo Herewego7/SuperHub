@@ -33,6 +33,9 @@ const COMMON = new Set([
   "families", "parent", "parents", "pta", "pto", "association", "office", "team", "community", "district",
   "isd", "class", "classroom", "grade", "mrs", "saint", "saints", "info", "noreply", "reply", "mail",
   "email", "group", "club", "kids", "youth", "student", "students", "staff", "admin", "principal",
+  "notifications", "notification", "alerts", "alert", "announcements", "announcement", "events", "calendar",
+  "message", "messages", "reminder", "reminders", "support", "hello", "contact", "communications",
+  "org", "com", "net", "edu", "gov", "www", "inc", "llc",
 ]);
 
 /** Mail services many unrelated senders share; the sender is in the subdomain or the name. */
@@ -41,8 +44,12 @@ const FREE = /^(gmail|googlemail|yahoo|ymail|outlook|hotmail|live|msn|icloud|me|
 
 export function distinctiveWords(name: string | null | undefined): string[] {
   if (!name) return [];
+  // An address is not a name: "info@rivervalley.org" and
+  // "notifications@farmingtonbasketball.org" matched on "org" (2026-10-22).
+  // The address itself is compared separately, in traitsOf.
+  const words = name.replace(/\S+@\S+/g, " ").replace(/\b(?:https?:\/\/)?(?:[\w-]+\.)+(?:com|org|net|edu|gov|us|io|ai|co|info|church)\b\S*/gi, " ");
   return [...new Set(
-    name.toLowerCase().replace(/['’]/g, "").split(/[^a-z0-9]+/).filter((word) => word.length >= 3 && !COMMON.has(word) && !/^\d+$/.test(word)),
+    words.toLowerCase().replace(/['’]/g, "").split(/[^a-z0-9]+/).filter((word) => word.length >= 3 && !COMMON.has(word) && !/^\d+$/.test(word)),
   )];
 }
 
@@ -86,11 +93,15 @@ function obvious(a: Traits, b: Traits, schools: string[][]): boolean {
   return schools.some((school) => school.length > 0 && covers(a, school) && covers(b, school));
 }
 
-/** Maybe the same: worth one question. */
+/**
+ * Maybe the same: worth one question. Stricter than a shared word of any
+ * length, which offered a church and a basketball league (2026-10-22): the
+ * word must be a real one (4+ letters), or the same organisation's address.
+ */
 function likely(a: Traits, b: Traits): boolean {
-  if (sharedWord(a, b)) return true;
+  if (a.words.some((word) => word.length >= 4 && b.words.includes(word))) return true;
   if (a.org && a.org === b.org) return true;
-  const inLabel = (words: string[], label: string) => label.length > 0 && words.some((word) => word.length >= 4 && label.includes(word));
+  const inLabel = (words: string[], label: string) => label.length > 0 && words.some((word) => word.length >= 5 && label.includes(word));
   return inLabel(a.words, b.label) || inLabel(b.words, a.label);
 }
 

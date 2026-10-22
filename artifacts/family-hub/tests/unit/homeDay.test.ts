@@ -428,11 +428,11 @@ test("every issue of a newsletter stays together, newest first, and a dated note
   const groups = newsletterGroups([first, second, dated], today);
   assert.equal(groups.length, 1);
   assert.deepEqual(groups[0].issues.map((issue) => issue.id), ["b", "a"]);
-  assert.equal(groups[0].name, "news@school.org");
+  assert.equal(groups[0].name, "school.org");
   assert.equal(sourceChipLabel("news@school.org", "mail"), "Source: news@school.org");
 });
 
-test("newsletters group by name, then sender name, then address, over the last 30 days", () => {
+test("newsletters group by name, then sender name, then site, over the last 30 days", () => {
   const note = (from: string, lines: string) => `From: ${from}\nPlan: newsletter\nRef: x\n${lines}Highlights.`;
   const room = (id: string, sent: string) => ({ id, title: "Room 12 News", description: note("teacher@school.org", `Name: Room 12 News\nSender: Ms. Park\nSent: ${sent}\n`), category: "school_email" as const });
   const legacy = { id: "legacy", title: "Room 12 News", description: note("teacher@school.org", ""), category: "school_email" as const, createdAt: new Date(2026, 8, 25) };
@@ -441,13 +441,13 @@ test("newsletters group by name, then sender name, then address, over the last 3
   const old = room("old", "2026-08-20T12:00:00.000Z");
   const rows = [room("r1", "2026-09-18T12:00:00.000Z"), room("r3", "2026-10-02T12:00:00.000Z"), room("r2", "2026-09-25T12:00:00.000Z"), legacy, pta, bare, old];
   const groups = newsletterGroups(rows, today);
-  assert.deepEqual(groups.map((group) => group.name), ["Room 12 News", "Great Oaks PTA", "district@school.org"]);
+  assert.deepEqual(groups.map((group) => group.name), ["Room 12 News", "Great Oaks PTA", "school.org"]);
   assert.deepEqual(groups[0].issues.map((issue) => issue.id), ["r3", "r2", "legacy", "r1"]);
   assert.equal(groups[0].issues[0].when.toISOString(), "2026-10-02T12:00:00.000Z");
   assert.equal(groups[0].muteName, "Room 12 News");
   assert.equal(groups[2].muteName, "");
   assert.equal(newsletterRowIds(rows, today).has("old"), true);
-  assert.deepEqual(newsletterGroups(rows, today, ["teacher@school.org|room 12 news"]).map((group) => group.name), ["Great Oaks PTA", "district@school.org"]);
+  assert.deepEqual(newsletterGroups(rows, today, ["teacher@school.org|room 12 news"]).map((group) => group.name), ["Great Oaks PTA", "school.org"]);
   assert.equal(issueDateLabel({ title: "Weekly Review 9/28–10/2", when: new Date(2026, 9, 2) }), "Week of Sep 28");
   assert.equal(issueDateLabel({ title: "Room 12 News", when: new Date(2026, 9, 2) }), "Fri, Oct 2");
 });

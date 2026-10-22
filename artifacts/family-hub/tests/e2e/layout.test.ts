@@ -203,7 +203,7 @@ const OPENED: Array<{ name: string; scenario: string; open: (page: Page) => Prom
     name: "a newsletter's All issues sheet",
     scenario: "homeNewsletters",
     open: async (page) => {
-      await page.getByRole("button", { name: "All issues" }).first().click();
+      await page.getByTestId("home-newsletter-position").first().click();
       await page.getByTestId("home-letter-issues").waitFor();
     },
   },
