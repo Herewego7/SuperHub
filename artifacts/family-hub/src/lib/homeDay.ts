@@ -896,6 +896,34 @@ function nameKeyOf(name: string): string {
  * A group is named for the newsletter, else the sender's name, else the address. An older
  * issue saved before newsletters had names joins its sender's one named newsletter.
  */
+/** How far back a second issue makes a sender a real, recurring newsletter. */
+export const NEWSLETTER_REPEAT_DAYS = 42;
+
+/**
+ * Senders that have sent two or more newsletter-like emails in the last six
+ * weeks, read or not. A one-off long email looked like a newsletter and
+ * filled the card; now a sender's first one waits, and its issues show once
+ * a second arrives (2026-10-22). By address, since a name can vary by issue.
+ */
+export function recurringNewsletterSenders<T extends PlanChore>(todos: T[], now: Date): Set<string> {
+  const today = dayStart(now);
+  const earliest = new Date(today);
+  earliest.setDate(earliest.getDate() - (NEWSLETTER_REPEAT_DAYS - 1));
+  const end = new Date(today);
+  end.setDate(end.getDate() + 1);
+  const ids = newsletterRowIds(todos, now);
+  const counts = new Map<string, number>();
+  for (const todo of todos) {
+    if (!ids.has(todo.id)) continue;
+    const sender = slipHeader(todo.description).From?.toLowerCase();
+    if (!sender) continue;
+    const when = mailSentAt(todo, today);
+    if (when < earliest || when >= end) continue;
+    counts.set(sender, (counts.get(sender) ?? 0) + 1);
+  }
+  return new Set([...counts].filter(([, count]) => count >= 2).map(([sender]) => sender));
+}
+
 export function newsletterGroups<T extends PlanChore>(todos: T[], now: Date, muted: readonly string[] = []): NewsletterGroup<T>[] {
   const today = dayStart(now);
   const earliest = new Date(today);

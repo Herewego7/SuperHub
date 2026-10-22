@@ -27,6 +27,8 @@ let chores = [
   issue("w2", "Last week at Lincoln", "Lincoln Weekly", "news@lincoln.org", "Lincoln Elementary", 8, "Thank you for a great open house. Spirit wear orders are due.", 1),
   issue("w3", "Lincoln news", "Lincoln Weekly", "news@lincoln.org", "Lincoln Elementary", 15, "Welcome back, families. Car line starts at the side door.", 2),
   issue("p1", "Troop update", "Troop 12 News", "leader@troop12scouts.org", "Troop 12", 3, "Volunteers are needed for the fall festival.", 3),
+  // Older than the 30 days shown, but it makes the troop a repeat sender.
+  issue("p0", "Troop update", "Troop 12 News", "leader@troop12scouts.org", "Troop 12", 35, "Summer camp photos are up.", 4),
 ];
 
 export function setup(): void {

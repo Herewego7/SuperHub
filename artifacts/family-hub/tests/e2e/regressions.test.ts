@@ -6580,6 +6580,7 @@ test("Newsletters: one school's or church's senders show as one row, and a less 
     await rows.first().waitFor({ timeout: 15_000 });
     await page.locator('[data-home-card="newsletters"]').getByRole("button", { name: "View all" }).click();
     assert.equal(await rows.count(), 4, "Lincoln, Grace, the boosters and Forward Future");
+    assert.equal(await newsletterRow(page, "Museum Gala").count(), 0, "a one-off email is not a newsletter");
 
     const lincoln = newsletterRow(page, "Lincoln Weekly");
     assert.equal(await lincoln.getByTestId("home-newsletter-position").textContent(), "1 of 3", "the weekly's two issues and the PTA's one");

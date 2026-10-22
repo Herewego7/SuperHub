@@ -33,6 +33,14 @@ let chores = [
   issue("g2", "Grace last week", "Grace Weekly", "office@gracechurch.org", "Grace Church", 9, "Choir starts again.", 5),
   issue("y1", "Youth night", "Grace Youth", "youth@gracechurch.org", "Grace Youth", 5, "Youth night is Friday.", 6),
   issue("f1", "Forward Future", "Forward Future", "news@forwardfuture.ai", "Forward Future", 6, "Agents are getting better.", 7),
+  // A second issue from each sender above with only one, older than the 30
+  // days shown: two in six weeks is what makes a sender a newsletter.
+  issue("p0", "PTA update", "PTA News", "pta@lincoln.org", "Lincoln PTA", 36, "Welcome back.", 8),
+  issue("b0", "Boosters", "Lincoln Boosters", "hello@lincolnathletics.org", "Lincoln Boosters", 36, "Season passes.", 9),
+  issue("y0", "Youth night", "Grace Youth", "youth@gracechurch.org", "Grace Youth", 36, "Summer camp.", 10),
+  issue("f0", "Forward Future", "Forward Future", "news@forwardfuture.ai", "Forward Future", 36, "Models.", 11),
+  // A one-off: never a newsletter row.
+  issue("x1", "Museum gala", "Museum Gala", "gala@citymuseum.org", "City Museum", 2, "Join us for the annual gala.", 12),
 ];
 
 let grouping = { groups: [] as unknown[], apart: [] as string[] };

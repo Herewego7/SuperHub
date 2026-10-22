@@ -5,7 +5,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Meal } from "@workspace/shared-types";
 import type { FamilyEvent } from "@/lib/familyEvents";
 import { recentShoutoutsQuery, type DailyContentAssignment, type DailyContentItem, type Shoutout } from "@/components/recent-shoutouts-card";
-import { type NewsletterGroup, dinnerName, driverNamesFor, drivesOnHomeDay, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonMail, horizonWithoutChecked, mailClockParts, mailKeyDates, mailOffCalendar, mailVisibleToKid, clearedTodos, newsletterGroups, newsletterRowIds, notesForHome, PLAN_KEY_DATES, PLAN_NEWSLETTERS, PLAN_TODO_FOLD, planTodoRows, plainEventDetail, praiseForHome, schoolEmailNames, schoolSlipsHeldOnHome, todosForHome } from "@/lib/homeDay";
+import { type NewsletterGroup, dinnerName, driverNamesFor, drivesOnHomeDay, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonMail, horizonWithoutChecked, mailClockParts, mailKeyDates, mailOffCalendar, mailVisibleToKid, clearedTodos, newsletterGroups, newsletterRowIds, notesForHome, PLAN_KEY_DATES, PLAN_NEWSLETTERS, PLAN_TODO_FOLD, planTodoRows, plainEventDetail, praiseForHome, recurringNewsletterSenders, schoolEmailNames, schoolSlipsHeldOnHome, todosForHome } from "@/lib/homeDay";
 import { type CombinedLetters, type NewsletterGrouping, EMPTY_GROUPING, combineNewsletters, combineRows, declinePair, renameRow, separateRow } from "@/lib/newsletterGroups";
 import { pointsProfileId } from "@/lib/chatTools";
 import { confirmDialog } from "@/lib/confirmDialog";
@@ -547,7 +547,11 @@ export function useHomeDay(props: HomeDayProps) {
     .filter((todo) => todo.category !== "school_email" || !kindKeptOut(kindsOfChore(todo), kindsOff));
   const stillOpen = visibleChores.filter((todo) => !completions.some((completion) => completion.choreId === todo.id));
   const homeEvents = forPeople(events, selectedIds, familyIds, familyProfileId).filter((event) => mailVisibleToKid(event, kidName ?? null));
+  // Counted over everything, finished ones too: reading the first issue
+  // must not keep the second from counting as a repeat.
+  const recurring = recurringNewsletterSenders(visibleChores, now);
   const letterSources = newsletterGroups(stillOpen, now, calendarSettings?.mutedNewsletters ?? [])
+    .filter((letters) => !letters.sender || recurring.has(letters.sender))
     .map((letters) => ({ ...letters, issues: letters.issues.filter((issue) => !hidden(issue.id)) }))
     .filter((letters) => letters.issues.length > 0);
   const grouping = calendarSettings?.newsletterGrouping ?? EMPTY_GROUPING;

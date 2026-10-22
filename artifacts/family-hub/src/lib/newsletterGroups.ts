@@ -85,9 +85,23 @@ function sharedWord(a: Traits, b: Traits): boolean {
   return a.words.some((word) => b.words.includes(word));
 }
 
+/**
+ * Each names a different one of the family's schools: a district that mails
+ * every school from one domain must not become one newsletter.
+ */
+function differentSchools(a: Traits, b: Traits, schools: string[][]): boolean {
+  const of = (t: Traits) => schools.map((school, index) => (covers(t, school) ? index : -1)).filter((index) => index >= 0);
+  const sa = of(a);
+  const sb = of(b);
+  return sa.length > 0 && sb.length > 0 && !sa.some((index) => sb.includes(index));
+}
+
 /** Plainly the same sender family: combine without asking. */
 function obvious(a: Traits, b: Traits, schools: string[][]): boolean {
-  if (a.org && a.org === b.org && (sharedWord(a, b) || a.words.length === 0 || b.words.length === 0)) return true;
+  // The same organisation's own domain: info@ and weekly@rivervalleychurch.org
+  // are one church (2026-10-22). Shared mail services and personal addresses
+  // have no org, so they never get here.
+  if (a.org && a.org === b.org) return !differentSchools(a, b, schools);
   const [small, large] = a.words.length <= b.words.length ? [a, b] : [b, a];
   if (small.words.length >= 2 && covers(large, small.words)) return true;
   return schools.some((school) => school.length > 0 && covers(a, school) && covers(b, school));
@@ -98,7 +112,8 @@ function obvious(a: Traits, b: Traits, schools: string[][]): boolean {
  * length, which offered a church and a basketball league (2026-10-22): the
  * word must be a real one (4+ letters), or the same organisation's address.
  */
-function likely(a: Traits, b: Traits): boolean {
+function likely(a: Traits, b: Traits, schools: string[][]): boolean {
+  if (differentSchools(a, b, schools)) return false;
   if (a.words.some((word) => word.length >= 4 && b.words.includes(word))) return true;
   if (a.org && a.org === b.org) return true;
   const inLabel = (words: string[], label: string) => label.length > 0 && words.some((word) => word.length >= 5 && label.includes(word));
@@ -198,7 +213,7 @@ export function combineNewsletters<T>(
       const pair = pairKey(a.members[0].key, b.members[0].key);
       if (apart.has(pair)) continue;
       if (a.members.some((m) => apart.has(m.key)) || b.members.some((m) => apart.has(m.key))) continue;
-      const close = a.members.some((m) => b.members.some((n) => likely(traits.get(m.key)!, traits.get(n.key)!)));
+      const close = a.members.some((m) => b.members.some((n) => likely(traits.get(m.key)!, traits.get(n.key)!, schoolWords)));
       if (close) {
         suggestion = { keys: [a.key, b.key], names: [a.name, b.name], pair };
         break outer;

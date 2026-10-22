@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, clearedTodos, choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonEvents, horizonMail, horizonWithoutChecked, issueDateLabel, mailDate, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, notesForHome, praiseForHome, newsletterGroups, newsletterRowIds, openTodos, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, clearedTodos, choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonEvents, horizonMail, horizonWithoutChecked, issueDateLabel, mailDate, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, notesForHome, praiseForHome, recurringNewsletterSenders, newsletterGroups, newsletterRowIds, openTodos, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -531,4 +531,16 @@ test("a to-do due last week leaves Today's To-dos and is counted as cleared", ()
   assert.deepEqual(rows.map((row) => [row.id, row.overdue]), [["late", true], ["today", false]]);
   assert.deepEqual(clearedTodos(todos, [], monday).map((row) => row.id), ["lunch", "pics"]);
   assert.deepEqual(clearedTodos(todos, [{ choreId: "lunch" }], monday).map((row) => row.id), ["pics"]);
+});
+
+test("a sender is a newsletter once it has sent two in six weeks; a one-off is not", () => {
+  const letter = (id: string, from: string, createdAt: Date) => ({ id, title: "Weekly news", description: `From: ${from}\nPlan: newsletter\nHighlights.`, category: "school_email" as const, createdAt });
+  const rows = [
+    letter("w1", "news@school.org", new Date(2026, 9, 1)),
+    letter("w2", "news@school.org", new Date(2026, 8, 3)),
+    letter("once", "gala@museum.org", new Date(2026, 9, 1)),
+    letter("old1", "old@club.org", new Date(2026, 9, 1)),
+    letter("old2", "old@club.org", new Date(2026, 6, 1)),
+  ];
+  assert.deepEqual([...recurringNewsletterSenders(rows, today)], ["news@school.org"]);
 });

@@ -87,3 +87,15 @@ test("two senders named only by their addresses aren't offered as the same", () 
   assert.equal(suggestion, null);
   assert.deepEqual(distinctiveWords("info@rivervalley.org"), []);
 });
+
+test("one organisation's domain combines on its own, unless it mails for two of the family's schools", () => {
+  const info = source("info@rivervalleychurch.org", "Sunday Notes");
+  const weekly = source("weekly@rivervalleychurch.org", "This Week");
+  assert.equal(combineNewsletters([info, weekly]).letters.length, 1);
+
+  const elementary = source("news@fisd.org", "Lincoln Elementary News");
+  const middle = source("office@fisd.org", "Jefferson Middle Weekly");
+  const district = combineNewsletters([elementary, middle], undefined, ["Lincoln Elementary", "Jefferson Middle School"]);
+  assert.equal(district.letters.length, 2);
+  assert.equal(district.suggestion, null);
+});
