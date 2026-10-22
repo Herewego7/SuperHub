@@ -1,3 +1,4 @@
+import { useRef } from "react"
 import { useToast } from "@/hooks/use-toast"
 import {
   Toast,
@@ -8,8 +9,20 @@ import {
   ToastViewport,
 } from "@/components/ui/toast"
 
+/** How far a press may move and still count as a tap. */
+const TAP_SLOP_PX = 6
+
 export function Toaster() {
   const { toasts, dismiss } = useToast()
+  // Where the press began. The browser still sends a click at the end of a
+  // drag, so without this a small nudge or a downward drag closed the toast,
+  // when only a tap or a real upward swipe should (2026-10-22).
+  const pressedAt = useRef<{ x: number; y: number } | null>(null)
+  const wasTap = (event: React.MouseEvent) => {
+    const start = pressedAt.current
+    pressedAt.current = null
+    return !start || Math.hypot(event.clientX - start.x, event.clientY - start.y) <= TAP_SLOP_PX
+  }
 
   return (
     // swipeDirection="up": these toasts show at the top of the screen (or
@@ -28,7 +41,12 @@ export function Toaster() {
           // experience was having to wait the toast out while it sat over the
           // Edit Event form. The action button below stops propagation so
           // "Manage in Celebrations" still does its job.
-          <Toast key={id} {...props} onClick={() => dismiss(id)}>
+          <Toast
+            key={id}
+            {...props}
+            onPointerDown={(event) => { pressedAt.current = { x: event.clientX, y: event.clientY } }}
+            onClick={(event) => { if (wasTap(event)) dismiss(id) }}
+          >
             {/* min-w-0 so the text column can actually take the room it needs:
                 without it a long title/description shrinks to roughly half the
                 toast beside the action and wraps to one or two words per line

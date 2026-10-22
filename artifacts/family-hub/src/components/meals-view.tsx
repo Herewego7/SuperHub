@@ -2725,8 +2725,10 @@ function MealModal({ meal, creatingFor, weekStartIso, weekEndIso, onClose, onCre
                 apart by justify-between, which read as two mismatched
                 buttons with an arbitrary gap between them. */}
             <div className="flex flex-col gap-2 w-full sm:w-auto">
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" onClick={onClose} disabled={isPending} className="flex-1">
+              {/* A two-column grid, not flex-1: flex let the longer label
+                  push its button wider (2026-10-22). */}
+              <div className="grid grid-cols-2 items-center gap-2">
+                <Button type="button" variant="outline" onClick={onClose} disabled={isPending} className="min-w-0">
                   Cancel
                 </Button>
                 <Button
@@ -2735,7 +2737,7 @@ function MealModal({ meal, creatingFor, weekStartIso, weekEndIso, onClose, onCre
                   onClick={() => saveToIdeasMutation.mutate()}
                   disabled={isPending || !name.trim()}
                   title="Save to your reusable Meal Ideas"
-                  className="flex-1"
+                  className="min-w-0"
                   data-testid="save-to-ideas-button"
                 >
                   <Sparkles className="w-3.5 h-3.5 mr-1.5" />
