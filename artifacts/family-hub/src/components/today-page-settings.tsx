@@ -141,7 +141,7 @@ export function TodayPageSettings({ isOpen, onClose, onSettingsChange }: TodayPa
 
         <div className="space-y-2 mt-4 overflow-y-auto overflow-x-hidden flex-1 px-6">
           <p className="text-sm text-muted-foreground mb-4">
-            Turn cards on or off, and drag them into the order you want on Home.
+            Turn cards on or off. Drag a card by its handle, or use the arrows, to change the order on Home.
           </p>
 
           <div className="space-y-2">
@@ -152,8 +152,7 @@ export function TodayPageSettings({ isOpen, onClose, onSettingsChange }: TodayPa
                 key={card.id}
                 ref={(el) => { if (el) cardRowRefs.current.set(card.id, el); else cardRowRefs.current.delete(card.id); }}
                 data-drag-card-id={card.id}
-                onPointerDown={(e) => handlePointerDown(e, card.id)}
-                className={`touch-none flex items-center gap-3 p-3 rounded-lg border transition-all duration-150 cursor-move ${
+                className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all duration-150 ${
                   draggedItem === card.id
                     ? "opacity-30 scale-95 bg-primary/10 border-primary"
                     : "border-border bg-card hover:bg-accent/50"
@@ -161,7 +160,17 @@ export function TodayPageSettings({ isOpen, onClose, onSettingsChange }: TodayPa
                 data-testid={`card-setting-${card.id}`}
               >
                 <div className="flex items-center gap-1 text-muted-foreground">
-                  <GripVertical className="w-4 h-4 cursor-grab" />
+                  {/* Only the grip starts a drag. A whole row did before, so a
+                      finger meant to scroll the list moved a card instead
+                      (2026-10-22). */}
+                  <span
+                    data-testid={`card-drag-handle-${card.id}`}
+                    aria-hidden="true"
+                    onPointerDown={(e) => handlePointerDown(e, card.id)}
+                    className="-my-2 -ml-1 grid touch-none place-items-center self-stretch px-1.5 py-2 cursor-grab"
+                  >
+                    <GripVertical className="w-4 h-4" />
+                  </span>
                   <div className="flex flex-col gap-0.5">
                     <button
                       type="button"

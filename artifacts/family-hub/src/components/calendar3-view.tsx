@@ -2543,7 +2543,7 @@ export const Calendar3View = forwardRef<Calendar3ViewHandle, Calendar3ViewProps>
                                 colors={eventStrip(event, profiles)}
                                 time={upcomingClock(event) ?? ("provider" in event ? "All day" : "To-do")}
                                 title={upcomingTitle({ ...event, drivers: driverNamesFor("drivingProfileIds" in event ? event.drivingProfileIds : undefined, profiles) })}
-                                chips={chip && <span data-testid="event-scan-chip" className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-xs">{chip}</span>}
+                                chips={chip && <span data-testid="event-scan-chip" className="mt-1 inline-block max-w-full truncate align-top rounded-full bg-muted px-2 py-0.5 text-xs">{chip}</span>}
                                 onClick={"provider" in event ? () => handleEventClick(event) : undefined}
                               />
                             </li>

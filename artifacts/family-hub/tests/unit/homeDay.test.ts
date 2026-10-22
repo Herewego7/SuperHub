@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatVisibleEvents, clearedTodos, choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonEvents, horizonMail, horizonWithoutChecked, issueDateLabel, mailDate, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, notesForHome, praiseForHome, newsletterGroups, newsletterRowIds, openTodos, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
+import { chatVisibleEvents, clearedTodos, choreProgress, choresForCount, dinnerName, driverNamesFor, drivesOnHomeDay, earlierForHome, eventsForDayPlan, eventsForDrivingQuestion, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonEvents, horizonMail, horizonWithoutChecked, issueDateLabel, mailDate, mailKeyDates, mailOffCalendar, mailSpan, mailVisibleToKid, notesForHome, praiseForHome, newsletterGroups, newsletterRowIds, openTodos, planDateLabel, planTodoRows, plainEventDetail, schoolEmailNames, schoolEventClock, schoolHomeTitle, schoolSlipsHeldOnHome, snoozeUntil, sourceChipLabel, todosForHome, visibleForProfiles } from "../../src/lib/homeDay";
 
 const shared = { id: "study", taskType: "todo", profileIds: ["liam", "parent"], isActive: true };
 const liamOnly = { id: "liam-pack", taskType: "todo", profileIds: ["liam"], isActive: true };
@@ -463,18 +463,13 @@ test("the sender's name is not read as a task", () => {
   assert.equal(newsletterRowIds([letter], today).has("signup"), true);
 });
 
-test("snooze tonight is 8 PM, and the completed list covers seven days", () => {
+test("snooze tonight is 8 PM, and tomorrow is 7 AM", () => {
   const tonight = snoozeUntil("tonight", new Date(2026, 9, 2, 11, 0));
   assert.equal(new Date(tonight!).getHours(), 20);
   assert.equal(snoozeUntil("tonight", new Date(2026, 9, 2, 21, 0)), null);
   const morning = new Date(snoozeUntil("tomorrow", new Date(2026, 9, 2, 21, 0))!);
   assert.equal(morning.getDate(), 3);
   assert.equal(morning.getHours(), 7);
-  const done = completedActions([
-    { id: "new", choreId: "a", completedAt: today },
-    { id: "old", choreId: "b", completedAt: new Date(2026, 8, 1) },
-  ], today);
-  assert.deepEqual(done.map((row) => row.id), ["new"]);
   assert.deepEqual(forecastFor([{ date: "2026-10-02", high: 68, low: 54, condition: "clear" }], today), { high: 68, low: 54, condition: "clear" });
 });
 

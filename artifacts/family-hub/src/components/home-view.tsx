@@ -540,14 +540,14 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [healthReminderSpotlightTrigger]);
 
-  // Praise and notes live in Completed Actions, which starts closed. Open it,
-  // then light the newest row of that kind once its query has loaded, or the
-  // whole section when there is no such row to find.
-  const [openEarlierKey, setOpenEarlierKey] = useState(0);
-  const revealEarlier = (rowId: string) => {
-    setOpenEarlierKey((k) => k + 1);
+  // Praise and notes live in Notes & Praise. Open it if it was folded, then
+  // light the newest row of that kind once its query has loaded, or the
+  // whole card when there is no such row to find.
+  const [openNotesKey, setOpenNotesKey] = useState(0);
+  const revealNotes = (rowId: string) => {
+    setOpenNotesKey((k) => k + 1);
     waitForElement(rowId, 4000).then((found) => {
-      const target = found ? rowId : "home-earlier";
+      const target = found ? rowId : "home-notes";
       if (!document.getElementById(target)) return;
       robustScrollIntoView(target, stickyHeaderOffset(), "auto");
       spotlight(target);
@@ -556,7 +556,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
 
   useEffect(() => {
     if (praiseSpotlightTrigger) {
-      revealEarlier("home-earlier-praise");
+      revealNotes("home-notes-praise");
       onPraiseSpotlightHandled?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -564,7 +564,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
 
   useEffect(() => {
     if (notesSpotlightTrigger) {
-      revealEarlier("home-earlier-note");
+      revealNotes("home-notes-note");
       onNotesSpotlightHandled?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -625,7 +625,6 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
           connected: !!(p.googleCalendarConnected || p.outlookCalendarConnected),
         }))}
         familyColor={profiles.find((p) => p.isAllFamilyProfile)?.color ?? null}
-        onOpenChores={() => setActiveTab("chores")}
         onAddTodo={onAddTodo}
         onEditTodo={onEditChore}
         onDeleteTodo={onDeleteChore}
@@ -648,7 +647,7 @@ export function HomeView({ selectedProfiles, profiles, setActiveTab, onSelectPro
         }}
         onOpenCalendarSettings={onOpenCalendarSettings}
         familyProfileId={profiles.find((p) => p.isAllFamilyProfile)?.id ?? null}
-        openEarlierKey={openEarlierKey}
+        openNotesKey={openNotesKey}
       />
 
       <CustomizePageCard

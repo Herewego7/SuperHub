@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { mailParts } from "@/lib/mailLinks";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import type { Chore } from "@workspace/shared-types";
@@ -202,7 +203,11 @@ export function ReadFullEmail({ chore, viewer }: { chore: Chore; viewer: string 
         <p className="mt-0.5 text-xs text-[#6e6e78]">
           {mail.from}{mail.sentAt ? ` · ${new Date(mail.sentAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
         </p>
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">{mail.text}</p>
+        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">
+          {mailParts(mail.text).map((part, index) => "href" in part ? (
+            <a key={index} href={part.href} target="_blank" rel="noreferrer" data-testid="home-full-email-link" className="font-medium text-[#5E8FAD] underline underline-offset-2">{part.text}</a>
+          ) : part.text)}
+        </p>
         {mail.webUrl && (
           <a href={mail.webUrl} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-[#5E8FAD]">
             {provider === "outlook" ? "Open in Outlook" : "Open in Gmail"}

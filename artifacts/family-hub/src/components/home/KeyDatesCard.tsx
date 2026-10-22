@@ -133,6 +133,7 @@ function KeyDateRow({ home, row, added, picked, onPick, onRemove, reduced }: {
     <motion.li
       layout={reduced ? false : "position"}
       data-testid={`home-key-date-${row.id}`}
+      data-added={added || undefined}
       className="relative overflow-hidden border-t border-[#ececf0] first:border-t-0"
       exit={reduced ? { opacity: 0, transition: { duration: 0 } } : { height: 0, opacity: 0, transition: { duration: 0.22, ease: "easeOut" } }}
     >
@@ -142,7 +143,7 @@ function KeyDateRow({ home, row, added, picked, onPick, onRemove, reduced }: {
         Remove
       </div>
       <motion.div
-        className="relative flex touch-pan-y items-start gap-3 bg-[#ffffff] py-3 dark:bg-[#1c1c21]"
+        className={`relative flex touch-pan-y items-start gap-3 py-3 transition-colors ${added ? "-mx-2 rounded-xl bg-[#E8F5EC] px-2 dark:bg-[#17301f]" : "bg-[#ffffff] dark:bg-[#1c1c21]"}`}
         drag={reduced ? false : "x"}
         dragDirectionLock
         dragConstraints={{ left: 0, right: 0 }}
@@ -157,7 +158,8 @@ function KeyDateRow({ home, row, added, picked, onPick, onRemove, reduced }: {
           <button
             type="button"
             aria-label={`Remove ${row.title} from your calendar`}
-            className="mt-0.5 grid h-[21px] w-[21px] shrink-0 place-items-center rounded-[5px] border-[1.5px] border-[#5E8FAD] bg-[#5E8FAD] text-white"
+            data-testid="key-date-added"
+            className="mt-0.5 grid h-[21px] w-[21px] shrink-0 place-items-center rounded-[5px] border-[1.5px] border-[#2E9E5B] bg-[#2E9E5B] text-white"
             onClick={() => removeFromCalendar.mutate({ choreId: row.id, eventId: kept[row.id] })}
           >
             <Calendar className="h-3 w-3" />
@@ -179,6 +181,7 @@ function KeyDateRow({ home, row, added, picked, onPick, onRemove, reduced }: {
           <button type="button" className="block w-full text-left" onClick={() => setSheet({ chore: row, mode: "source", keyDate: true })}>
             <div className="text-[15px] font-medium leading-snug">{row.title}</div>
           </button>
+          {added && <div className="mt-0.5 text-xs font-semibold text-[#2E9E5B]">Added to calendar</div>}
           <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[#6e6e78]">
             <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" aria-hidden="true" />{planDateLabel(row.start, row.end)}</span>
             {row.time && <span className="inline-flex items-center gap-1"><AlarmClock className="h-3.5 w-3.5" aria-hidden="true" />{row.time}</span>}

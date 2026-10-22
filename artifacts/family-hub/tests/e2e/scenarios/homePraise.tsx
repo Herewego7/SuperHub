@@ -3,7 +3,7 @@ import { queryClient } from "@/lib/queryClient";
 import FamilyHub from "@/pages/family-hub";
 import { installMockApi, baselineRoutes, ok } from "../mockApi";
 
-// Praise and a family note on Home's Completed Actions, and the Home tab's
+// Praise and a family note on Home's Notes & Praise, and the Home tab's
 // badge. Praise is stateful: a POST to .../seen marks it seen on the next
 // read, so a test can watch the badge clear. Every such POST is recorded on
 // window.__seenPosts, in order.
@@ -21,7 +21,7 @@ export function setup(): void {
     { id: "p-new", fromProfileId: "dad", toProfileId: "kid1", emoji: "🌟", message: "Great job on the dishes", createdAt: at(1) },
     { id: "p-dad", fromProfileId: "kid1", toProfileId: "dad", emoji: "🥞", message: "Thanks for the pancakes", createdAt: at(2) },
     { id: "p-old", fromProfileId: "dad", toProfileId: "kid1", emoji: "📚", message: "Nice reading", createdAt: at(72) },
-    // Older than Completed Actions' seven days, so Home never shows it and the
+    // Older than Notes & Praise's seven days, so Home never shows it and the
     // badge must not count it.
     { id: "p-stale", fromProfileId: "dad", toProfileId: "kid1", emoji: "🎨", message: "Lovely painting", createdAt: at(240) },
   ];

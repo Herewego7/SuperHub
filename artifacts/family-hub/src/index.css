@@ -604,6 +604,11 @@
   border-radius: 20px;
   box-shadow: none;
   padding: 16px;
+  /* Nothing inside a card may run past its edge: a long address or link with
+     no spaces wraps anywhere rather than pushing out (2026-10-22). */
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .hearth-theme .plan-card h2 {

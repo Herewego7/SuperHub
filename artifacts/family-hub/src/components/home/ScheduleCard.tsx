@@ -81,7 +81,7 @@ export function ScheduleCard({ home }: { home: HomeModel }) {
                   tinted
                   time={event.isAllDay === true ? "All day" : clockOf(event.startTime)}
                   title={planEventTitle(appendPlace(event.title, event.location), driverNamesFor(event.drivingProfileIds, people))}
-                  chips={chip && <span data-testid="event-scan-chip" className="mt-1 inline-block rounded-full bg-white/70 px-2 py-0.5 text-xs">{chip}</span>}
+                  chips={chip && <span data-testid="event-scan-chip" className="mt-1 inline-block max-w-full truncate align-top rounded-full bg-white/70 px-2 py-0.5 text-xs">{chip}</span>}
                   onClick={() => onOpenEvent?.(event.id)}
                 />
               </li>

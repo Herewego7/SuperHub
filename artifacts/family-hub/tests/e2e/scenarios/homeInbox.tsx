@@ -58,6 +58,7 @@ export function setup(): void {
     baselineRoutes({
       "/api/auth/user": { id: "u1", email: "test@test.com", onboardingCompletedAt: new Date().toISOString(), createdAt: new Date().toISOString() },
       "/api/profiles": profiles,
+      "/api/events": (_url: string, opts?: RequestInit) => ok(opts?.method === "POST" ? { id: "added-event" } : []),
       "/api/calendar-settings": () => ok({ shareOriginals: false, mutedSenders: stopped }),
       // Like the server before 2026-10: it only skips the sender's future
       // mail and leaves their open items, so the app has to remove them.

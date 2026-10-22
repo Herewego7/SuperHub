@@ -6168,35 +6168,28 @@ async function openHomePraise(person: string, tab?: string): Promise<Page> {
   return page;
 }
 
-test("Completed Actions shows the week's praise and notes, and marks seen only what reached the person on screen", async () => {
+test("Notes & Praise shows the week's praise and notes, and marks seen only what reached the person on screen", async () => {
   // SuperHub's Home dropped the Announcements banner, which was the only place
   // praise and notes showed. The praise card that stayed is hidden, yet it
   // still marked everything seen, so the badge cleared with nothing shown.
+  // Completed Actions held them until 2026-10-22; Notes & Praise does now.
   const page = await openHomePraise("kid1");
   try {
-    await page.getByTestId("home-earlier-toggle").waitFor({ timeout: 15_000 });
-    await page.waitForTimeout(1500);
-    assert.deepEqual(
-      await page.evaluate(`window.__seenPosts.slice()`),
-      [],
-      "praise was marked seen while Completed Actions was still closed",
-    );
-
-    await page.getByTestId("home-earlier-toggle").click();
-    const rows = await page.locator("#home-earlier li").evaluateAll((items) =>
+    await page.getByTestId("home-notes-card").waitFor({ timeout: 15_000 });
+    const rows = () => page.locator("#home-notes li").evaluateAll((items) =>
       items.map((item) => [item.getAttribute("data-testid"), item.textContent?.trim()]),
     );
-    assert.deepEqual(rows, [
-      ["home-earlier-note", "📝 Dad: Dentist moved to Thursday"],
-      ["home-earlier-praise", "🌟 Dad to Ava: Great job on the dishes"],
-      ["home-earlier-praise", "🥞 Ava to Dad: Thanks for the pancakes"],
-      ["home-earlier-praise", "📚 Dad to Ava: Nice reading"],
+    // Four, past the usual three, because the last is praise Ava hasn't seen.
+    assert.deepEqual(await rows(), [
+      ["home-notes-note", "📝 Dad: Dentist moved to Thursday"],
+      ["home-notes-praise", "🌟 Dad to Ava: Great job on the dishes"],
+      ["home-notes-praise", "🥞 Ava to Dad: Thanks for the pancakes"],
+      ["home-notes-praise", "📚 Dad to Ava: Nice reading"],
     ]);
-
     // Ava received two of them. The one she sent is Dad's to see, and the
     // ten-day-old one never showed.
     await page.waitForFunction(`window.__seenPosts.length >= 2`, undefined, { timeout: 5000 });
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1500);
     const posted = (await page.evaluate(`window.__seenPosts.slice()`)) as string[];
     assert.deepEqual([...posted].sort(), ["p-new", "p-old"]);
   } finally {
@@ -6222,8 +6215,8 @@ test("the Home badge counts praise for the person on screen, and following it la
     await page.waitForTimeout(500);
     const geom = (await page.evaluate(`(() => {
       const hole = document.querySelector('[data-testid="spotlight-hole"]').getBoundingClientRect();
-      const row = document.getElementById("home-earlier-praise");
-      const section = document.getElementById("home-earlier");
+      const row = document.getElementById("home-notes-praise");
+      const section = document.getElementById("home-notes");
       const r = row ? row.getBoundingClientRect() : null;
       return {
         rowText: row ? row.textContent : null,
@@ -6759,20 +6752,65 @@ test("Customize Home: cards move and hide, and the layout stays on this device",
     await page.getByTestId("home-day").waitFor({ timeout: 15_000 });
     assert.deepEqual(
       await homeCardOrder(page),
-      ["todos", "keyDates", "chores", "newsletters", "schedule", "horizon", "completed"],
-      "every card shows, in the default order",
+      ["todos", "keyDates", "newsletters", "schedule", "horizon"],
+      "every card shows, in the default order (Notes & Praise only shows when there are some)",
     );
 
     await page.getByTestId("customize-home-page-card").click();
-    for (let i = 0; i < 4; i++) await page.getByTestId("move-up-schedule").click();
+    for (let i = 0; i < 3; i++) await page.getByTestId("move-up-schedule").click();
     await page.getByTestId("toggle-keyDates").click();
     await page.getByTestId("save-card-settings").click();
-    const moved = ["schedule", "todos", "chores", "newsletters", "horizon", "completed"];
+    const moved = ["schedule", "todos", "newsletters", "horizon"];
     assert.deepEqual(await homeCardOrder(page), moved, "Today's Schedule moves to the top and Key Dates to Add is gone");
 
     await page.reload();
     await page.getByTestId("home-day").waitFor({ timeout: 15_000 });
     assert.deepEqual(await homeCardOrder(page), moved, "the layout is still there after the app reopens");
+  } finally {
+    await page.close();
+  }
+});
+
+// Every row started a drag, so on a phone there was nowhere to put a finger
+// to scroll the list without moving a card (2026-10-22). Only the grip drags.
+test("Customize Home: a swipe on a card's row scrolls the list instead of moving the card", async () => {
+  const page = await openScenarioTouch("familyHub", { width: 360, height: 560 });
+  try {
+    await page.getByTestId("home-day").waitFor({ timeout: 15_000 });
+    await page.getByTestId("customize-home-page-card").click();
+    // The first row, so the swipe starts well inside the list's visible part.
+    const row = page.getByTestId("card-setting-todos");
+    await row.waitFor({ timeout: 5000 });
+    const list = page.locator('[role="dialog"] .overflow-y-auto').first();
+    const order = () => page.locator('[data-testid^="card-setting-"]').evaluateAll((rows) => rows.map((r) => r.getAttribute("data-testid")));
+    const before = await order();
+    const box = await row.locator("label").boundingBox();
+    assert.ok(box);
+    await touchDrag(page, box.x + box.width / 2, box.y + box.height / 2, box.x + box.width / 2, box.y + box.height / 2 - 160);
+    await page.waitForTimeout(400);
+    assert.deepEqual(await order(), before, "a swipe on the row moved a card");
+    assert.ok(await list.evaluate((el) => el.scrollTop > 0), "the list did not scroll");
+    assert.equal(await page.getByTestId("card-drag-handle-todos").count(), 1, "the grip is still there to drag with");
+  } finally {
+    await page.context().close();
+  }
+});
+
+test("Customize Home: dragging a card by its grip reorders it", async () => {
+  const page = await openScenario("familyHub");
+  try {
+    await page.getByTestId("home-day").waitFor({ timeout: 15_000 });
+    await page.getByTestId("customize-home-page-card").click();
+    const grip = page.getByTestId("card-drag-handle-keyDates");
+    await grip.waitFor({ timeout: 5000 });
+    const g = (await grip.boundingBox())!;
+    const target = (await page.getByTestId("card-setting-todos").boundingBox())!;
+    await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+    await page.mouse.down();
+    for (let step = 1; step <= 10; step++) await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2 + ((target.y + 5) - (g.y + g.height / 2)) * step / 10);
+    await page.mouse.up();
+    const order = await page.locator('[data-testid^="card-setting-"]').evaluateAll((rows) => rows.map((r) => r.getAttribute("data-testid")));
+    assert.deepEqual(order.slice(0, 2), ["card-setting-keyDates", "card-setting-todos"]);
   } finally {
     await page.close();
   }
@@ -7073,6 +7111,41 @@ test("Key Dates: ticking dates brings up Add to calendar and Remove, and a swipe
     await conf.waitFor({ state: "detached", timeout: 5000 });
   } finally {
     await page.close();
+  }
+});
+
+// An added date was hard to tell apart and stayed all session: it now turns
+// green, sinks below the dates still to add, and leaves after a minute (2026-10-22).
+test("Key Dates: an added date turns green, moves to the bottom, and leaves after a minute", async () => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  await page.clock.install();
+  await page.goto(`${BASE_URL}?scenario=homeInbox`);
+  await page.waitForTimeout(1200);
+  try {
+    await page.getByTestId("profile-all family").click({ timeout: 15_000 });
+    const fair = page.getByTestId("home-key-date-fair");
+    await fair.waitFor({ timeout: 10_000 });
+    const order = () => page.locator('[data-testid^="home-key-date-"]').evaluateAll((rows) => rows.map((row) => row.getAttribute("data-testid")));
+    assert.deepEqual(await order(), ["home-key-date-fair", "home-key-date-conf"]);
+    await fair.getByTestId("key-date-pick").click();
+    await page.getByTestId("key-dates-add").click();
+    await fair.getByTestId("key-date-added").waitFor({ timeout: 5000 });
+    await fair.getByText("Added to calendar").waitFor();
+    await page.waitForFunction(() => {
+      const rows = [...document.querySelectorAll('[data-testid^="home-key-date-"]')].map((row) => row.getAttribute("data-testid"));
+      return rows[rows.length - 1] === "home-key-date-fair";
+    }, undefined, { timeout: 5000 });
+    await page.clock.fastForward(61_000);
+    // Under the fake clock the fold-away animation starts but never finishes,
+    // so a row folding to zero height counts as gone.
+    await page.waitForFunction(() => {
+      const row = document.querySelector<HTMLElement>('[data-testid="home-key-date-fair"]');
+      return !row || row.style.height === "0px";
+    }, undefined, { timeout: 5000 });
+    await page.getByTestId("home-key-date-conf").waitFor();
+  } finally {
+    await ctx.close();
   }
 });
 

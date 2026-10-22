@@ -1,19 +1,21 @@
 import type { LucideIcon } from "lucide-react";
-import { Calendar, CalendarPlus, Car, CheckCheck, ClipboardList, ListTodo, Newspaper, Telescope } from "lucide-react";
+import { Calendar, CalendarPlus, Car, ListTodo, MessageSquareHeart, Newspaper, Telescope } from "lucide-react";
 
 /**
  * Every card Home can show, in its default order. The day header, medication
  * reminders and the inbox-scan banner are pinned above these and are not cards.
+ * Chores (a link to the Chores tab) and Completed Actions (a long list of what
+ * was done) left on 2026-10-22: finished to-dos sit under To-Dos' Done, and
+ * praise and notes have their own card that shows only when there are some.
  */
 export const HOME_CARDS = [
   { id: "todos", name: "To-Dos", icon: ListTodo },
   { id: "keyDates", name: "Key Dates to Add", icon: CalendarPlus },
-  { id: "chores", name: "Chores", icon: ClipboardList },
   { id: "newsletters", name: "School Newsletters", icon: Newspaper },
   { id: "schedule", name: "Today's Schedule", icon: Calendar },
   { id: "driving", name: "Driving", icon: Car },
   { id: "horizon", name: "On the Horizon", icon: Telescope },
-  { id: "completed", name: "Completed Actions", icon: CheckCheck },
+  { id: "notes", name: "Notes & Praise", icon: MessageSquareHeart },
 ] as const satisfies readonly { id: string; name: string; icon: LucideIcon }[];
 
 export type HomeCardId = (typeof HOME_CARDS)[number]["id"];

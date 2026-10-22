@@ -5,7 +5,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Chore, ChoreCompletion, Meal } from "@workspace/shared-types";
 import type { FamilyEvent } from "@/lib/familyEvents";
 import { recentShoutoutsQuery, type DailyContentAssignment, type DailyContentItem, type Shoutout } from "@/components/recent-shoutouts-card";
-import { type NewsletterGroup, choreProgress, choresForCount, completedActions, dinnerName, driverNamesFor, drivesOnHomeDay, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonMail, horizonWithoutChecked, mailClockParts, mailKeyDates, mailOffCalendar, mailVisibleToKid, clearedTodos, newsletterGroups, newsletterRowIds, notesForHome, PLAN_KEY_DATES, PLAN_NEWSLETTERS, PLAN_TODO_FOLD, planTodoRows, plainEventDetail, praiseForHome, schoolEmailNames, schoolSlipsHeldOnHome, todosForHome } from "@/lib/homeDay";
+import { type NewsletterGroup, dinnerName, driverNamesFor, drivesOnHomeDay, eventsOnHomeDay, forecastFor, forPeople, homeBirthdayLine, horizonBirthdays, horizonDatedTodos, horizonMail, horizonWithoutChecked, mailClockParts, mailKeyDates, mailOffCalendar, mailVisibleToKid, clearedTodos, newsletterGroups, newsletterRowIds, notesForHome, PLAN_KEY_DATES, PLAN_NEWSLETTERS, PLAN_TODO_FOLD, planTodoRows, plainEventDetail, praiseForHome, schoolEmailNames, schoolSlipsHeldOnHome, todosForHome } from "@/lib/homeDay";
 import { pointsProfileId } from "@/lib/chatTools";
 import { confirmDialog } from "@/lib/confirmDialog";
 import { hapticLight } from "@/lib/haptics";
@@ -29,7 +29,6 @@ export type HomeDayProps = {
   kidName?: string | null;
   personId?: string | null;
   people?: Person[];
-  onOpenChores: () => void;
   onAddTodo?: () => void;
   onEditTodo?: (chore: Chore) => void;
   onDeleteTodo?: (chore: Chore) => void;
@@ -43,8 +42,8 @@ export type HomeDayProps = {
   familyProfileId?: string | null;
   /** The All Family profile's color, for anything that is for everyone. */
   familyColor?: string | null;
-  /** Bumped to open Completed Actions, for a praise or note push. */
-  openEarlierKey?: number;
+  /** Bumped to open Notes & Praise, for a praise or note push. */
+  openNotesKey?: number;
 };
 
 export type Letters = NewsletterGroup<Chore>;
@@ -54,6 +53,8 @@ const SNOOZE_KEY = "superhub_home_snooze";
 const TICK_MS = 60_000;
 /** How long a ticked to-do stays in place, green, before it moves into Done. */
 export const CHECK_HOLD_MS = 600;
+/** How long a date just added to the calendar stays in Key Dates. */
+export const KEY_DATE_ADDED_MS = 60_000;
 const CHORES_KEY = ["/api/chores"];
 
 function readSnooze(): Record<string, number> {
@@ -67,7 +68,7 @@ function readSnooze(): Record<string, number> {
 }
 
 export function useHomeDay(props: HomeDayProps) {
-  const { chores: allChores, completions, events, selectedIds, familyIds, day, kidName, people = [], familyProfileId = null, familyColor = null, openEarlierKey = 0, onDeleteTodo } = props;
+  const { chores: allChores, completions, events, selectedIds, familyIds, day, kidName, people = [], familyProfileId = null, familyColor = null, openNotesKey = 0, onDeleteTodo } = props;
   const reduced = useReducedMotion() === true;
   // Rows removed here, and senders stopped here, stay gone even when a refresh
   // that started before the server finished brings them back for a moment —
@@ -84,16 +85,23 @@ export function useHomeDay(props: HomeDayProps) {
     try { localStorage.setItem(LOCAL_SENDERS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
   };
   const chores = gone.size === 0 ? allChores : allChores.filter((chore) => !gone.has(chore.id));
-  const [earlierOpen, setEarlierOpen] = useState(false);
-  useEffect(() => {
-    if (openEarlierKey) setEarlierOpen(true);
-  }, [openEarlierKey]);
   const [showAllTodos, setShowAllTodos] = useState(false);
   const [showDoneTodos, setShowDoneTodos] = useState(false);
   const [showAllKeys, setShowAllKeys] = useState(false);
   const [showAllHorizon, setShowAllHorizon] = useState(false);
   const [showAllLetters, setShowAllLetters] = useState(false);
   const [kept, setKept] = useState<Record<string, string>>({});
+  // A date added to the calendar stays a minute, green at the bottom of Key
+  // Dates so the add is plain and can be undone, then leaves (2026-10-22).
+  const [settled, setSettled] = useState<Set<string>>(new Set());
+  const keptIds = Object.keys(kept).join(",");
+  useEffect(() => {
+    const ids = keptIds.split(",").filter((id) => id && !settled.has(id));
+    if (ids.length === 0) return;
+    const timer = window.setTimeout(() => setSettled((current) => new Set([...current, ...ids])), KEY_DATE_ADDED_MS);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keptIds]);
   const [snooze, setSnooze] = useState<Record<string, number>>(readSnooze);
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [revealed, setRevealed] = useState<string | null>(null);
@@ -118,6 +126,17 @@ export function useHomeDay(props: HomeDayProps) {
     return () => window.clearInterval(id);
   }, []);
   const isCollapsed = (id: HomeCardId) => collapsed.has(id);
+  // A praise or note push opens Notes & Praise even if it was left folded.
+  useEffect(() => {
+    if (!openNotesKey) return;
+    setCollapsed((current) => {
+      if (!current.has("notes")) return current;
+      const next = new Set(current);
+      next.delete("notes");
+      saveCollapsed(next);
+      return next;
+    });
+  }, [openNotesKey]);
   const toggleCard = (id: HomeCardId) => {
     const next = new Set(collapsed);
     if (next.has(id)) next.delete(id);
@@ -515,10 +534,12 @@ export function useHomeDay(props: HomeDayProps) {
     stillOpen,
     homeEvents.filter((event) => !Object.values(kept).includes(event.id)),
     now,
-  ).filter((row) => !hidden(row.id));
+  )
+    .filter((row) => !hidden(row.id) && !(settled.has(row.id) && kept[row.id]))
+    // Added ones sink below the dates still to add; sort is stable, so each group keeps its date order.
+    .sort((a, b) => Number(!!kept[a.id]) - Number(!!kept[b.id]));
   const heldIds = new Set([...newsletterRowIds(visibleChores, now), ...keyDates.map((row) => row.id)]);
   const todoRows = planTodoRows(visibleChores.filter((todo) => !heldIds.has(todo.id)), completions, day, now).filter((todo) => !hidden(todo.id));
-  const progress = choreProgress(choresForCount(chores, selectedIds, familyIds), completions, day);
   const dinner = dinnerName(meals, day);
   const birthday = homeBirthdayLine(celebrations, day);
   const todayEvents = eventsOnHomeDay(
@@ -551,18 +572,10 @@ export function useHomeDay(props: HomeDayProps) {
   const laterMail = horizonMail(stillOpen, homeEvents, day).filter((row) => !hidden(row.id));
   const laterTodos = horizonDatedTodos(stillOpen, homeEvents, day).filter((row) => !hidden(row.id));
   const allSelected = familyIds.length > 0 && familyIds.every((id) => selectedIds.includes(id));
-  const earlier = completedActions(
-    completions.filter((completion) => selectedIds.length === 0 || allSelected || (!!completion.profileId && selectedIds.includes(completion.profileId))),
-    now,
-  );
   const everyone = selectedIds.length === 0 || allSelected;
   const praise = praiseForHome(praiseList, selectedIds, everyone, now);
   const notes = notesForHome(dailyContent, contentAssignments, selectedIds, everyone, familyProfileId, now);
-  const earlierRows = [
-    ...earlier.map((completion) => ({ kind: "done" as const, id: completion.id, at: new Date(completion.completedAt ?? 0), choreId: completion.choreId })),
-    ...praise,
-    ...notes,
-  ].sort((a, b) => b.at.getTime() - a.at.getTime());
+  const messages = [...praise, ...notes].sort((a, b) => b.at.getTime() - a.at.getTime());
   const nameOf = (id: string | null) => people.find((person) => person.id === id)?.name;
   const daysOut = Math.round((new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
   const todosTitle = daysOut === 0 ? "Today's To-dos" : daysOut === 1 ? "Tomorrow's To-dos" : `${day.toLocaleDateString("en-US", { weekday: "long" })}'s To-dos`;
@@ -675,7 +688,6 @@ export function useHomeDay(props: HomeDayProps) {
     calendarSettings,
     isCollapsed,
     toggleCard,
-    earlierOpen, setEarlierOpen,
     showAllTodos, setShowAllTodos,
     showDoneTodos, setShowDoneTodos,
     showAllKeys, setShowAllKeys,
@@ -691,12 +703,11 @@ export function useHomeDay(props: HomeDayProps) {
     keyDates, visibleKeys,
     openTodos, doneTodos, folded, visibleTodos,
     cleared, ackCleared,
-    progress,
     dinner, birthday,
     todayEvents, offCalendar,
     drives,
     comingEvents, laterMail, laterTodos,
-    earlierRows, praise, notes, nameOf,
+    messages, praise, notes, nameOf,
     forecast,
     placeMail,
   };

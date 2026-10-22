@@ -133,11 +133,10 @@ for (const scenario of SCENARIOS) {
 /** States the walk above never reaches, because each needs a tap first. */
 const OPENED: Array<{ name: string; scenario: string; open: (page: Page) => Promise<void> }> = [
   {
-    name: "Home's Completed Actions with praise and a note",
+    name: "Home's Notes & Praise with praise and a note",
     scenario: "homePraise",
     open: async (page) => {
-      await page.getByTestId("home-earlier-toggle").click();
-      await page.getByTestId("home-earlier-note").waitFor();
+      await page.getByTestId("home-notes-note").waitFor();
     },
   },
   {

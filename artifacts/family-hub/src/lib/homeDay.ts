@@ -958,15 +958,6 @@ function inCompletedWindow(at: Date, now: Date): boolean {
   return at >= earliest && at < end;
 }
 
-/** Finished to-dos from the last 7 days, counting today. Newest first. */
-export function completedActions<T extends { id: string; choreId: string; completedAt?: Date | string | null }>(
-  completions: T[],
-  now: Date,
-): T[] {
-  return completions
-    .filter((completion) => !!completion.completedAt && inCompletedWindow(new Date(completion.completedAt), now))
-    .sort((a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime());
-}
 
 export type HomePraise = { kind: "praise"; id: string; at: Date; fromId: string; toId: string; emoji: string; text: string; unseen: boolean };
 export type HomeNote = { kind: "note"; id: string; at: Date; authorId: string | null; text: string };

@@ -1,6 +1,4 @@
 import type { ComponentType } from "react";
-import { ChoresCard } from "@/components/home/ChoresCard";
-import { CompletedCard } from "@/components/home/CompletedCard";
 import { DayHeader } from "@/components/home/DayHeader";
 import { DrivingCard } from "@/components/home/DrivingCard";
 import { EmailFiltersSheet } from "@/components/home/EmailFiltersSheet";
@@ -9,6 +7,7 @@ import { InboxScanBanner } from "@/components/home/InboxScanBanner";
 import { ItemSheet } from "@/components/home/ItemSheet";
 import { KeyDatesCard } from "@/components/home/KeyDatesCard";
 import { NewslettersCard } from "@/components/home/NewslettersCard";
+import { NotesCard } from "@/components/home/NotesCard";
 import { ScheduleCard } from "@/components/home/ScheduleCard";
 import { TodosCard } from "@/components/home/TodosCard";
 import { DEFAULT_CARD_CONFIG, type HomeCardId } from "@/components/home/registry";
@@ -17,12 +16,11 @@ import { useHomeDay, type HomeDayProps, type HomeModel } from "@/components/home
 const CARDS: Record<HomeCardId, ComponentType<{ home: HomeModel }>> = {
   todos: TodosCard,
   keyDates: KeyDatesCard,
-  chores: ChoresCard,
   newsletters: NewslettersCard,
   schedule: ScheduleCard,
   driving: DrivingCard,
   horizon: HorizonCard,
-  completed: CompletedCard,
+  notes: NotesCard,
 };
 
 export function HomeDay(props: HomeDayProps) {

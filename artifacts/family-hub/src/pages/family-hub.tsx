@@ -856,7 +856,7 @@ export default function FamilyHub() {
   const { data: rewardSettingsCfg } = useQuery<RewardSettings>({ queryKey: ["/api/reward-settings"] });
   const showRewardCatalog = (rewardSettingsCfg?.redemptionMode ?? "both") !== "cashout_only";
 
-  // Counted from the list Home's Completed Actions shows, by the same rule, so
+  // Counted from the list Home's Notes & Praise shows, by the same rule, so
   // the badge only ever points at praise that following it will reveal.
   const { data: recentPraise = [] } = useQuery<Shoutout[]>(recentShoutoutsQuery);
   const familyIds = profiles.filter((p) => !p.isAllFamilyProfile).map((p) => p.id);
