@@ -99,7 +99,7 @@ export function ProfileCalendarRow({
         <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: profile.color }} />
         <span className="text-sm font-medium flex-1 min-w-[4rem]">{profile.name}</span>
         {allowConnect && (
-        <DropdownMenu modal={false}>
+        <DropdownMenu>
           <DropdownMenuTrigger asChild>
             {/* "Add another" once something is already connected: this menu is
                 per-profile (it also offers the other provider and iCal), but

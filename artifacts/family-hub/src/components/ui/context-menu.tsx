@@ -4,7 +4,10 @@ import { Check, ChevronRight, Circle } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const ContextMenu = ContextMenuPrimitive.Root
+/** Non-modal by default, for the same iPhone freeze as DropdownMenu (2026-10-22). */
+function ContextMenu({ modal = false, ...props }: React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Root>) {
+  return <ContextMenuPrimitive.Root modal={modal} {...props} />
+}
 
 const ContextMenuTrigger = ContextMenuPrimitive.Trigger
 

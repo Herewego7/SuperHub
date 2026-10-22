@@ -60,6 +60,7 @@ import * as trophyStripOverflow from "./scenarios/trophyStripOverflow";
 import * as createTaskAssignees from "./scenarios/createTaskAssignees";
 import * as todosHistoryDrawer from "./scenarios/todosHistoryDrawer";
 import * as settingsGroupsPin from "./scenarios/settingsGroupsPin";
+import * as strandedMenu from "./scenarios/strandedMenu";
 import * as kbPanel from "./scenarios/kbPanel";
 import * as mealModal from "./scenarios/mealModal";
 import * as groceryEdit from "./scenarios/groceryEdit";
@@ -150,6 +151,7 @@ const SCENARIOS: Record<string, { setup: () => void; Component: React.ComponentT
   createTaskAssignees,
   todosHistoryDrawer,
   settingsGroupsPin,
+  strandedMenu,
   kbPanel,
   mealModal,
   groceryEdit,

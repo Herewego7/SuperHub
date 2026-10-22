@@ -4,7 +4,17 @@ import { Check, ChevronRight, Circle } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const DropdownMenu = DropdownMenuPrimitive.Root
+/**
+ * Menus are non-modal by default. A modal menu switches off page scrolling
+ * and makes everything outside it ignore taps until a tap outside closes it,
+ * and on iPhone that tap never comes: Radix waits for a click, and iOS sends
+ * none for a tap on blank page or for a scroll. The menu stayed open and the
+ * whole app froze until it was force-quit (2026-10-22). Non-modal, the page
+ * still scrolls and responds, and the menu closes on the next tap elsewhere.
+ */
+function DropdownMenu({ modal = false, ...props }: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Root>) {
+  return <DropdownMenuPrimitive.Root modal={modal} {...props} />
+}
 
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
 

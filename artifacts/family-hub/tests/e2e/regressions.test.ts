@@ -1517,6 +1517,36 @@ test("Toast: a small drag snaps back, and a downward drag doesn't dismiss — on
 });
 
 // ---------------------------------------------------------------------------
+// On iPhone the app froze with a menu stuck open: a modal menu switches off
+// scrolling and every touch, and closes only on a click iOS never sends for a
+// tap on blank page or a swipe (2026-10-22). Menus are non-modal now, and a
+// touch on the locked page closes any layer that still locks it.
+// ---------------------------------------------------------------------------
+test("Menus: an open menu leaves the page usable, and a touch on a locked page closes what locked it", async () => {
+  const page = await openScenario("strandedMenu");
+  try {
+    await page.getByTestId("plain-menu").click();
+    await page.getByText("Browse built-in ideas").waitFor();
+    assert.notEqual(await page.evaluate(() => document.body.style.pointerEvents), "none", "an ordinary menu switched the page off");
+    await page.keyboard.press("Escape");
+    await page.getByText("Browse built-in ideas").waitFor({ state: "detached" });
+
+    await page.getByTestId("modal-menu").click();
+    await page.getByRole("menuitem", { name: "Item" }).waitFor();
+    assert.equal(await page.evaluate(() => document.body.style.pointerEvents), "none", "the modal menu should lock the page, or this proves nothing");
+    // Only the touch, with no click after it, the way iOS delivers it.
+    await page.evaluate(() => {
+      const touch = new Touch({ identifier: 1, target: document.documentElement, clientX: 20, clientY: 600 });
+      document.documentElement.dispatchEvent(new TouchEvent("touchend", { bubbles: true, cancelable: true, changedTouches: [touch] }));
+    });
+    await page.getByRole("menuitem", { name: "Item" }).waitFor({ state: "detached", timeout: 3000 });
+    await page.waitForFunction(() => document.body.style.pointerEvents !== "none", undefined, { timeout: 3000 });
+  } finally {
+    await page.close();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Real bug (2026-08-27), user-reported: on a fresh login, "Finish Setting Up"
 // briefly showed onboarding steps that were ALREADY genuinely completed
 // (e.g. Rewards & Approvals, already configured with a Parent PIN), then they

@@ -6,6 +6,7 @@ import { initNativeNotifications } from "./lib/nativeNotifications";
 import { initNativeAuth } from "./lib/nativeAuth";
 import { initNativeResumeFix } from "./lib/nativeResume";
 import { resetWebviewScroll } from "./lib/webviewScrollLock";
+import { initStrandedLayerEscape } from "./lib/strandedLayer";
 import { initSentry, SentryErrorBoundary } from "./lib/sentry";
 
 // A no-op until VITE_SENTRY_DSN is configured — see lib/sentry.ts. Called
@@ -22,6 +23,10 @@ initNativeResumeFix();
 // reload. Sign-out reloads from inside a dialog that holds it, which left the
 // login screen unable to scroll. Always start from scrolling ON. No-op on web.
 resetWebviewScroll();
+
+// A touch on the blank, locked page closes whatever open menu or list locked
+// it. On iPhone nothing else would, and the app froze (2026-10-22).
+initStrandedLayerEscape();
 
 // Wire up native (Capacitor) push listeners once at boot. No-op on the web.
 void initNativeNotifications();
