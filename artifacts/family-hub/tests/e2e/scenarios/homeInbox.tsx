@@ -106,7 +106,7 @@ export function setup(): void {
         subject: "Planner reminder",
         from: "Front Office <office@school.org>",
         sentAt: new Date().toISOString(),
-        text: "Hi families,\n\nPlease send your child to class with their planner every day this week.",
+        text: "Hi families,\n\nPlease send your child to class with their planner every day this week. Details (https://www.cnn.com/2026/10/19/a?_hsenc=p2ANqtz-9F).\nView image: (https://media.beehiiv.com/banner.png)\n**[Register now →](https://school.org/register?x=1)****",
         webUrl: "https://mail.google.com/mail/u/0/#all/m1",
       },
     }),

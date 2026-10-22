@@ -1,12 +1,33 @@
 /**
- * An email's plain text, with every web address cut down to the site's name.
+ * An email's plain text, with every web address cut down to the site's name
+ * (or, for a Markdown link, the words it was written on).
  * Newsletters read as walls of tracking links once the HTML is gone:
  * "(https://www.bloomberg.com/news/articles/…?_hsenc=p2ANqtz-…)" becomes a
  * tappable "(Bloomberg)" (2026-10-22).
  */
 export type MailPart = { text: string } | { text: string; href: string };
 
-const URL_PATTERN = /<?\bhttps?:\/\/[^\s<>"]+>?/gi;
+/** A Markdown link, "[Register now →](https://…)", whose words are the link; or a bare address. */
+const LINK_PATTERN = /\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]+)\)|<?\bhttps?:\/\/[^\s<>"]+>?/gi;
+
+/**
+ * Newsletter clutter that only made sense in the formatted email: picture
+ * placeholders ("View image: (…)", "Follow image link: (…)", an empty
+ * "Caption:"), divider lines of dashes, and Markdown bold marks left as
+ * stray "**" (2026-10-22).
+ */
+export function tidyMailText(text: string): string {
+  return text
+    .split("\n")
+    // A line that is only dashes or underscores was a divider; a blank line does that here.
+    .map((line) => (/^\s*[-_=–—]{3,}\s*$/.test(line) ? "" : line))
+    .filter((line) => !/^\s*(view image|follow image link)\s*:\s*\(?\s*(https?:\/\/\S*)?\s*\)?\s*$/i.test(line) && !/^\s*caption\s*:\s*$/i.test(line))
+    .join("\n")
+    .replace(/\*{2,}/g, "")
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 /** Sites whose name is not just their domain with a capital letter. */
 const SITE_NAMES: Record<string, string> = {
@@ -49,12 +70,19 @@ export function siteName(url: string): string {
 }
 
 /** Splits text into plain runs and links, each link labeled by its site. */
-export function mailParts(text: string): MailPart[] {
+export function mailParts(raw: string): MailPart[] {
+  const text = tidyMailText(raw);
   const parts: MailPart[] = [];
   let at = 0;
-  for (const match of text.matchAll(URL_PATTERN)) {
-    let raw = match[0];
+  for (const match of text.matchAll(LINK_PATTERN)) {
     const start = match.index ?? 0;
+    if (match[1] !== undefined) {
+      if (start > at) parts.push({ text: text.slice(at, start) });
+      parts.push({ text: match[1].trim() || siteName(match[2]), href: match[2] });
+      at = start + match[0].length;
+      continue;
+    }
+    let raw = match[0];
     // Trailing punctuation belongs to the sentence, not the address. A ")"
     // stays only when the address itself opened one, like Wikipedia's.
     let trail = "";

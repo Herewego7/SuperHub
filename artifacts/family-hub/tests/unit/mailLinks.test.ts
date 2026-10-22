@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mailParts, siteName } from "../../src/lib/mailLinks";
+import { mailParts, siteName, tidyMailText } from "../../src/lib/mailLinks";
 
 test("a link reads as its site's name", () => {
   assert.equal(siteName("https://www.cnn.com/2026/10/19/business/elon?_hsenc=abc"), "CNN");
@@ -34,4 +34,25 @@ test("an address that opens its own bracket keeps it, and <angle> links lose the
 
 test("text with no links is one run", () => {
   assert.deepEqual(mailParts("Spirit day Friday"), [{ text: "Spirit day Friday" }]);
+});
+
+test("a Markdown link links its own words, and bold marks go", () => {
+  assert.deepEqual(mailParts("Use code MattBerman50: **[Register now →](https://boxworks.box.com/series/x?coupon_code=MattBerman50)**** **"), [
+    { text: "Use code MattBerman50: " },
+    { text: "Register now →", href: "https://boxworks.box.com/series/x?coupon_code=MattBerman50" },
+  ]);
+});
+
+test("picture placeholders and an empty caption leave the text", () => {
+  const text = [
+    "View image: (https://media.beehiiv.com/cdn-cgi/image/fit=scale-down/Newsletter_Banner.png?t=1)",
+    "Follow image link: (https://boxworks.box.com/series/boxworks-2026/landing_page?coupon_code=MattBerman50)",
+    "Caption:",
+    "",
+    "----------",
+    "",
+    "",
+    "Get 50% off BoxWorks Developer Summit.",
+  ].join("\n");
+  assert.equal(tidyMailText(text), "Get 50% off BoxWorks Developer Summit.");
 });

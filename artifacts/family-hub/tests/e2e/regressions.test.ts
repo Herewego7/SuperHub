@@ -6552,6 +6552,11 @@ test("Home to-dos: an item's sheet lists its note as bullets, and its own parent
     const mail = sheet.getByTestId("home-full-email");
     await mail.waitFor({ timeout: 3000 });
     assert.match((await mail.textContent()) ?? "", /send your child to class with their planner/);
+    // Addresses read as their site, Markdown links as their words, and picture placeholders go (2026-10-22).
+    const text = (await mail.textContent()) ?? "";
+    assert.doesNotMatch(text, /https?:\/\/|View image|\*\*/);
+    assert.equal(await mail.getByRole("link", { name: "CNN" }).getAttribute("href"), "https://www.cnn.com/2026/10/19/a?_hsenc=p2ANqtz-9F");
+    assert.equal(await mail.getByRole("link", { name: "Register now →" }).getAttribute("href"), "https://school.org/register?x=1");
     assert.equal(await mail.getByRole("link", { name: "Open in Gmail" }).getAttribute("href"), "https://mail.google.com/mail/u/0/#all/m1");
   } finally {
     await page.close();
